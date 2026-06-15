@@ -103,7 +103,7 @@ export default function JobDetailScreen({ route, navigation }) {
                   <StatusPill closed={job.closed} />
                 </View>
                 <Text style={styles.jobCode}>{job.code}</Text>
-                <Text style={styles.jobTitle} numberOfLines={2}>
+                <Text style={styles.jobTitle} numberOfLines={3}>
                   {job.title}
                 </Text>
                 <Text style={styles.jobDetail} numberOfLines={2}>
@@ -178,7 +178,19 @@ const styles = StyleSheet.create({
   },
   indexText: { color: colors.onNavy, fontWeight: '800', fontSize: 14 },
   jobCode: { color: colors.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginBottom: 2 },
-  jobTitle: { color: colors.textPrimary, fontSize: 15, fontWeight: '700', marginBottom: 4 },
+  jobTitle: {
+    color: colors.navy,
+    fontSize: 20,
+    fontWeight: '800',
+    lineHeight: 27,
+    marginBottom: 6,
+    backgroundColor: '#FFF0C2',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
   jobDetail: { color: colors.textSecondary, fontSize: 12, lineHeight: 18 },
   jobTime: { color: colors.textMuted, fontSize: 11, marginTop: 6 },
   pill: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: 999 },
