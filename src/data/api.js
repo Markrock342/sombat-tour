@@ -27,18 +27,19 @@ export async function fetchRepairs(dateStr) {
 }
 
 // งานค้างซ่อม นับต่อช่าง → { total, rows: [{ name, pending }] }
+// หมายเหตุ: ใช้ backlog.php (โฮสต์บล็อก URL ที่มีคำว่า "pending")
 export async function fetchPending() {
-  const res = await fetch(`${API_BASE}/pending.php`);
+  const res = await fetch(`${API_BASE}/backlog.php`);
   const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'pending failed');
+  if (!data.ok) throw new Error(data.error || 'backlog failed');
   return data;
 }
 
 // รายการงานค้างของช่างคนเดียว → { rows: [...] }
 export async function fetchPendingJobs(tech) {
-  const res = await fetch(`${API_BASE}/pending.php?tech=${encodeURIComponent(tech)}`);
+  const res = await fetch(`${API_BASE}/backlog.php?tech=${encodeURIComponent(tech)}`);
   const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'pending jobs failed');
+  if (!data.ok) throw new Error(data.error || 'backlog jobs failed');
   return data;
 }
 
