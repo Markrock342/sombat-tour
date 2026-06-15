@@ -6,7 +6,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import DashboardScreen from './src/screens/DashboardScreen';
 import JobDetailScreen from './src/screens/JobDetailScreen';
-import CandleGalleryScreen from './src/screens/CandleGalleryScreen';
 import { colors } from './src/theme';
 
 const Stack = createNativeStackNavigator();
@@ -31,7 +30,6 @@ export default function App() {
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Dashboard" component={DashboardScreen} />
           <Stack.Screen name="JobDetail" component={JobDetailScreen} />
-          <Stack.Screen name="CandleGallery" component={CandleGalleryScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  Pressable,
   StyleSheet,
   useWindowDimensions,
 } from 'react-native';
@@ -13,7 +12,6 @@ import Card from '../components/Card';
 import Dropdown from '../components/Dropdown';
 import TechnicianBar from '../components/TechnicianBar';
 import { SkeletonCardBody } from '../components/Skeleton';
-import LiveCandlestickChart from '../components/LiveCandlestickChart';
 import { colors, spacing } from '../theme';
 import { routineJobs, pendingJobs, filterOptions } from '../data/mock';
 
@@ -33,16 +31,8 @@ export default function DashboardScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.headerTitle}>Dashboard</Text>
-          <Text style={styles.headerSub}>ภาพรวมงานช่าง</Text>
-        </View>
-        <Pressable
-          style={styles.chartBtn}
-          onPress={() => navigation.navigate('CandleGallery')}
-        >
-          <Text style={styles.chartBtnText}>📊 กราฟแท่งเทียน</Text>
-        </Pressable>
+        <Text style={styles.headerTitle}>Dashboard</Text>
+        <Text style={styles.headerSub}>ภาพรวมงานช่าง</Text>
       </View>
 
       <ScrollView
@@ -71,9 +61,6 @@ export default function DashboardScreen({ navigation }) {
                 onPress={() => openJobs(tech)}
               />
             ))}
-            <View style={styles.divider} />
-            <Text style={styles.chartLabel}>แนวโน้มงาน (เรียลไทม์)</Text>
-            <LiveCandlestickChart defaultStyle="navy" />
           </Card>
 
           <Card
@@ -92,9 +79,6 @@ export default function DashboardScreen({ navigation }) {
                 onPress={() => openJobs(tech)}
               />
             ))}
-            <View style={styles.divider} />
-            <Text style={styles.chartLabel}>แนวโน้มงาน (เรียลไทม์)</Text>
-            <LiveCandlestickChart defaultStyle="classic" />
           </Card>
 
           <Card
@@ -134,25 +118,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
     paddingBottom: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerLeft: {
-    flexShrink: 1,
-  },
-  chartBtn: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  chartBtnText: {
-    color: colors.onNavy,
-    fontSize: 13,
-    fontWeight: '700',
   },
   headerTitle: {
     color: colors.onNavy,
@@ -189,18 +154,6 @@ const styles = StyleSheet.create({
   pendingHeaderSpacer: {
     // keeps the bar list aligned with the card that has a dropdown above it
     height: 48,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
-  },
-  chartLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
   },
   bottomCard: {
     minHeight: 200,
