@@ -60,13 +60,22 @@ export default function DateRangePicker({ value, presetKey, onChange }) {
   const [viewMonth, setViewMonth] = useState(
     new Date(value.start.getFullYear(), value.start.getMonth(), 1)
   );
+  // 'days' | 'months' | 'years'
+  const [viewMode, setViewMode] = useState('days');
+  const [yearBase, setYearBase] = useState(value.start.getFullYear() - 5);
 
   const openModal = () => {
     setTempStart(value.start);
     setTempEnd(value.end);
     setTempKey(presetKey);
     setViewMonth(new Date(value.start.getFullYear(), value.start.getMonth(), 1));
+    setViewMode('days');
     setOpen(true);
+  };
+
+  const openYears = (y) => {
+    setYearBase(y - 5);
+    setViewMode('years');
   };
 
   const applyPreset = (key) => {
@@ -143,43 +152,109 @@ export default function DateRangePicker({ value, presetKey, onChange }) {
               })}
             </View>
 
-            {/* month nav */}
-            <View style={styles.calHeader}>
-              <Pressable hitSlop={10} onPress={() => setViewMonth(new Date(year, month - 1, 1))}>
-                <Text style={styles.navArrow}>‹</Text>
-              </Pressable>
-              <Text style={styles.calTitle}>{TH_MONTHS[month]} {year + 543}</Text>
-              <Pressable hitSlop={10} onPress={() => setViewMonth(new Date(year, month + 1, 1))}>
-                <Text style={styles.navArrow}>›</Text>
-              </Pressable>
-            </View>
-
-            {/* weekdays */}
-            <View style={styles.weekRow}>
-              {TH_WEEKDAYS.map((w) => (
-                <Text key={w} style={styles.weekday}>{w}</Text>
-              ))}
-            </View>
-
-            {/* days */}
-            <View style={styles.grid}>
-              {cells.map((day, i) => {
-                if (!day) return <View key={i} style={styles.cell} />;
-                const isStart = sameDay(day, tempStart);
-                const isEnd = sameDay(day, rangeEnd);
-                const inRange = tempStart && rangeEnd && day >= tempStart && day <= rangeEnd;
-                const edge = isStart || isEnd;
-                return (
-                  <Pressable key={i} style={styles.cell} onPress={() => pickDay(day)}>
-                    <View style={[styles.dayInner, inRange && styles.dayInRange, edge && styles.dayEdge]}>
-                      <Text style={[styles.dayText, edge && styles.dayTextEdge]}>
-                        {day.getDate()}
-                      </Text>
-                    </View>
+            {/* ===== DAYS VIEW ===== */}
+            {viewMode === 'days' ? (
+              <>
+                <View style={styles.calHeader}>
+                  <Pressable hitSlop={10} onPress={() => setViewMonth(new Date(year, month - 1, 1))}>
+                    <Text style={styles.navArrow}>‹</Text>
                   </Pressable>
-                );
-              })}
-            </View>
+                  <Pressable onPress={() => setViewMode('months')}>
+                    <Text style={styles.calTitle}>{TH_MONTHS[month]} {year + 543} ▾</Text>
+                  </Pressable>
+                  <Pressable hitSlop={10} onPress={() => setViewMonth(new Date(year, month + 1, 1))}>
+                    <Text style={styles.navArrow}>›</Text>
+                  </Pressable>
+                </View>
+
+                <View style={styles.weekRow}>
+                  {TH_WEEKDAYS.map((w) => (
+                    <Text key={w} style={styles.weekday}>{w}</Text>
+                  ))}
+                </View>
+
+                <View style={styles.grid}>
+                  {cells.map((day, i) => {
+                    if (!day) return <View key={i} style={styles.cell} />;
+                    const isStart = sameDay(day, tempStart);
+                    const isEnd = sameDay(day, rangeEnd);
+                    const inRange = tempStart && rangeEnd && day >= tempStart && day <= rangeEnd;
+                    const edge = isStart || isEnd;
+                    return (
+                      <Pressable key={i} style={styles.cell} onPress={() => pickDay(day)}>
+                        <View style={[styles.dayInner, inRange && styles.dayInRange, edge && styles.dayEdge]}>
+                          <Text style={[styles.dayText, edge && styles.dayTextEdge]}>
+                            {day.getDate()}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : viewMode === 'months' ? (
+              /* ===== MONTHS VIEW ===== */
+              <>
+                <View style={styles.calHeader}>
+                  <Pressable hitSlop={10} onPress={() => setViewMonth(new Date(year - 1, month, 1))}>
+                    <Text style={styles.navArrow}>‹</Text>
+                  </Pressable>
+                  <Pressable onPress={() => openYears(year)}>
+                    <Text style={styles.calTitle}>{year + 543} ▾</Text>
+                  </Pressable>
+                  <Pressable hitSlop={10} onPress={() => setViewMonth(new Date(year + 1, month, 1))}>
+                    <Text style={styles.navArrow}>›</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.pickGrid}>
+                  {TH_MONTHS.map((m, mi) => (
+                    <Pressable
+                      key={m}
+                      style={[styles.pickCell, mi === month && styles.pickCellActive]}
+                      onPress={() => {
+                        setViewMonth(new Date(year, mi, 1));
+                        setViewMode('days');
+                      }}
+                    >
+                      <Text style={[styles.pickText, mi === month && styles.pickTextActive]}>
+                        {TH_MONTHS_SHORT[mi]}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : (
+              /* ===== YEARS VIEW ===== */
+              <>
+                <View style={styles.calHeader}>
+                  <Pressable hitSlop={10} onPress={() => setYearBase(yearBase - 12)}>
+                    <Text style={styles.navArrow}>‹</Text>
+                  </Pressable>
+                  <Text style={styles.calTitle}>
+                    {yearBase + 543} - {yearBase + 11 + 543}
+                  </Text>
+                  <Pressable hitSlop={10} onPress={() => setYearBase(yearBase + 12)}>
+                    <Text style={styles.navArrow}>›</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.pickGrid}>
+                  {Array.from({ length: 12 }, (_, i) => yearBase + i).map((y) => (
+                    <Pressable
+                      key={y}
+                      style={[styles.pickCell, y === year && styles.pickCellActive]}
+                      onPress={() => {
+                        setViewMonth(new Date(y, month, 1));
+                        setViewMode('months');
+                      }}
+                    >
+                      <Text style={[styles.pickText, y === year && styles.pickTextActive]}>
+                        {y + 543}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
 
             {/* footer */}
             <Text style={styles.footerHint}>
@@ -279,6 +354,23 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  pickGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingVertical: spacing.sm,
+  },
+  pickCell: {
+    width: `${100 / 3}%`,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickCellActive: { backgroundColor: colors.navyTint, borderRadius: 10 },
+  pickText: { fontSize: 15, color: colors.textPrimary, fontWeight: '600' },
+  pickTextActive: {
+    color: colors.navy,
+    fontWeight: '800',
+  },
   cell: {
     width: `${100 / 7}%`,
     aspectRatio: 1,
