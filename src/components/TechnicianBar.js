@@ -13,12 +13,17 @@ export default function TechnicianBar({
   color = colors.barFill,
   onPress,
 }) {
-  const pct = max > 0 ? Math.max(0.06, value / max) : 0;
+  const empty = value <= 0;
+  const pct = !empty && max > 0 ? Math.max(0.05, value / max) : 0;
 
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.row,
+        empty && styles.rowEmpty,
+        pressed && styles.pressed,
+      ]}
       android_ripple={{ color: colors.navyTint }}
     >
       <Text style={styles.name} numberOfLines={1}>
@@ -26,15 +31,17 @@ export default function TechnicianBar({
       </Text>
       <View style={styles.barWrap}>
         <View style={styles.track}>
-          <View
-            style={[
-              styles.fill,
-              { width: `${pct * 100}%`, backgroundColor: color },
-            ]}
-          />
+          {!empty ? (
+            <View
+              style={[
+                styles.fill,
+                { width: `${pct * 100}%`, backgroundColor: color },
+              ]}
+            />
+          ) : null}
         </View>
       </View>
-      <Text style={styles.value}>{value}</Text>
+      <Text style={[styles.value, empty && styles.valueEmpty]}>{value}</Text>
     </Pressable>
   );
 }
@@ -45,6 +52,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.sm,
     borderRadius: radius.sm,
+  },
+  rowEmpty: {
+    opacity: 0.4,
   },
   pressed: {
     backgroundColor: colors.navyTint,
@@ -75,5 +85,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: colors.textPrimary,
+  },
+  valueEmpty: {
+    color: colors.textMuted,
+    fontWeight: '600',
   },
 });

@@ -1,13 +1,22 @@
 import React from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, shadow } from '../theme';
 import { getJobsForTechnician } from '../data/mock';
 
 export default function JobDetailScreen({ route, navigation }) {
-  const { technician } = route.params ?? {};
-  const jobs = getJobsForTechnician(technician);
+  const { technician, count } = route.params ?? {};
+  const jobs = getJobsForTechnician(technician, count);
+  const { width } = useWindowDimensions();
+  const isWide = width >= 900;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -15,32 +24,42 @@ export default function JobDetailScreen({ route, navigation }) {
         <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
           <Text style={styles.back}>‹ กลับ</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>รายการที่เลือก</Text>
-        <Text style={styles.headerSub}>{technician}</Text>
+        <Text style={styles.headerTitle}>รายการแจ้งซ่อม</Text>
+        <Text style={styles.headerSub}>
+          {technician} · {jobs.length} งาน
+        </Text>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        {jobs.map((job) => (
-          <Pressable
-            key={job.id}
-            style={({ pressed }) => [styles.jobCard, pressed && styles.pressed]}
-          >
-            <View style={styles.indexBadge}>
-              <Text style={styles.indexText}>{job.id}</Text>
-            </View>
-            <View style={styles.jobBody}>
+        <View style={[styles.grid, isWide && styles.gridWide]}>
+          {jobs.map((job) => (
+            <Pressable
+              key={job.id}
+              style={({ pressed }) => [
+                styles.jobCard,
+                isWide ? styles.jobCardWide : styles.jobCardFull,
+                pressed && styles.pressed,
+              ]}
+            >
               <View style={styles.jobTopRow}>
-                <Text style={styles.jobCode}>{job.code}</Text>
+                <View style={styles.indexBadge}>
+                  <Text style={styles.indexText}>{job.id}</Text>
+                </View>
                 <StatusPill status={job.status} />
               </View>
-              <Text style={styles.jobTitle}>{job.title}</Text>
-              <Text style={styles.jobDetail}>{job.detail}</Text>
-            </View>
-          </Pressable>
-        ))}
+              <Text style={styles.jobCode}>{job.code}</Text>
+              <Text style={styles.jobTitle} numberOfLines={2}>
+                {job.title}
+              </Text>
+              <Text style={styles.jobDetail} numberOfLines={2}>
+                {job.detail}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -51,6 +70,7 @@ function StatusPill({ status }) {
     'กำลังดำเนินการ': colors.barFill,
     'รอตรวจรับ': colors.navySoft,
     'งานค้าง': colors.barFillAlt,
+    'เสร็จสิ้น': '#1FA97A',
   };
   const bg = map[status] ?? colors.navySoft;
   return (
@@ -93,56 +113,66 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl * 2,
     minHeight: '100%',
   },
-  jobCard: {
+  grid: {
+    gap: spacing.md,
+  },
+  gridWide: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  jobCard: {
     backgroundColor: colors.card,
     borderRadius: radius.lg,
     padding: spacing.lg,
-    marginBottom: spacing.md,
     ...shadow,
+  },
+  jobCardFull: {
+    width: '100%',
+  },
+  jobCardWide: {
+    flexBasis: '22%',
+    flexGrow: 1,
+    minWidth: 220,
   },
   pressed: {
     opacity: 0.85,
-  },
-  indexBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.navy,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  indexText: {
-    color: colors.onNavy,
-    fontWeight: '800',
-    fontSize: 15,
-  },
-  jobBody: {
-    flex: 1,
   },
   jobTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  indexBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.navy,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  indexText: {
+    color: colors.onNavy,
+    fontWeight: '800',
+    fontSize: 14,
   },
   jobCode: {
     color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,
+    marginBottom: 2,
   },
   jobTitle: {
     color: colors.textPrimary,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     marginBottom: 4,
   },
   jobDetail: {
     color: colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12,
+    lineHeight: 18,
   },
   pill: {
     paddingHorizontal: spacing.sm,

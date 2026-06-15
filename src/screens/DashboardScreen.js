@@ -10,42 +10,41 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Card from '../components/Card';
 import TechnicianBar from '../components/TechnicianBar';
-import { SkeletonCardBody } from '../components/Skeleton';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
 import { colors, spacing } from '../theme';
-import { routineJobs, pendingJobs } from '../data/mock';
+import { routineJobs, pendingJobs, totalToday, activeToday } from '../data/mock';
 
 export default function DashboardScreen({ navigation }) {
-  const [dateRange, setDateRange] = useState(() => presetRange('7d'));
-  const [datePreset, setDatePreset] = useState('7d');
+  const [dateRange, setDateRange] = useState(() => presetRange('today'));
+  const [datePreset, setDatePreset] = useState('today');
   const { width } = useWindowDimensions();
 
-  // Single column on phones, three across on wide screens (tablet / web).
+  // Desktop: 3-column grid. Mobile: single column.
   const isWide = width >= 900;
 
-  const routineMax = Math.max(...routineJobs.map((t) => t.count));
-  const pendingMax = Math.max(...pendingJobs.map((t) => t.count));
+  const routineMax = Math.max(...routineJobs.map((t) => t.today), 1);
+  const pendingMax = Math.max(...pendingJobs.map((t) => t.pending), 1);
 
-  const openJobs = (tech) =>
-    navigation.navigate('JobDetail', { technician: tech.name });
+  const openJobs = (tech, count) =>
+    navigation.navigate('JobDetail', { technician: tech.name, count });
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Dashboard</Text>
-        <Text style={styles.headerSub}>ภาพรวมงานช่าง</Text>
+        <Text style={styles.headerSub}>โปรแกรมงานซ่อมบำรุง</Text>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        {/* Top row: routine / pending / weekly volume */}
-        <View style={[styles.row, isWide && styles.rowWide]}>
+        <View style={[styles.grid, isWide && styles.gridWide]}>
+          {/* 1 — งานประจำวันแต่ละช่าง */}
           <Card
             starred
-            title="งานประจำแต่ละช่าง"
-            style={[styles.topCard, isWide && styles.topCardWide]}
+            title="งานประจำวันแต่ละช่าง"
+            style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
           >
             <DateRangePicker
               value={dateRange}
@@ -55,61 +54,66 @@ export default function DashboardScreen({ navigation }) {
                 setDatePreset(key);
               }}
             />
-            {routineJobs.map((tech) => (
-              <TechnicianBar
-                key={tech.id}
-                name={tech.name}
-                value={tech.count}
-                max={routineMax}
-                color={colors.barFill}
-                onPress={() => openJobs(tech)}
-              />
-            ))}
+            <Text style={styles.summary}>
+              รวม <Text style={styles.summaryNum}>{totalToday}</Text> งาน ·
+              ทำงาน <Text style={styles.summaryNum}>{activeToday}</Text> ช่าง
+            </Text>
+            <ScrollView style={styles.list} nestedScrollEnabled>
+              {routineJobs.map((tech) => (
+                <TechnicianBar
+                  key={tech.id}
+                  name={tech.name}
+                  value={tech.today}
+                  max={routineMax}
+                  color={colors.barFill}
+                  onPress={() => openJobs(tech, tech.today)}
+                />
+              ))}
+            </ScrollView>
           </Card>
 
+          {/* 2 — งานค้างซ่อมแต่ละช่าง */}
           <Card
             starred
-            title="งานค้างแต่ละช่าง"
-            style={[styles.topCard, isWide && styles.topCardWide]}
+            title="งานค้างซ่อมแต่ละช่าง"
+            style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
           >
-            <View style={styles.pendingHeaderSpacer} />
-            {pendingJobs.map((tech) => (
-              <TechnicianBar
-                key={tech.id}
-                name={tech.name}
-                value={tech.count}
-                max={pendingMax}
-                color={colors.barFillAlt}
-                onPress={() => openJobs(tech)}
-              />
-            ))}
+            <ScrollView style={styles.list} nestedScrollEnabled>
+              {pendingJobs.map((tech) => (
+                <TechnicianBar
+                  key={tech.id}
+                  name={tech.name}
+                  value={tech.pending}
+                  max={pendingMax}
+                  color={colors.barFillAlt}
+                  onPress={() => openJobs(tech, tech.pending)}
+                />
+              ))}
+            </ScrollView>
           </Card>
 
-          <Card
-            title="ปริมาณงาน (อาทิตย์)"
-            style={[styles.topCard, isWide && styles.topCardWide]}
-          >
-            <SkeletonCardBody showChart lines={2} />
-          </Card>
-        </View>
-
-        {/* Bottom row: two loading cards */}
-        <View style={[styles.row, isWide && styles.rowWide]}>
-          <Card
-            title="แนวโน้มงานรายเดือน"
-            style={[styles.bottomCard, isWide && styles.bottomCardWide]}
-          >
-            <SkeletonCardBody showChart lines={2} />
-          </Card>
-          <Card
-            title="สรุปสถานะ"
-            style={[styles.bottomCardSmall, isWide && styles.bottomCardSmallWide]}
-          >
-            <SkeletonCardBody lines={4} />
-          </Card>
+          {/* 3-6 — placeholders for future cards */}
+          <Placeholder title="ประวัติแจ้งซ่อมรายคัน" tag="อาจจะ" icon="🚗" isWide={isWide} />
+          <Placeholder title="สต็อกอะไหล่" tag="อาจจะ" icon="📦" isWide={isWide} />
+          <Placeholder title="ข้อมูลด้านอื่น ๆ" icon="📊" isWide={isWide} />
+          <Placeholder title="xxx" icon="➕" isWide={isWide} />
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function Placeholder({ title, tag, icon, isWide }) {
+  return (
+    <Card
+      title={tag ? `${title} (${tag})` : title}
+      style={[styles.card, isWide ? styles.cardWide : styles.cardFull, styles.placeholderCard]}
+    >
+      <View style={styles.placeholderBody}>
+        <Text style={styles.placeholderIcon}>{icon}</Text>
+        <Text style={styles.placeholderText}>อยู่ระหว่างพัฒนา</Text>
+      </View>
+    </Card>
   );
 }
 
@@ -142,33 +146,52 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl * 2,
     minHeight: '100%',
   },
-  row: {
+  grid: {
     gap: spacing.lg,
-    marginBottom: spacing.lg,
   },
-  rowWide: {
+  gridWide: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
   },
-  topCard: {
-    minHeight: 240,
+  card: {},
+  cardFull: {
+    width: '100%',
   },
-  topCardWide: {
+  cardWide: {
+    flexBasis: '30%',
+    flexGrow: 1,
+    minWidth: 280,
+  },
+  summary: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  summaryNum: {
+    color: colors.navy,
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  list: {
+    maxHeight: 300,
+  },
+  placeholderCard: {
+    minHeight: 170,
+  },
+  placeholderBody: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
   },
-  pendingHeaderSpacer: {
-    // keeps the bar list aligned with the date-range control in the other card
-    height: 80,
+  placeholderIcon: {
+    fontSize: 30,
+    marginBottom: spacing.sm,
+    opacity: 0.7,
   },
-  bottomCard: {
-    minHeight: 200,
-  },
-  bottomCardWide: {
-    flex: 2,
-  },
-  bottomCardSmall: {
-    minHeight: 200,
-  },
-  bottomCardSmallWide: {
-    flex: 1,
+  placeholderText: {
+    fontSize: 13,
+    color: colors.textMuted,
+    fontWeight: '600',
   },
 });
