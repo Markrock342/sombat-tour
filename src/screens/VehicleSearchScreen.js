@@ -75,24 +75,16 @@ export default function VehicleSearchScreen({ navigation }) {
         ) : (
           results.map((v) => (
             <Pressable
-              key={v.r_v_id}
+              key={v.v_id}
               style={({ pressed }) => [styles.vCard, pressed && styles.pressed]}
-              onPress={() =>
-                navigation.navigate('VehicleHistory', {
-                  id: v.r_v_id,
-                  label: v.name || `ID ${v.r_v_id}`,
-                })
-              }
+              onPress={() => navigation.navigate('VehicleDetail', { vehicle: v })}
             >
               <View style={styles.vTop}>
-                <Text style={styles.vId}>ID {v.r_v_id}</Text>
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{v.jobs} งาน</Text>
-                </View>
+                <Text style={styles.vId}>ID {v.v_id}</Text>
+                <Text style={styles.vName}>{v.v_name || '-'}</Text>
               </View>
-              <Text style={styles.vName}>{v.name || '-'}</Text>
               <Text style={styles.vSub}>
-                {[v.brand, v.model].filter(Boolean).join(' ')} · ทะเบียน {v.plate || '-'}
+                {[v.v_brand, v.v_model].filter(Boolean).join(' ')} · ทะเบียน {v.v_plate || '-'}
               </Text>
             </Pressable>
           ))

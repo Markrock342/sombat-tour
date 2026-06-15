@@ -42,18 +42,34 @@ export async function fetchPendingJobs(tech) {
   return data;
 }
 
-// ค้นหารถจาก ID รถ / เบอร์รถ → [{ r_v_id, name, plate, brand, model, jobs }]
-export async function searchVehicles(q) {
-  const res = await fetch(`${API_BASE}/vehicle.php?q=${encodeURIComponent(q)}`);
+// ดึงรถ 1 คันจาก v_id (ตาราง vihicle)
+export async function getVehicle(id) {
+  const res = await fetch(`${API_BASE}/vehicle_get.php?id=${encodeURIComponent(id)}`);
   const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'search failed');
-  return data.rows || [];
+  if (!data.ok) throw new Error(data.error || 'vehicle get failed');
+  return data.row || null;
 }
 
-// ประวัติแจ้งซ่อมของรถคันเดียว → { vehicle, total, rows: [...] }
-export async function fetchVehicleHistory(id) {
-  const res = await fetch(`${API_BASE}/vehicle.php?id=${encodeURIComponent(id)}`);
+// ค้นหารถจาก ID/เบอร์รถ (v_name) — ไม่ค้นทะเบียน
+// คืน rows จากตาราง vihicle: [{ v_id, v_name, v_plate, v_brand, v_model, ... }]
+export async function searchVehicles(term) {
+  const res = await fetch(
+    `${API_BASE}/vehicle_search.php?name=${encodeURIComponent(term)}&limit=50`
+  );
   const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'vehicle history failed');
-  return data;
+  if (!data.ok) throw new Error(data.error || 'search failed');
+  let rows = data.rows || [];
+
+  // ถ้าพิมพ์เป็นตัวเลขล้วน ลองหา v_id ตรง ๆ แล้วเอามาไว้บนสุด
+  if (/^\d+$/.test(term)) {
+    try {
+      const row = await getVehicle(term);
+      if (row && !rows.some((v) => String(v.v_id) === String(row.v_id))) {
+        rows = [row, ...rows];
+      }
+    } catch (_) {
+      /* ไม่พบก็ข้าม */
+    }
+  }
+  return rows;
 }
