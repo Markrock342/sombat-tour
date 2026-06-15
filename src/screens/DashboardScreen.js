@@ -108,8 +108,13 @@ export default function DashboardScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Dashboard</Text>
-        <Text style={styles.headerSub}>โปรแกรมงานซ่อมบำรุง</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerTitle}>Dashboard</Text>
+          <Text style={styles.headerSub}>โปรแกรมงานซ่อมบำรุง</Text>
+        </View>
+        <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('VehicleSearch')}>
+          <Text style={styles.searchBtnText}>🔍 ค้นหารถ</Text>
+        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -228,7 +233,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
     paddingBottom: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
+  headerLeft: { flexShrink: 1 },
+  searchBtn: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  searchBtnText: { color: colors.onNavy, fontSize: 13, fontWeight: '700' },
   headerTitle: { color: colors.onNavy, fontSize: 24, fontWeight: '800', letterSpacing: 0.3 },
   headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
   scroll: {

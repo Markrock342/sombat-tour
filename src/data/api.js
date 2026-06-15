@@ -41,3 +41,19 @@ export async function fetchPendingJobs(tech) {
   if (!data.ok) throw new Error(data.error || 'pending jobs failed');
   return data;
 }
+
+// ค้นหารถจาก ID รถ / เบอร์รถ → [{ r_v_id, name, plate, brand, model, jobs }]
+export async function searchVehicles(q) {
+  const res = await fetch(`${API_BASE}/vehicle.php?q=${encodeURIComponent(q)}`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'search failed');
+  return data.rows || [];
+}
+
+// ประวัติแจ้งซ่อมของรถคันเดียว → { vehicle, total, rows: [...] }
+export async function fetchVehicleHistory(id) {
+  const res = await fetch(`${API_BASE}/vehicle.php?id=${encodeURIComponent(id)}`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'vehicle history failed');
+  return data;
+}
