@@ -26,7 +26,7 @@ export default function TechnicianBar({
       ]}
       android_ripple={{ color: colors.navyTint }}
     >
-      <Text style={styles.name} numberOfLines={1}>
+      <Text style={styles.name} numberOfLines={2}>
         {name}
       </Text>
       <View style={styles.barWrap}>
@@ -60,8 +60,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.navyTint,
   },
   name: {
-    width: 64,
-    fontSize: 13,
+    width: 104,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: colors.textPrimary,
     fontWeight: '600',
   },
