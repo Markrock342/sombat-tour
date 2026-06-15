@@ -9,15 +9,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Card from '../components/Card';
-import Dropdown from '../components/Dropdown';
 import TechnicianBar from '../components/TechnicianBar';
 import { SkeletonCardBody } from '../components/Skeleton';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
 import { colors, spacing } from '../theme';
-import { routineJobs, pendingJobs, filterOptions } from '../data/mock';
+import { routineJobs, pendingJobs } from '../data/mock';
 
 export default function DashboardScreen({ navigation }) {
-  const [filter, setFilter] = useState(filterOptions[0]);
   const [dateRange, setDateRange] = useState(() => presetRange('7d'));
   const [datePreset, setDatePreset] = useState('7d');
   const { width } = useWindowDimensions();
@@ -42,16 +40,6 @@ export default function DashboardScreen({ navigation }) {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        {/* Date range filter */}
-        <DateRangePicker
-          value={dateRange}
-          presetKey={datePreset}
-          onChange={(range, key) => {
-            setDateRange(range);
-            setDatePreset(key);
-          }}
-        />
-
         {/* Top row: routine / pending / weekly volume */}
         <View style={[styles.row, isWide && styles.rowWide]}>
           <Card
@@ -59,10 +47,14 @@ export default function DashboardScreen({ navigation }) {
             title="งานประจำแต่ละช่าง"
             style={[styles.topCard, isWide && styles.topCardWide]}
           >
-            <Dropdown
-              value={filter}
-              options={filterOptions}
-              onChange={setFilter}
+            <DateRangePicker
+              embedded
+              value={dateRange}
+              presetKey={datePreset}
+              onChange={(range, key) => {
+                setDateRange(range);
+                setDatePreset(key);
+              }}
             />
             {routineJobs.map((tech) => (
               <TechnicianBar
@@ -165,8 +157,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pendingHeaderSpacer: {
-    // keeps the bar list aligned with the card that has a dropdown above it
-    height: 48,
+    // keeps the bar list aligned with the date-range control in the other card
+    height: 92,
   },
   bottomCard: {
     minHeight: 200,

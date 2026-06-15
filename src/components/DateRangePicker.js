@@ -55,7 +55,7 @@ const PRESETS = [
   { key: 'custom', label: 'กำหนดเอง' },
 ];
 
-export default function DateRangePicker({ value, presetKey, onChange }) {
+export default function DateRangePicker({ value, presetKey, onChange, embedded = false }) {
   const [open, setOpen] = useState(false);
   const [tempStart, setTempStart] = useState(value.start);
   const [tempEnd, setTempEnd] = useState(value.end);
@@ -110,7 +110,7 @@ export default function DateRangePicker({ value, presetKey, onChange }) {
   const rangeEnd = tempEnd ?? tempStart;
 
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, embedded && styles.barEmbedded]}>
       <Text style={styles.barLabel}>ช่วงวันที่</Text>
 
       <ScrollView
@@ -225,6 +225,13 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.lg,
     ...shadow,
+  },
+  barEmbedded: {
+    backgroundColor: 'transparent',
+    padding: 0,
+    marginBottom: spacing.md,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   barLabel: {
     fontSize: 12,
