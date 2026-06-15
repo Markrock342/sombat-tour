@@ -13,6 +13,7 @@ import Card from '../components/Card';
 import Dropdown from '../components/Dropdown';
 import TechnicianBar from '../components/TechnicianBar';
 import { SkeletonCardBody } from '../components/Skeleton';
+import LiveCandlestickChart from '../components/LiveCandlestickChart';
 import { colors, spacing } from '../theme';
 import { routineJobs, pendingJobs, filterOptions } from '../data/mock';
 
@@ -70,6 +71,9 @@ export default function DashboardScreen({ navigation }) {
                 onPress={() => openJobs(tech)}
               />
             ))}
+            <View style={styles.divider} />
+            <Text style={styles.chartLabel}>แนวโน้มงาน (เรียลไทม์)</Text>
+            <LiveCandlestickChart defaultStyle="navy" />
           </Card>
 
           <Card
@@ -88,6 +92,9 @@ export default function DashboardScreen({ navigation }) {
                 onPress={() => openJobs(tech)}
               />
             ))}
+            <View style={styles.divider} />
+            <Text style={styles.chartLabel}>แนวโน้มงาน (เรียลไทม์)</Text>
+            <LiveCandlestickChart defaultStyle="classic" />
           </Card>
 
           <Card
@@ -182,6 +189,18 @@ const styles = StyleSheet.create({
   pendingHeaderSpacer: {
     // keeps the bar list aligned with the card that has a dropdown above it
     height: 48,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
+  },
+  chartLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
   },
   bottomCard: {
     minHeight: 200,
