@@ -11,10 +11,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { fetchRepairs } from '../data/api';
+import { fetchRepairs, fetchPendingJobs } from '../data/api';
 
 export default function JobDetailScreen({ route, navigation }) {
-  const { technician, date } = route.params ?? {};
+  const { technician, date, mode = 'day' } = route.params ?? {};
+  const isPending = mode === 'pending';
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -25,25 +26,27 @@ export default function JobDetailScreen({ route, navigation }) {
     setLoading(true);
     setError(null);
     try {
-      const rep = await fetchRepairs(date);
-      const mapped = (rep.rows || [])
-        .filter((r) => r.r_technician === technician)
-        .map((r, i) => ({
-          id: i + 1,
-          code: r.r_job_num ? `#${r.r_job_num}` : `#${r.r_id}`,
-          title: r.r_repair_list || 'งานแจ้งซ่อม',
-          closed: r.r_close && r.r_close !== '0',
-          vehicle: [r.r_v_plate, r.r_v_brand, r.r_v_model].filter(Boolean).join(' '),
-          company: r.r_v_company || r.r_inv_com || '',
-          datetime: r.r_dt_rec,
-        }));
+      // โหมดงานค้าง: ดึงงานค้างทั้งหมดของช่าง; โหมดปกติ: งานของวันนั้น
+      const rows = isPending
+        ? (await fetchPendingJobs(technician)).rows || []
+        : ((await fetchRepairs(date)).rows || []).filter((r) => r.r_technician === technician);
+
+      const mapped = rows.map((r, i) => ({
+        id: i + 1,
+        code: r.r_job_num ? `#${r.r_job_num}` : `#${r.r_id}`,
+        title: r.r_repair_list || 'งานแจ้งซ่อม',
+        closed: r.r_close && r.r_close !== '0',
+        vehicle: [r.r_v_plate, r.r_v_brand, r.r_v_model].filter(Boolean).join(' '),
+        company: r.r_v_company || r.r_inv_com || '',
+        datetime: r.r_dt_rec,
+      }));
       setJobs(mapped);
     } catch (e) {
       setError(e.message || 'โหลดข้อมูลไม่สำเร็จ');
     } finally {
       setLoading(false);
     }
-  }, [technician, date]);
+  }, [technician, date, isPending]);
 
   useEffect(() => {
     load();
@@ -55,9 +58,12 @@ export default function JobDetailScreen({ route, navigation }) {
         <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
           <Text style={styles.back}>‹ กลับ</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>รายการแจ้งซ่อม</Text>
+        <Text style={styles.headerTitle}>
+          {isPending ? 'งานค้างซ่อม' : 'รายการแจ้งซ่อม'}
+        </Text>
         <Text style={styles.headerSub}>
-          {technician} · {date}
+          {technician}
+          {isPending ? '' : ` · ${date}`}
           {!loading && !error ? ` · ${jobs.length} งาน` : ''}
         </Text>
       </View>

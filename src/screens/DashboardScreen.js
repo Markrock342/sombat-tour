@@ -14,13 +14,15 @@ import TechnicianBar from '../components/TechnicianBar';
 import { SkeletonCardBody } from '../components/Skeleton';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
 import { colors, spacing } from '../theme';
-import { fetchTechnicians, fetchRepairs, fmtDate } from '../data/api';
+import { fetchTechnicians, fetchRepairs, fetchPending, fmtDate } from '../data/api';
 
 export default function DashboardScreen({ navigation }) {
   const [dateRange, setDateRange] = useState(() => presetRange('today'));
   const [datePreset, setDatePreset] = useState('today');
   const [techs, setTechs] = useState([]);
   const [repairs, setRepairs] = useState([]);
+  const [pending, setPending] = useState([]);
+  const [pendingTotal, setPendingTotal] = useState(0);
   const [meta, setMeta] = useState({ date: null, total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -47,6 +49,16 @@ export default function DashboardScreen({ navigation }) {
       if (!techRows || !techRows.length) {
         const names = [...new Set(rows.map((r) => r.r_technician).filter(Boolean))];
         techRows = names.map((n, i) => ({ id: String(i + 1), name: n }));
+      }
+
+      // งานค้างซ่อม (สะสมข้ามวัน — ไม่ขึ้นกับวันที่เลือก)
+      try {
+        const pend = await fetchPending();
+        setPending(pend.rows || []);
+        setPendingTotal(pend.total || 0);
+      } catch (_) {
+        setPending([]);
+        setPendingTotal(0);
       }
 
       setRepairs(rows);
@@ -76,8 +88,22 @@ export default function DashboardScreen({ navigation }) {
   const total = meta.total || repairs.length;
   const active = routine.filter((t) => t.today > 0).length;
 
+  // งานค้างซ่อมต่อช่าง (จับคู่ด้วยชื่อ)
+  const pendingByName = {};
+  pending.forEach((p) => {
+    pendingByName[p.name] = p.pending;
+  });
+  const pendingList = techs
+    .map((t) => ({ id: t.id, name: t.name, pending: pendingByName[t.name] || 0 }))
+    .sort((a, b) => b.pending - a.pending);
+  const pendingMax = Math.max(...pendingList.map((t) => t.pending), 1);
+  const pendingSum = pendingTotal || pendingList.reduce((s, t) => s + t.pending, 0);
+
   const openJobs = (tech) =>
-    navigation.navigate('JobDetail', { technician: tech.name, date: dateStr });
+    navigation.navigate('JobDetail', { technician: tech.name, date: dateStr, mode: 'day' });
+
+  const openPendingJobs = (tech) =>
+    navigation.navigate('JobDetail', { technician: tech.name, mode: 'pending' });
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -135,8 +161,43 @@ export default function DashboardScreen({ navigation }) {
             )}
           </Card>
 
-          {/* 2-6 — รอเชื่อม endpoint เพิ่ม */}
-          <Placeholder title="งานค้างซ่อมแต่ละช่าง" tag="รอ endpoint" icon="🛠️" isWide={isWide} />
+          {/* 2 — งานค้างซ่อมแต่ละช่าง (ข้อมูลจริง) */}
+          <Card
+            starred
+            title="งานค้างซ่อมแต่ละช่าง"
+            style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
+          >
+            {loading ? (
+              <SkeletonCardBody lines={6} />
+            ) : error ? (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>โหลดข้อมูลไม่สำเร็จ</Text>
+                <Pressable style={styles.retryBtn} onPress={load}>
+                  <Text style={styles.retryText}>ลองใหม่</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.summary}>
+                  ค้างทั้งหมด <Text style={styles.summaryNum}>{pendingSum}</Text> งาน
+                </Text>
+                <ScrollView style={styles.list} nestedScrollEnabled>
+                  {pendingList.map((tech) => (
+                    <TechnicianBar
+                      key={tech.id}
+                      name={tech.name}
+                      value={tech.pending}
+                      max={pendingMax}
+                      color={colors.barFillAlt}
+                      onPress={() => openPendingJobs(tech)}
+                    />
+                  ))}
+                </ScrollView>
+              </>
+            )}
+          </Card>
+
+          {/* 3-6 — รอเชื่อม endpoint เพิ่ม */}
           <Placeholder title="ประวัติแจ้งซ่อมรายคัน" tag="อาจจะ" icon="🚗" isWide={isWide} />
           <Placeholder title="สต็อกอะไหล่" tag="อาจจะ" icon="📦" isWide={isWide} />
           <Placeholder title="ข้อมูลด้านอื่น ๆ" icon="📊" isWide={isWide} />

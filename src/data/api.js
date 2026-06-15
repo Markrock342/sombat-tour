@@ -25,3 +25,19 @@ export async function fetchRepairs(dateStr) {
   if (!data.ok) throw new Error(data.error || 'list_repair failed');
   return data;
 }
+
+// งานค้างซ่อม นับต่อช่าง → { total, rows: [{ name, pending }] }
+export async function fetchPending() {
+  const res = await fetch(`${API_BASE}/pending.php`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'pending failed');
+  return data;
+}
+
+// รายการงานค้างของช่างคนเดียว → { rows: [...] }
+export async function fetchPendingJobs(tech) {
+  const res = await fetch(`${API_BASE}/pending.php?tech=${encodeURIComponent(tech)}`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'pending jobs failed');
+  return data;
+}
