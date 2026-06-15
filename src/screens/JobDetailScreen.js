@@ -1,22 +1,53 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
   Pressable,
+  ActivityIndicator,
   StyleSheet,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { getJobsForTechnician } from '../data/mock';
+import { fetchRepairs } from '../data/api';
 
 export default function JobDetailScreen({ route, navigation }) {
-  const { technician, count } = route.params ?? {};
-  const jobs = getJobsForTechnician(technician, count);
+  const { technician, date } = route.params ?? {};
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const rep = await fetchRepairs(date);
+      const mapped = (rep.rows || [])
+        .filter((r) => r.r_technician === technician)
+        .map((r, i) => ({
+          id: i + 1,
+          code: r.r_job_num ? `#${r.r_job_num}` : `#${r.r_id}`,
+          title: r.r_repair_list || 'งานแจ้งซ่อม',
+          closed: r.r_close && r.r_close !== '0',
+          vehicle: [r.r_v_plate, r.r_v_brand, r.r_v_model].filter(Boolean).join(' '),
+          company: r.r_v_company || r.r_inv_com || '',
+          datetime: r.r_dt_rec,
+        }));
+      setJobs(mapped);
+    } catch (e) {
+      setError(e.message || 'โหลดข้อมูลไม่สำเร็จ');
+    } finally {
+      setLoading(false);
+    }
+  }, [technician, date]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -26,85 +57,81 @@ export default function JobDetailScreen({ route, navigation }) {
         </Pressable>
         <Text style={styles.headerTitle}>รายการแจ้งซ่อม</Text>
         <Text style={styles.headerSub}>
-          {technician} · {jobs.length} งาน
+          {technician} · {date}
+          {!loading && !error ? ` · ${jobs.length} งาน` : ''}
         </Text>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={[styles.grid, isWide && styles.gridWide]}>
-          {jobs.map((job) => (
-            <Pressable
-              key={job.id}
-              style={({ pressed }) => [
-                styles.jobCard,
-                isWide ? styles.jobCardWide : styles.jobCardFull,
-                pressed && styles.pressed,
-              ]}
-            >
-              <View style={styles.jobTopRow}>
-                <View style={styles.indexBadge}>
-                  <Text style={styles.indexText}>{job.id}</Text>
-                </View>
-                <StatusPill status={job.status} />
-              </View>
-              <Text style={styles.jobCode}>{job.code}</Text>
-              <Text style={styles.jobTitle} numberOfLines={2}>
-                {job.title}
-              </Text>
-              <Text style={styles.jobDetail} numberOfLines={2}>
-                {job.detail}
-              </Text>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.navy} />
+            <Text style={styles.centerText}>กำลังโหลด...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.center}>
+            <Text style={styles.centerText}>{error}</Text>
+            <Pressable style={styles.retryBtn} onPress={load}>
+              <Text style={styles.retryText}>ลองใหม่</Text>
             </Pressable>
-          ))}
-        </View>
+          </View>
+        ) : jobs.length === 0 ? (
+          <View style={styles.center}>
+            <Text style={styles.centerText}>ไม่มีงานของช่างคนนี้ในวันที่เลือก</Text>
+          </View>
+        ) : (
+          <View style={[styles.grid, isWide && styles.gridWide]}>
+            {jobs.map((job) => (
+              <Pressable
+                key={job.id}
+                style={({ pressed }) => [
+                  styles.jobCard,
+                  isWide ? styles.jobCardWide : styles.jobCardFull,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <View style={styles.jobTopRow}>
+                  <View style={styles.indexBadge}>
+                    <Text style={styles.indexText}>{job.id}</Text>
+                  </View>
+                  <StatusPill closed={job.closed} />
+                </View>
+                <Text style={styles.jobCode}>{job.code}</Text>
+                <Text style={styles.jobTitle} numberOfLines={2}>
+                  {job.title}
+                </Text>
+                <Text style={styles.jobDetail} numberOfLines={2}>
+                  {job.vehicle}
+                  {job.company ? ` · ${job.company}` : ''}
+                </Text>
+                {job.datetime ? <Text style={styles.jobTime}>{job.datetime}</Text> : null}
+              </Pressable>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function StatusPill({ status }) {
-  const map = {
-    'กำลังดำเนินการ': colors.barFill,
-    'รอตรวจรับ': colors.navySoft,
-    'งานค้าง': colors.barFillAlt,
-    'เสร็จสิ้น': '#1FA97A',
-  };
-  const bg = map[status] ?? colors.navySoft;
+function StatusPill({ closed }) {
   return (
-    <View style={[styles.pill, { backgroundColor: bg }]}>
-      <Text style={styles.pillText}>{status}</Text>
+    <View style={[styles.pill, { backgroundColor: closed ? '#1FA97A' : colors.barFillAlt }]}>
+      <Text style={styles.pillText}>{closed ? 'ปิดงานแล้ว' : 'กำลังซ่อม'}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.navy,
-  },
+  safe: { flex: 1, backgroundColor: colors.navy },
   header: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
     paddingBottom: spacing.lg,
   },
-  back: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 15,
-    marginBottom: spacing.sm,
-  },
-  headerTitle: {
-    color: colors.onNavy,
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  headerSub: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 13,
-    marginTop: 2,
-  },
+  back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
+  headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },
+  headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
   scroll: {
     backgroundColor: colors.background,
     borderTopLeftRadius: 28,
@@ -113,30 +140,22 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl * 2,
     minHeight: '100%',
   },
-  grid: {
-    gap: spacing.md,
+  center: { paddingVertical: spacing.xl * 2, alignItems: 'center' },
+  centerText: { color: colors.textSecondary, fontSize: 14, marginTop: spacing.sm, textAlign: 'center' },
+  retryBtn: {
+    backgroundColor: colors.navy,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    marginTop: spacing.md,
   },
-  gridWide: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  jobCard: {
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    ...shadow,
-  },
-  jobCardFull: {
-    width: '100%',
-  },
-  jobCardWide: {
-    flexBasis: '22%',
-    flexGrow: 1,
-    minWidth: 220,
-  },
-  pressed: {
-    opacity: 0.85,
-  },
+  retryText: { color: colors.onNavy, fontWeight: '700' },
+  grid: { gap: spacing.md },
+  gridWide: { flexDirection: 'row', flexWrap: 'wrap' },
+  jobCard: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.lg, ...shadow },
+  jobCardFull: { width: '100%' },
+  jobCardWide: { flexBasis: '22%', flexGrow: 1, minWidth: 220 },
+  pressed: { opacity: 0.85 },
   jobTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -151,37 +170,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  indexText: {
-    color: colors.onNavy,
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  jobCode: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  jobTitle: {
-    color: colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  jobDetail: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  pill: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  pillText: {
-    color: colors.onNavy,
-    fontSize: 11,
-    fontWeight: '700',
-  },
+  indexText: { color: colors.onNavy, fontWeight: '800', fontSize: 14 },
+  jobCode: { color: colors.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginBottom: 2 },
+  jobTitle: { color: colors.textPrimary, fontSize: 15, fontWeight: '700', marginBottom: 4 },
+  jobDetail: { color: colors.textSecondary, fontSize: 12, lineHeight: 18 },
+  jobTime: { color: colors.textMuted, fontSize: 11, marginTop: 6 },
+  pill: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: 999 },
+  pillText: { color: colors.onNavy, fontSize: 11, fontWeight: '700' },
 });

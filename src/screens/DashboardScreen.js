@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
+  Pressable,
   StyleSheet,
   useWindowDimensions,
 } from 'react-native';
@@ -10,23 +11,73 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Card from '../components/Card';
 import TechnicianBar from '../components/TechnicianBar';
+import { SkeletonCardBody } from '../components/Skeleton';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
 import { colors, spacing } from '../theme';
-import { routineJobs, pendingJobs, totalToday, activeToday } from '../data/mock';
+import { fetchTechnicians, fetchRepairs, fmtDate } from '../data/api';
 
 export default function DashboardScreen({ navigation }) {
   const [dateRange, setDateRange] = useState(() => presetRange('today'));
   const [datePreset, setDatePreset] = useState('today');
+  const [techs, setTechs] = useState([]);
+  const [repairs, setRepairs] = useState([]);
+  const [meta, setMeta] = useState({ date: null, total: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   const { width } = useWindowDimensions();
-
-  // Desktop: 3-column grid. Mobile: single column.
   const isWide = width >= 900;
+  const dateStr = fmtDate(dateRange.start);
 
-  const routineMax = Math.max(...routineJobs.map((t) => t.today), 1);
-  const pendingMax = Math.max(...pendingJobs.map((t) => t.pending), 1);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const rep = await fetchRepairs(dateStr);
+      const rows = rep.rows || [];
 
-  const openJobs = (tech, count) =>
-    navigation.navigate('JobDetail', { technician: tech.name, count });
+      // รายชื่อช่าง: เอาจาก technician_list; ถ้าโหลดไม่ได้ (เช่น CORS ตอน dev)
+      // ให้ดึงรายชื่อจากตัวงานแทน เพื่อให้ยังแสดงผลได้
+      let techRows = [];
+      try {
+        techRows = await fetchTechnicians();
+      } catch (_) {
+        techRows = null;
+      }
+      if (!techRows || !techRows.length) {
+        const names = [...new Set(rows.map((r) => r.r_technician).filter(Boolean))];
+        techRows = names.map((n, i) => ({ id: String(i + 1), name: n }));
+      }
+
+      setRepairs(rows);
+      setTechs(techRows);
+      setMeta({ date: rep.date, total: rep.total ?? rows.length });
+    } catch (e) {
+      setError(e.message || 'โหลดข้อมูลไม่สำเร็จ');
+    } finally {
+      setLoading(false);
+    }
+  }, [dateStr]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // นับจำนวนงานต่อช่าง (จับคู่ด้วยชื่อ r_technician)
+  const countByName = {};
+  repairs.forEach((r) => {
+    const n = r.r_technician || '-';
+    countByName[n] = (countByName[n] || 0) + 1;
+  });
+  const routine = techs
+    .map((t) => ({ id: t.id, name: t.name, today: countByName[t.name] || 0 }))
+    .sort((a, b) => b.today - a.today);
+  const routineMax = Math.max(...routine.map((t) => t.today), 1);
+  const total = meta.total || repairs.length;
+  const active = routine.filter((t) => t.today > 0).length;
+
+  const openJobs = (tech) =>
+    navigation.navigate('JobDetail', { technician: tech.name, date: dateStr });
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -35,12 +86,9 @@ export default function DashboardScreen({ navigation }) {
         <Text style={styles.headerSub}>โปรแกรมงานซ่อมบำรุง</Text>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={[styles.grid, isWide && styles.gridWide]}>
-          {/* 1 — งานประจำวันแต่ละช่าง */}
+          {/* 1 — งานประจำวันแต่ละช่าง (ข้อมูลจริง) */}
           <Card
             starred
             title="งานประจำวันแต่ละช่าง"
@@ -54,45 +102,41 @@ export default function DashboardScreen({ navigation }) {
                 setDatePreset(key);
               }}
             />
-            <Text style={styles.summary}>
-              รวม <Text style={styles.summaryNum}>{totalToday}</Text> งาน ·
-              ทำงาน <Text style={styles.summaryNum}>{activeToday}</Text> ช่าง
-            </Text>
-            <ScrollView style={styles.list} nestedScrollEnabled>
-              {routineJobs.map((tech) => (
-                <TechnicianBar
-                  key={tech.id}
-                  name={tech.name}
-                  value={tech.today}
-                  max={routineMax}
-                  color={colors.barFill}
-                  onPress={() => openJobs(tech, tech.today)}
-                />
-              ))}
-            </ScrollView>
+
+            {loading ? (
+              <SkeletonCardBody lines={6} />
+            ) : error ? (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>โหลดข้อมูลไม่สำเร็จ</Text>
+                <Text style={styles.errorMsg}>{error}</Text>
+                <Pressable style={styles.retryBtn} onPress={load}>
+                  <Text style={styles.retryText}>ลองใหม่</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.summary}>
+                  วันที่ {meta.date} · รวม <Text style={styles.summaryNum}>{total}</Text> งาน ·{' '}
+                  <Text style={styles.summaryNum}>{active}</Text> ช่าง
+                </Text>
+                <ScrollView style={styles.list} nestedScrollEnabled>
+                  {routine.map((tech) => (
+                    <TechnicianBar
+                      key={tech.id}
+                      name={tech.name}
+                      value={tech.today}
+                      max={routineMax}
+                      color={colors.barFill}
+                      onPress={() => openJobs(tech)}
+                    />
+                  ))}
+                </ScrollView>
+              </>
+            )}
           </Card>
 
-          {/* 2 — งานค้างซ่อมแต่ละช่าง */}
-          <Card
-            starred
-            title="งานค้างซ่อมแต่ละช่าง"
-            style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
-          >
-            <ScrollView style={styles.list} nestedScrollEnabled>
-              {pendingJobs.map((tech) => (
-                <TechnicianBar
-                  key={tech.id}
-                  name={tech.name}
-                  value={tech.pending}
-                  max={pendingMax}
-                  color={colors.barFillAlt}
-                  onPress={() => openJobs(tech, tech.pending)}
-                />
-              ))}
-            </ScrollView>
-          </Card>
-
-          {/* 3-6 — placeholders for future cards */}
+          {/* 2-6 — รอเชื่อม endpoint เพิ่ม */}
+          <Placeholder title="งานค้างซ่อมแต่ละช่าง" tag="รอ endpoint" icon="🛠️" isWide={isWide} />
           <Placeholder title="ประวัติแจ้งซ่อมรายคัน" tag="อาจจะ" icon="🚗" isWide={isWide} />
           <Placeholder title="สต็อกอะไหล่" tag="อาจจะ" icon="📦" isWide={isWide} />
           <Placeholder title="ข้อมูลด้านอื่น ๆ" icon="📊" isWide={isWide} />
@@ -118,26 +162,14 @@ function Placeholder({ title, tag, icon, isWide }) {
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.navy,
-  },
+  safe: { flex: 1, backgroundColor: colors.navy },
   header: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
     paddingBottom: spacing.lg,
   },
-  headerTitle: {
-    color: colors.onNavy,
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  headerSub: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 13,
-    marginTop: 2,
-  },
+  headerTitle: { color: colors.onNavy, fontSize: 24, fontWeight: '800', letterSpacing: 0.3 },
+  headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
   scroll: {
     backgroundColor: colors.background,
     borderTopLeftRadius: 28,
@@ -146,52 +178,26 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl * 2,
     minHeight: '100%',
   },
-  grid: {
-    gap: spacing.lg,
-  },
-  gridWide: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
+  grid: { gap: spacing.lg },
+  gridWide: { flexDirection: 'row', flexWrap: 'wrap' },
   card: {},
-  cardFull: {
-    width: '100%',
+  cardFull: { width: '100%' },
+  cardWide: { flexBasis: '30%', flexGrow: 1, minWidth: 280 },
+  summary: { fontSize: 13, color: colors.textSecondary, marginBottom: spacing.sm },
+  summaryNum: { color: colors.navy, fontWeight: '800', fontSize: 15 },
+  list: { maxHeight: 320 },
+  errorBox: { paddingVertical: spacing.xl, alignItems: 'center' },
+  errorText: { color: colors.textPrimary, fontWeight: '700', marginBottom: 4 },
+  errorMsg: { color: colors.textMuted, fontSize: 12, textAlign: 'center', marginBottom: spacing.md },
+  retryBtn: {
+    backgroundColor: colors.navy,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
   },
-  cardWide: {
-    flexBasis: '30%',
-    flexGrow: 1,
-    minWidth: 280,
-  },
-  summary: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  summaryNum: {
-    color: colors.navy,
-    fontWeight: '800',
-    fontSize: 15,
-  },
-  list: {
-    maxHeight: 300,
-  },
-  placeholderCard: {
-    minHeight: 170,
-  },
-  placeholderBody: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xl,
-  },
-  placeholderIcon: {
-    fontSize: 30,
-    marginBottom: spacing.sm,
-    opacity: 0.7,
-  },
-  placeholderText: {
-    fontSize: 13,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
+  retryText: { color: colors.onNavy, fontWeight: '700' },
+  placeholderCard: { minHeight: 170 },
+  placeholderBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl },
+  placeholderIcon: { fontSize: 30, marginBottom: spacing.sm, opacity: 0.7 },
+  placeholderText: { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
 });
