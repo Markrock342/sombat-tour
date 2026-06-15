@@ -12,11 +12,14 @@ import Card from '../components/Card';
 import Dropdown from '../components/Dropdown';
 import TechnicianBar from '../components/TechnicianBar';
 import { SkeletonCardBody } from '../components/Skeleton';
+import DateRangePicker, { presetRange } from '../components/DateRangePicker';
 import { colors, spacing } from '../theme';
 import { routineJobs, pendingJobs, filterOptions } from '../data/mock';
 
 export default function DashboardScreen({ navigation }) {
   const [filter, setFilter] = useState(filterOptions[0]);
+  const [dateRange, setDateRange] = useState(() => presetRange('7d'));
+  const [datePreset, setDatePreset] = useState('7d');
   const { width } = useWindowDimensions();
 
   // Single column on phones, three across on wide screens (tablet / web).
@@ -39,6 +42,16 @@ export default function DashboardScreen({ navigation }) {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
+        {/* Date range filter */}
+        <DateRangePicker
+          value={dateRange}
+          presetKey={datePreset}
+          onChange={(range, key) => {
+            setDateRange(range);
+            setDatePreset(key);
+          }}
+        />
+
         {/* Top row: routine / pending / weekly volume */}
         <View style={[styles.row, isWide && styles.rowWide]}>
           <Card
