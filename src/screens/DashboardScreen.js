@@ -48,7 +48,6 @@ export default function DashboardScreen({ navigation }) {
             style={[styles.topCard, isWide && styles.topCardWide]}
           >
             <DateRangePicker
-              embedded
               value={dateRange}
               presetKey={datePreset}
               onChange={(range, key) => {
@@ -158,7 +157,7 @@ const styles = StyleSheet.create({
   },
   pendingHeaderSpacer: {
     // keeps the bar list aligned with the date-range control in the other card
-    height: 92,
+    height: 80,
   },
   bottomCard: {
     minHeight: 200,
