@@ -105,6 +105,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.md,
+    width: '100%',
+    maxWidth: 560,
   },
   input: {
     flex: 1,
