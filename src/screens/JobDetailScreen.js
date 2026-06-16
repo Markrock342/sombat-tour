@@ -108,7 +108,7 @@ export default function JobDetailScreen({ route, navigation }) {
                 </View>
                 <Text style={styles.jobCode}>
                   {job.code}
-                  {job.datetime ? ` · ${job.datetime}` : ''}
+                  {job.datetime ? ` • ${job.datetime}` : ''}
                 </Text>
 
                 <View style={styles.vehicleBox}>
@@ -117,13 +117,13 @@ export default function JobDetailScreen({ route, navigation }) {
                   ) : null}
                   <Text style={styles.jobDetail}>
                     {job.plate || '-'}
-                    {job.chassis ? ` · ${job.chassis}` : ''}
+                    {job.chassis ? ` • ${job.chassis}` : ''}
                   </Text>
                   {job.model ? <Text style={styles.jobDetail}>{job.model}</Text> : null}
                   {job.mile > 0 || job.company ? (
                     <Text style={styles.jobDetail}>
                       {job.mile > 0 ? `ไมล์ ${job.mile.toLocaleString()}` : ''}
-                      {job.mile > 0 && job.company ? ' · ' : ''}
+                      {job.mile > 0 && job.company ? ' • ' : ''}
                       {job.company || ''}
                     </Text>
                   ) : null}
