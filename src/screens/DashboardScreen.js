@@ -119,10 +119,10 @@ export default function DashboardScreen({ navigation }) {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={[styles.grid, isWide && styles.gridWide]}>
-          {/* 1 — งานประจำวันแต่ละช่าง (ข้อมูลจริง) */}
+          {/* 1 — งานประจำวัน (ข้อมูลจริง) */}
           <Card
             starred
-            title="งานประจำวันแต่ละช่าง"
+            title="งานประจำวัน"
             style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
           >
             <DateRangePicker
