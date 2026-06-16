@@ -22,7 +22,6 @@ export default function DashboardScreen({ navigation }) {
   const [techs, setTechs] = useState([]);
   const [repairs, setRepairs] = useState([]);
   const [pending, setPending] = useState([]);
-  const [pendingTotal, setPendingTotal] = useState(0);
   const [meta, setMeta] = useState({ date: null, total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -56,10 +55,8 @@ export default function DashboardScreen({ navigation }) {
       try {
         const pend = await fetchPending();
         setPending(pend.rows || []);
-        setPendingTotal(pend.total || 0);
       } catch (_) {
         setPending([]);
-        setPendingTotal(0);
       }
 
       setRepairs(rows);
@@ -92,13 +89,23 @@ export default function DashboardScreen({ navigation }) {
   // งานค้างซ่อมต่อช่าง (จับคู่ด้วยชื่อ)
   const pendingByName = {};
   pending.forEach((p) => {
-    pendingByName[p.name] = p.pending;
+    const name = p.name?.trim() ? p.name.trim() : 'ไม่ระบุช่าง';
+    pendingByName[name] = (pendingByName[name] || 0) + (p.pending || 0);
   });
-  const pendingList = techs
-    .map((t) => ({ id: t.id, name: t.name, pending: pendingByName[t.name] || 0 }))
-    .sort((a, b) => b.pending - a.pending);
+  const techNames = new Set(techs.map((t) => t.name));
+  const pendingList = [
+    ...techs.map((t) => ({ id: t.id, name: t.name, pending: pendingByName[t.name] || 0 })),
+    ...Object.entries(pendingByName)
+      .filter(([name]) => !techNames.has(name))
+      .map(([name, count], i) => ({
+        id: `pending-${i}`,
+        name,
+        pending: count,
+        queryName: name === 'ไม่ระบุช่าง' ? '' : name,
+      })),
+  ].sort((a, b) => b.pending - a.pending);
   const pendingMax = Math.max(...pendingList.map((t) => t.pending), 1);
-  const pendingSum = pendingTotal || pendingList.reduce((s, t) => s + t.pending, 0);
+  const pendingSum = pendingList.reduce((s, t) => s + t.pending, 0);
 
   const openJobs = (tech) =>
     navigation.navigate('JobDetail', {
@@ -109,7 +116,10 @@ export default function DashboardScreen({ navigation }) {
     });
 
   const openPendingJobs = (tech) =>
-    navigation.navigate('JobDetail', { technician: tech.name, mode: 'pending' });
+    navigation.navigate('JobDetail', {
+      technician: tech.queryName ?? tech.name,
+      mode: 'pending',
+    });
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
