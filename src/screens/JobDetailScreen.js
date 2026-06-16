@@ -106,7 +106,10 @@ export default function JobDetailScreen({ route, navigation }) {
                   </View>
                   <StatusPill closed={job.closed} />
                 </View>
-                <Text style={styles.jobCode}>{job.code}</Text>
+                <Text style={styles.jobCode}>
+                  {job.code}
+                  {job.datetime ? ` · ${job.datetime}` : ''}
+                </Text>
 
                 <View style={styles.vehicleBox}>
                   {job.vehicleNo ? (
@@ -116,15 +119,17 @@ export default function JobDetailScreen({ route, navigation }) {
                     {job.plate || '-'}
                     {job.chassis ? ` · ${job.chassis}` : ''}
                   </Text>
-                  <Text style={styles.jobDetail}>
-                    {job.model}
-                    {job.mile > 0 ? `${job.model ? ' · ' : ''}ไมล์ ${job.mile.toLocaleString()}` : ''}
-                    {job.company ? ` · ${job.company}` : ''}
-                  </Text>
+                  {job.model ? <Text style={styles.jobDetail}>{job.model}</Text> : null}
+                  {job.mile > 0 || job.company ? (
+                    <Text style={styles.jobDetail}>
+                      {job.mile > 0 ? `ไมล์ ${job.mile.toLocaleString()}` : ''}
+                      {job.mile > 0 && job.company ? ' · ' : ''}
+                      {job.company || ''}
+                    </Text>
+                  ) : null}
                 </View>
 
                 <Text style={styles.jobTitle}>{job.title}</Text>
-                {job.datetime ? <Text style={styles.jobTime}>{job.datetime}</Text> : null}
               </Pressable>
             ))}
           </View>
