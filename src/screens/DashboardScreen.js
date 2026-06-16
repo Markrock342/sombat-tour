@@ -169,7 +169,7 @@ export default function DashboardScreen({ navigation }) {
           {/* 2 — งานค้างซ่อมแต่ละช่าง (ข้อมูลจริง) */}
           <Card
             starred
-            title="งานค้างซ่อมแต่ละช่าง"
+            title="งานค้างซ่อม"
             style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
           >
             {loading ? (
@@ -184,7 +184,7 @@ export default function DashboardScreen({ navigation }) {
             ) : (
               <>
                 <Text style={styles.summary}>
-                  ค้างทั้งหมด <Text style={styles.summaryNum}>{pendingSum}</Text> งาน
+                  รวม <Text style={styles.summaryNum}>{pendingSum}</Text> งาน
                 </Text>
                 <ScrollView style={styles.list} nestedScrollEnabled>
                   {pendingList.map((tech) => (
