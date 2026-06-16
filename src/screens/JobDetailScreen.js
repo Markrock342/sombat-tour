@@ -39,7 +39,7 @@ export default function JobDetailScreen({ route, navigation }) {
         vehicleNo: r.r_v_name || '',
         plate: r.r_v_plate || '',
         chassis: r.r_v_chassis || '',
-        model: [r.r_v_brand, r.r_v_model].filter(Boolean).join(' '),
+        model: [r.r_v_brand, r.r_v_model].filter(Boolean).join(' • '),
         mile: Number(r.r_mile) || 0,
         company: r.r_v_company || r.r_inv_com || '',
         datetime: r.r_dt_rec,
