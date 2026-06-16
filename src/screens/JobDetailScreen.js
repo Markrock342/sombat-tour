@@ -16,6 +16,7 @@ import { fetchRepairs, fetchPendingJobs } from '../data/api';
 export default function JobDetailScreen({ route, navigation }) {
   const { technician, date, dateEnd, mode = 'day' } = route.params ?? {};
   const dateLabel = dateEnd && dateEnd !== date ? `${date} – ${dateEnd}` : date;
+  const techLabel = technician?.trim() ? technician : 'ไม่ระบุช่าง';
   const isPending = mode === 'pending';
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +31,12 @@ export default function JobDetailScreen({ route, navigation }) {
       // โหมดงานค้าง: ดึงงานค้างทั้งหมดของช่าง; โหมดปกติ: งานของวันนั้น
       const rows = isPending
         ? (await fetchPendingJobs(technician)).rows || []
-        : ((await fetchRepairs(date, dateEnd)).rows || []).filter((r) => r.r_technician === technician);
+        : ((await fetchRepairs(date, dateEnd)).rows || []).filter((r) => {
+            const tech = (r.r_technician || '').trim();
+            const want = (technician || '').trim();
+            if (!want || want === 'ไม่ระบุช่าง') return !tech;
+            return tech === want;
+          });
 
       const mapped = rows.map((r, i) => ({
         id: i + 1,
@@ -67,7 +73,7 @@ export default function JobDetailScreen({ route, navigation }) {
           {isPending ? 'งานค้างซ่อม' : 'รายการแจ้งซ่อม'}
         </Text>
         <Text style={styles.headerSub}>
-          {technician}
+          {techLabel}
           {isPending ? '' : ` · ${dateLabel}`}
           {!loading && !error ? ` · ${jobs.length} งาน` : ''}
         </Text>

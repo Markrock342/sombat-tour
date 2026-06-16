@@ -76,12 +76,21 @@ export default function DashboardScreen({ navigation }) {
   // นับจำนวนงานต่อช่าง (จับคู่ด้วยชื่อ r_technician)
   const countByName = {};
   repairs.forEach((r) => {
-    const n = r.r_technician || '-';
+    const n = r.r_technician?.trim() ? r.r_technician.trim() : 'ไม่ระบุช่าง';
     countByName[n] = (countByName[n] || 0) + 1;
   });
-  const routine = techs
-    .map((t) => ({ id: t.id, name: t.name, today: countByName[t.name] || 0 }))
-    .sort((a, b) => b.today - a.today);
+  const techNames = new Set(techs.map((t) => t.name));
+  const routine = [
+    ...techs.map((t) => ({ id: t.id, name: t.name, today: countByName[t.name] || 0 })),
+    ...Object.entries(countByName)
+      .filter(([name]) => !techNames.has(name))
+      .map(([name, count], i) => ({
+        id: `routine-${i}`,
+        name,
+        today: count,
+        queryName: name === 'ไม่ระบุช่าง' ? '' : name,
+      })),
+  ].sort((a, b) => b.today - a.today);
   const routineMax = Math.max(...routine.map((t) => t.today), 1);
   const total = meta.total || repairs.length;
   const active = routine.filter((t) => t.today > 0).length;
@@ -92,7 +101,6 @@ export default function DashboardScreen({ navigation }) {
     const name = p.name?.trim() ? p.name.trim() : 'ไม่ระบุช่าง';
     pendingByName[name] = (pendingByName[name] || 0) + (p.pending || 0);
   });
-  const techNames = new Set(techs.map((t) => t.name));
   const pendingList = [
     ...techs.map((t) => ({ id: t.id, name: t.name, pending: pendingByName[t.name] || 0 })),
     ...Object.entries(pendingByName)
@@ -109,7 +117,7 @@ export default function DashboardScreen({ navigation }) {
 
   const openJobs = (tech) =>
     navigation.navigate('JobDetail', {
-      technician: tech.name,
+      technician: tech.queryName ?? tech.name,
       date: dateStart,
       dateEnd,
       mode: 'day',
