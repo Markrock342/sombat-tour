@@ -13,6 +13,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, radius, shadow } from '../theme';
 import { fetchRepairs, fetchPendingJobs, fmtThaiDate, fmtDateTime } from '../data/api';
 
+const STATUS_FILTERS = [
+  { key: 'all', label: 'ทั้งหมด' },
+  { key: 'open', label: 'กำลังซ่อม' },
+  { key: 'closed', label: 'ปิดงานแล้ว' },
+];
+
 export default function JobDetailScreen({ route, navigation }) {
   const { technician, date, dateEnd, mode = 'day' } = route.params ?? {};
   const dateLabel =
@@ -22,6 +28,7 @@ export default function JobDetailScreen({ route, navigation }) {
   const techLabel = technician?.trim() ? technician : 'ไม่ระบุช่าง';
   const isPending = mode === 'pending';
   const [jobs, setJobs] = useState([]);
+  const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { width } = useWindowDimensions();
@@ -57,6 +64,7 @@ export default function JobDetailScreen({ route, navigation }) {
         datetime: r.r_dt_rec,
       }));
       setJobs(mapped);
+      setStatusFilter('all');
     } catch (e) {
       setError(e.message || 'โหลดข้อมูลไม่สำเร็จ');
     } finally {
@@ -67,6 +75,19 @@ export default function JobDetailScreen({ route, navigation }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  const visibleJobs = jobs
+    .filter((job) => {
+      if (statusFilter === 'open') return !job.closed;
+      if (statusFilter === 'closed') return job.closed;
+      return true;
+    })
+    .map((job, i) => ({ ...job, displayId: i + 1 }));
+
+  const countLabel =
+    statusFilter === 'all'
+      ? `${jobs.length} งาน`
+      : `${visibleJobs.length} จาก ${jobs.length} งาน`;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -80,7 +101,7 @@ export default function JobDetailScreen({ route, navigation }) {
         <Text style={styles.headerSub}>
           {techLabel}
           {isPending ? '' : ` · ${dateLabel}`}
-          {!loading && !error ? ` · ${jobs.length} งาน` : ''}
+          {!loading && !error && jobs.length > 0 ? ` · ${countLabel}` : ''}
         </Text>
       </View>
 
@@ -102,10 +123,33 @@ export default function JobDetailScreen({ route, navigation }) {
             <Text style={styles.centerText}>ไม่มีงานของช่างคนนี้ในวันที่เลือก</Text>
           </View>
         ) : (
+          <>
+            <View style={styles.filterRow}>
+              {STATUS_FILTERS.map((f) => {
+                const active = statusFilter === f.key;
+                return (
+                  <Pressable
+                    key={f.key}
+                    onPress={() => setStatusFilter(f.key)}
+                    style={[styles.filterChip, active && styles.filterChipActive]}
+                  >
+                    <Text style={[styles.filterText, active && styles.filterTextActive]}>
+                      {f.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {visibleJobs.length === 0 ? (
+              <View style={styles.center}>
+                <Text style={styles.centerText}>ไม่มีงานในสถานะที่เลือก</Text>
+              </View>
+            ) : (
           <View style={[styles.grid, isWide && styles.gridWide]}>
-            {jobs.map((job) => (
+            {visibleJobs.map((job) => (
               <Pressable
-                key={job.id}
+                key={job.code}
                 style={({ pressed }) => [
                   styles.jobCard,
                   isWide ? styles.jobCardWide : styles.jobCardFull,
@@ -114,7 +158,7 @@ export default function JobDetailScreen({ route, navigation }) {
               >
                 <View style={styles.jobTopRow}>
                   <View style={styles.indexBadge}>
-                    <Text style={styles.indexText}>{job.id}</Text>
+                    <Text style={styles.indexText}>{job.displayId}</Text>
                   </View>
                   <StatusPill closed={job.closed} />
                 </View>
@@ -145,6 +189,8 @@ export default function JobDetailScreen({ route, navigation }) {
               </Pressable>
             ))}
           </View>
+            )}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -188,6 +234,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   retryText: { color: colors.onNavy, fontWeight: '700' },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.lg },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: colors.navyTint,
+  },
+  filterChipActive: { backgroundColor: colors.navy },
+  filterText: { fontSize: 13, fontWeight: '700', color: colors.navySoft },
+  filterTextActive: { color: colors.onNavy },
   grid: { gap: spacing.md },
   gridWide: { flexDirection: 'row', flexWrap: 'wrap' },
   jobCard: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.lg, ...shadow },
