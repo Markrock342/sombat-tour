@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
   },
   vehicleNo: {
     color: colors.textPrimary,
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: '800',
     marginBottom: 3,
   },
