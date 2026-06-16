@@ -147,8 +147,8 @@ export default function DashboardScreen({ navigation }) {
             ) : (
               <>
                 <Text style={styles.summary}>
-                  วันที่ {meta.date} · รวม <Text style={styles.summaryNum}>{total}</Text> งาน ·{' '}
-                  <Text style={styles.summaryNum}>{active}</Text> ช่าง
+                  มีงาน <Text style={styles.summaryNum}>{active}</Text> ผู้ซ่อม · รวม{' '}
+                  <Text style={styles.summaryNum}>{total}</Text> งาน
                 </Text>
                 <ScrollView style={styles.list} nestedScrollEnabled>
                   {routine.map((tech) => (
