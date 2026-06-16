@@ -107,22 +107,23 @@ export default function JobDetailScreen({ route, navigation }) {
                   <StatusPill closed={job.closed} />
                 </View>
                 <Text style={styles.jobCode}>{job.code}</Text>
-                <Text style={styles.jobTitle}>{job.title}</Text>
 
                 <View style={styles.vehicleBox}>
                   {job.vehicleNo ? (
-                    <Text style={styles.vehicleNo}>🚚 หมายเลขรถ {job.vehicleNo}</Text>
+                    <Text style={styles.vehicleNo}>🚚 {job.vehicleNo}</Text>
                   ) : null}
                   <Text style={styles.jobDetail}>
-                    ทะเบียน {job.plate || '-'}
-                    {job.chassis ? ` · คัสซี ${job.chassis}` : ''}
+                    {job.plate || '-'}
+                    {job.chassis ? ` · ${job.chassis}` : ''}
                   </Text>
                   <Text style={styles.jobDetail}>
                     {job.model}
-                    {job.mile > 0 ? `${job.model ? ' · ' : ''}ไมล์ ${job.mile.toLocaleString()} กม.` : ''}
+                    {job.mile > 0 ? `${job.model ? ' · ' : ''}ไมล์ ${job.mile.toLocaleString()}` : ''}
                     {job.company ? ` · ${job.company}` : ''}
                   </Text>
                 </View>
+
+                <Text style={styles.jobTitle}>{job.title}</Text>
                 {job.datetime ? <Text style={styles.jobTime}>{job.datetime}</Text> : null}
               </Pressable>
             ))}
@@ -197,6 +198,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     lineHeight: 27,
+    marginTop: 8,
     marginBottom: 6,
     backgroundColor: '#FFF0C2',
     alignSelf: 'flex-start',
