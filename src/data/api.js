@@ -9,6 +9,32 @@ export function fmtDate(d) {
   return `${y}-${m}-${day}`;
 }
 
+const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const addDays = (d, n) => {
+  const r = startOfDay(d);
+  r.setDate(r.getDate() + n);
+  return r;
+};
+
+function eachDayInRange(start, end) {
+  const days = [];
+  let d = startOfDay(start);
+  const last = startOfDay(end);
+  while (d <= last) {
+    days.push(fmtDate(d));
+    d = addDays(d, 1);
+  }
+  return days;
+}
+
+async function fetchRepairsForDay(dateStr) {
+  const q = dateStr ? `?date=${encodeURIComponent(dateStr)}` : '?date=latest';
+  const res = await fetch(`${API_BASE}/list_repair.php${q}`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'list_repair failed');
+  return data;
+}
+
 // รายชื่อช่างทั้งหมด → [{ id, name, v_sort }]
 export async function fetchTechnicians() {
   const res = await fetch(`${API_BASE}/technician_list.php?limit=500`);
@@ -17,13 +43,33 @@ export async function fetchTechnicians() {
   return data.rows || [];
 }
 
-// งานแจ้งซ่อมของวันที่ระบุ → { date, total, rows: [...] }
-export async function fetchRepairs(dateStr) {
-  const q = dateStr ? `?date=${encodeURIComponent(dateStr)}` : '?date=latest';
-  const res = await fetch(`${API_BASE}/list_repair.php${q}`);
-  const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'list_repair failed');
-  return data;
+// งานแจ้งซ่อมของวันที่ระบุ (หรือช่วงวันที่) → { date, total, rows: [...] }
+export async function fetchRepairs(start, end) {
+  if (!start) return fetchRepairsForDay(null);
+
+  const startDate = start instanceof Date ? start : new Date(`${start}T00:00:00`);
+  const endDate = end
+    ? end instanceof Date
+      ? end
+      : new Date(`${end}T00:00:00`)
+    : startDate;
+  const startStr = fmtDate(startDate);
+  const endStr = fmtDate(endDate);
+
+  if (startStr === endStr) return fetchRepairsForDay(startStr);
+
+  const parts = await Promise.all(eachDayInRange(startDate, endDate).map(fetchRepairsForDay));
+  const seen = new Set();
+  const rows = [];
+  for (const part of parts) {
+    for (const row of part.rows || []) {
+      const id = String(row.r_id || row.r_job_num || '');
+      if (id && seen.has(id)) continue;
+      if (id) seen.add(id);
+      rows.push(row);
+    }
+  }
+  return { ok: true, date: `${startStr}..${endStr}`, total: rows.length, rows };
 }
 
 // งานค้างซ่อม นับต่อช่าง → { total, rows: [{ name, pending }] }

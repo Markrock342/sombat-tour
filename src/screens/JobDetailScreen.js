@@ -14,7 +14,8 @@ import { colors, spacing, radius, shadow } from '../theme';
 import { fetchRepairs, fetchPendingJobs } from '../data/api';
 
 export default function JobDetailScreen({ route, navigation }) {
-  const { technician, date, mode = 'day' } = route.params ?? {};
+  const { technician, date, dateEnd, mode = 'day' } = route.params ?? {};
+  const dateLabel = dateEnd && dateEnd !== date ? `${date} – ${dateEnd}` : date;
   const isPending = mode === 'pending';
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,7 +30,7 @@ export default function JobDetailScreen({ route, navigation }) {
       // โหมดงานค้าง: ดึงงานค้างทั้งหมดของช่าง; โหมดปกติ: งานของวันนั้น
       const rows = isPending
         ? (await fetchPendingJobs(technician)).rows || []
-        : ((await fetchRepairs(date)).rows || []).filter((r) => r.r_technician === technician);
+        : ((await fetchRepairs(date, dateEnd)).rows || []).filter((r) => r.r_technician === technician);
 
       const mapped = rows.map((r, i) => ({
         id: i + 1,
@@ -50,7 +51,7 @@ export default function JobDetailScreen({ route, navigation }) {
     } finally {
       setLoading(false);
     }
-  }, [technician, date, isPending]);
+  }, [technician, date, dateEnd, isPending]);
 
   useEffect(() => {
     load();
@@ -67,7 +68,7 @@ export default function JobDetailScreen({ route, navigation }) {
         </Text>
         <Text style={styles.headerSub}>
           {technician}
-          {isPending ? '' : ` · ${date}`}
+          {isPending ? '' : ` · ${dateLabel}`}
           {!loading && !error ? ` · ${jobs.length} งาน` : ''}
         </Text>
       </View>

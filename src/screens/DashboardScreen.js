@@ -29,13 +29,14 @@ export default function DashboardScreen({ navigation }) {
 
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
-  const dateStr = fmtDate(dateRange.start);
+  const dateStart = fmtDate(dateRange.start);
+  const dateEnd = fmtDate(dateRange.end);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const rep = await fetchRepairs(dateStr);
+      const rep = await fetchRepairs(dateRange.start, dateRange.end);
       const rows = rep.rows || [];
 
       // รายชื่อช่าง: เอาจาก technician_list; ถ้าโหลดไม่ได้ (เช่น CORS ตอน dev)
@@ -69,7 +70,7 @@ export default function DashboardScreen({ navigation }) {
     } finally {
       setLoading(false);
     }
-  }, [dateStr]);
+  }, [dateRange.start, dateRange.end]);
 
   useEffect(() => {
     load();
@@ -100,7 +101,12 @@ export default function DashboardScreen({ navigation }) {
   const pendingSum = pendingTotal || pendingList.reduce((s, t) => s + t.pending, 0);
 
   const openJobs = (tech) =>
-    navigation.navigate('JobDetail', { technician: tech.name, date: dateStr, mode: 'day' });
+    navigation.navigate('JobDetail', {
+      technician: tech.name,
+      date: dateStart,
+      dateEnd,
+      mode: 'day',
+    });
 
   const openPendingJobs = (tech) =>
     navigation.navigate('JobDetail', { technician: tech.name, mode: 'pending' });
