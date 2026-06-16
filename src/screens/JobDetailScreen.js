@@ -108,7 +108,7 @@ export default function JobDetailScreen({ route, navigation }) {
                 </View>
                 <Text style={styles.jobCode}>
                   {job.code}
-                  {job.datetime ? ` • ${job.datetime}` : ''}
+                  {job.datetime ? ` | ${job.datetime}` : ''}
                 </Text>
 
                 <View style={styles.vehicleBox}>
