@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, shadow } from '../theme';
+import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
 
 const FIELDS = [
   ['v_id', 'ID รถ'],
@@ -25,20 +26,25 @@ export default function VehicleDetailScreen({ route, navigation }) {
   const { vehicle } = route.params ?? {};
   const v = vehicle || {};
   const rows = FIELDS.filter(([key]) => v[key] !== undefined && v[key] !== null && v[key] !== '');
+  const isMobile = useIsMobile();
+  const goBack = () => navigation.goBack();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={styles.body}>
       <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
-          <Text style={styles.back}>‹ กลับ</Text>
-        </Pressable>
+        {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
         <Text style={styles.headerTitle}>ข้อมูลรถ</Text>
         <Text style={styles.headerSub}>
           {v.v_name || `ID ${v.v_id}`} · {[v.v_brand, v.v_model].filter(Boolean).join(' ')}
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.card}>
           {rows.map(([key, label], i) => (
             <View key={key} style={[styles.row, i === rows.length - 1 && styles.rowLast]}>
@@ -48,12 +54,16 @@ export default function VehicleDetailScreen({ route, navigation }) {
           ))}
         </View>
       </ScrollView>
+      {isMobile ? <MobileBackBar onPress={goBack} /> : null}
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.navy },
+  body: { flex: 1 },
+  scrollView: { flex: 1 },
   header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.lg },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
   headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },

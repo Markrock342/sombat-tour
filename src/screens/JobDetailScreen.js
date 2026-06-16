@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, shadow } from '../theme';
 import DateRangePicker from '../components/DateRangePicker';
+import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
 import { fetchRepairs, fetchPendingJobs, fmtThaiDate, fmtDateTime, fmtDate } from '../data/api';
 
 const STATUS_FILTERS = [
@@ -48,6 +49,8 @@ export default function JobDetailScreen({ route, navigation }) {
   const [error, setError] = useState(null);
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
+  const isMobile = useIsMobile();
+  const goBack = () => navigation.goBack();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -106,10 +109,9 @@ export default function JobDetailScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={styles.body}>
       <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
-          <Text style={styles.back}>‹ กลับ</Text>
-        </Pressable>
+        {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
         <Text style={styles.headerTitle}>
           {isPending ? 'งานค้างซ่อม' : 'รายการแจ้งซ่อม'}
         </Text>
@@ -121,7 +123,11 @@ export default function JobDetailScreen({ route, navigation }) {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
+        showsVerticalScrollIndicator={false}
+      >
         {!isPending ? (
           <DateRangePicker
             value={dateRange}
@@ -222,6 +228,8 @@ export default function JobDetailScreen({ route, navigation }) {
           </>
         )}
       </ScrollView>
+      {isMobile ? <MobileBackBar onPress={goBack} /> : null}
+      </View>
     </SafeAreaView>
   );
 }
@@ -237,6 +245,8 @@ function StatusPill({ closed }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.navy },
+  body: { flex: 1 },
+  scrollView: { flex: 1 },
   header: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,

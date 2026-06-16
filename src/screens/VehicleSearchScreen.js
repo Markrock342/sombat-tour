@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, shadow } from '../theme';
+import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
 import { searchVehicles } from '../data/api';
 
 export default function VehicleSearchScreen({ navigation }) {
@@ -19,6 +20,8 @@ export default function VehicleSearchScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searched, setSearched] = useState(false);
+  const isMobile = useIsMobile();
+  const goBack = () => navigation.goBack();
 
   const doSearch = useCallback(async () => {
     const term = q.trim();
@@ -37,10 +40,9 @@ export default function VehicleSearchScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={styles.body}>
       <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
-          <Text style={styles.back}>‹ กลับ</Text>
-        </Pressable>
+        {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
         <Text style={styles.headerTitle}>ค้นหารถ</Text>
         <Text style={styles.headerSub}>ค้นจาก ID รถ หรือ เบอร์รถ (ไม่ใช่ทะเบียน)</Text>
       </View>
@@ -61,7 +63,11 @@ export default function VehicleSearchScreen({ navigation }) {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
+        keyboardShouldPersistTaps="handled"
+      >
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator color={colors.navy} />
@@ -90,12 +96,16 @@ export default function VehicleSearchScreen({ navigation }) {
           ))
         )}
       </ScrollView>
+      {isMobile ? <MobileBackBar onPress={goBack} /> : null}
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.navy },
+  body: { flex: 1 },
+  scrollView: { flex: 1 },
   header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.md },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
   headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },
