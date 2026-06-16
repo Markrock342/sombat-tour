@@ -120,6 +120,7 @@ export default function DashboardScreen({ navigation }) {
       technician: tech.queryName ?? tech.name,
       date: dateStart,
       dateEnd,
+      datePreset,
       mode: 'day',
     });
 

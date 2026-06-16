@@ -11,7 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { fetchRepairs, fetchPendingJobs, fmtThaiDate, fmtDateTime } from '../data/api';
+import DateRangePicker from '../components/DateRangePicker';
+import { fetchRepairs, fetchPendingJobs, fmtThaiDate, fmtDateTime, fmtDate } from '../data/api';
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'ทั้งหมด' },
@@ -19,14 +20,28 @@ const STATUS_FILTERS = [
   { key: 'closed', label: 'ปิดงานแล้ว' },
 ];
 
+function parseDateStr(str) {
+  if (!str) return new Date();
+  const [y, m, d] = String(str).split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 export default function JobDetailScreen({ route, navigation }) {
-  const { technician, date, dateEnd, mode = 'day' } = route.params ?? {};
-  const dateLabel =
-    dateEnd && dateEnd !== date
-      ? `${fmtThaiDate(date)} – ${fmtThaiDate(dateEnd)}`
-      : fmtThaiDate(date);
-  const techLabel = technician?.trim() ? technician : 'ไม่ระบุช่าง';
+  const { technician, date, dateEnd, datePreset: initialPreset = 'custom', mode = 'day' } =
+    route.params ?? {};
   const isPending = mode === 'pending';
+  const [dateRange, setDateRange] = useState(() => ({
+    start: parseDateStr(date),
+    end: parseDateStr(dateEnd || date),
+  }));
+  const [datePreset, setDatePreset] = useState(initialPreset);
+  const dateStart = fmtDate(dateRange.start);
+  const dateEndStr = fmtDate(dateRange.end);
+  const dateLabel =
+    dateEndStr !== dateStart
+      ? `${fmtThaiDate(dateStart)} – ${fmtThaiDate(dateEndStr)}`
+      : fmtThaiDate(dateStart);
+  const techLabel = technician?.trim() ? technician : 'ไม่ระบุช่าง';
   const [jobs, setJobs] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -41,7 +56,7 @@ export default function JobDetailScreen({ route, navigation }) {
       // โหมดงานค้าง: ดึงงานค้างทั้งหมดของช่าง; โหมดปกติ: งานของวันนั้น
       const rows = isPending
         ? (await fetchPendingJobs(technician)).rows || []
-        : ((await fetchRepairs(date, dateEnd)).rows || []).filter((r) => {
+        : ((await fetchRepairs(dateRange.start, dateRange.end)).rows || []).filter((r) => {
             const tech = (r.r_technician || '').trim();
             const want = (technician || '').trim();
             if (!want || want === 'ไม่ระบุช่าง') return !tech;
@@ -70,7 +85,7 @@ export default function JobDetailScreen({ route, navigation }) {
     } finally {
       setLoading(false);
     }
-  }, [technician, date, dateEnd, isPending]);
+  }, [technician, dateRange.start, dateRange.end, isPending]);
 
   useEffect(() => {
     load();
@@ -101,11 +116,23 @@ export default function JobDetailScreen({ route, navigation }) {
         <Text style={styles.headerSub}>
           {techLabel}
           {isPending ? '' : ` · ${dateLabel}`}
-          {!loading && !error && jobs.length > 0 ? ` · ${countLabel}` : ''}
+          {!loading && !error && !isPending ? ` · ${jobs.length === 0 ? '0 งาน' : countLabel}` : ''}
+          {!loading && !error && isPending && jobs.length > 0 ? ` · ${countLabel}` : ''}
         </Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {!isPending ? (
+          <DateRangePicker
+            value={dateRange}
+            presetKey={datePreset}
+            onChange={(range, key) => {
+              setDateRange(range);
+              setDatePreset(key);
+            }}
+          />
+        ) : null}
+
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator color={colors.navy} />
@@ -118,77 +145,79 @@ export default function JobDetailScreen({ route, navigation }) {
               <Text style={styles.retryText}>ลองใหม่</Text>
             </Pressable>
           </View>
-        ) : jobs.length === 0 ? (
-          <View style={styles.center}>
-            <Text style={styles.centerText}>ไม่มีงานของช่างคนนี้ในวันที่เลือก</Text>
-          </View>
         ) : (
           <>
-            <View style={styles.filterRow}>
-              {STATUS_FILTERS.map((f) => {
-                const active = statusFilter === f.key;
-                return (
-                  <Pressable
-                    key={f.key}
-                    onPress={() => setStatusFilter(f.key)}
-                    style={[styles.filterChip, active && styles.filterChipActive]}
-                  >
-                    <Text style={[styles.filterText, active && styles.filterTextActive]}>
-                      {f.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            {jobs.length > 0 ? (
+              <View style={styles.filterRow}>
+                {STATUS_FILTERS.map((f) => {
+                  const active = statusFilter === f.key;
+                  return (
+                    <Pressable
+                      key={f.key}
+                      onPress={() => setStatusFilter(f.key)}
+                      style={[styles.filterChip, active && styles.filterChipActive]}
+                    >
+                      <Text style={[styles.filterText, active && styles.filterTextActive]}>
+                        {f.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
 
-            {visibleJobs.length === 0 ? (
+            {jobs.length === 0 ? (
+              <View style={styles.center}>
+                <Text style={styles.centerText}>ไม่มีงานของช่างคนนี้ในวันที่เลือก</Text>
+              </View>
+            ) : visibleJobs.length === 0 ? (
               <View style={styles.center}>
                 <Text style={styles.centerText}>ไม่มีงานในสถานะที่เลือก</Text>
               </View>
             ) : (
-          <View style={[styles.grid, isWide && styles.gridWide]}>
-            {visibleJobs.map((job) => (
-              <Pressable
-                key={job.code}
-                style={({ pressed }) => [
-                  styles.jobCard,
-                  isWide ? styles.jobCardWide : styles.jobCardFull,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <View style={styles.jobTopRow}>
-                  <View style={styles.indexBadge}>
-                    <Text style={styles.indexText}>{job.displayId}</Text>
-                  </View>
-                  <StatusPill closed={job.closed} />
-                </View>
-                <Text style={styles.jobCode}>
-                  {job.code}
-                  {job.datetime ? ` | ${fmtDateTime(job.datetime)}` : ''}
-                </Text>
-
-                <View style={styles.vehicleBox}>
-                  {job.vehicleNo ? (
-                    <Text style={styles.vehicleNo}>🚚 {job.vehicleNo}</Text>
-                  ) : null}
-                  <Text style={styles.jobDetail}>
-                    {job.plate || '-'}
-                    {job.chassis ? ` • ${job.chassis}` : ''}
-                  </Text>
-                  {job.model ? <Text style={styles.jobDetail}>{job.model}</Text> : null}
-                  {job.mile > 0 || job.company ? (
-                    <Text style={styles.jobDetail}>
-                      {job.mile > 0 ? `ไมล์ ${job.mile.toLocaleString()}` : ''}
-                      {job.mile > 0 && job.company ? ' • ' : ''}
-                      {job.company || ''}
+              <View style={[styles.grid, isWide && styles.gridWide]}>
+                {visibleJobs.map((job) => (
+                  <Pressable
+                    key={job.code}
+                    style={({ pressed }) => [
+                      styles.jobCard,
+                      isWide ? styles.jobCardWide : styles.jobCardFull,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <View style={styles.jobTopRow}>
+                      <View style={styles.indexBadge}>
+                        <Text style={styles.indexText}>{job.displayId}</Text>
+                      </View>
+                      <StatusPill closed={job.closed} />
+                    </View>
+                    <Text style={styles.jobCode}>
+                      {job.code}
+                      {job.datetime ? ` | ${fmtDateTime(job.datetime)}` : ''}
                     </Text>
-                  ) : null}
-                </View>
 
-                <Text style={styles.jobTitle}>{job.title}</Text>
-              </Pressable>
-            ))}
-          </View>
+                    <View style={styles.vehicleBox}>
+                      {job.vehicleNo ? (
+                        <Text style={styles.vehicleNo}>🚚 {job.vehicleNo}</Text>
+                      ) : null}
+                      <Text style={styles.jobDetail}>
+                        {job.plate || '-'}
+                        {job.chassis ? ` • ${job.chassis}` : ''}
+                      </Text>
+                      {job.model ? <Text style={styles.jobDetail}>{job.model}</Text> : null}
+                      {job.mile > 0 || job.company ? (
+                        <Text style={styles.jobDetail}>
+                          {job.mile > 0 ? `ไมล์ ${job.mile.toLocaleString()}` : ''}
+                          {job.mile > 0 && job.company ? ' • ' : ''}
+                          {job.company || ''}
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    <Text style={styles.jobTitle}>{job.title}</Text>
+                  </Pressable>
+                ))}
+              </View>
             )}
           </>
         )}
