@@ -11,11 +11,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { fetchRepairs, fetchPendingJobs } from '../data/api';
+import { fetchRepairs, fetchPendingJobs, fmtThaiDate, fmtDateTime } from '../data/api';
 
 export default function JobDetailScreen({ route, navigation }) {
   const { technician, date, dateEnd, mode = 'day' } = route.params ?? {};
-  const dateLabel = dateEnd && dateEnd !== date ? `${date} – ${dateEnd}` : date;
+  const dateLabel =
+    dateEnd && dateEnd !== date
+      ? `${fmtThaiDate(date)} – ${fmtThaiDate(dateEnd)}`
+      : fmtThaiDate(date);
   const techLabel = technician?.trim() ? technician : 'ไม่ระบุช่าง';
   const isPending = mode === 'pending';
   const [jobs, setJobs] = useState([]);
@@ -115,7 +118,7 @@ export default function JobDetailScreen({ route, navigation }) {
                 </View>
                 <Text style={styles.jobCode}>
                   {job.code}
-                  {job.datetime ? ` | ${job.datetime}` : ''}
+                  {job.datetime ? ` | ${fmtDateTime(job.datetime)}` : ''}
                 </Text>
 
                 <View style={styles.vehicleBox}>

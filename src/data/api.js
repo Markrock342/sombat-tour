@@ -9,6 +9,33 @@ export function fmtDate(d) {
   return `${y}-${m}-${day}`;
 }
 
+const TH_MONTHS_SHORT = [
+  'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
+];
+
+function parseYmd(str) {
+  const m = String(str || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  return { y: +m[1], mo: +m[2], d: +m[3] };
+}
+
+// "2026-06-09" → "9 มิ.ย. 2569"
+export function fmtThaiDate(str) {
+  const p = parseYmd(str);
+  if (!p) return str || '';
+  return `${p.d} ${TH_MONTHS_SHORT[p.mo - 1]} ${p.y + 543}`;
+}
+
+// "2026-06-09 07:07:01" → "9/06/2569 07:07:01" (แบบระบบต้นทาง)
+export function fmtDateTime(str) {
+  const m = String(str || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}:\d{2}:\d{2}))?/);
+  if (!m) return str || '';
+  const be = +m[1] + 543;
+  const datePart = `${+m[3]}/${m[2]}/${be}`;
+  return m[4] ? `${datePart} ${m[4]}` : datePart;
+}
+
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const addDays = (d, n) => {
   const r = startOfDay(d);
