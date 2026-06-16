@@ -41,7 +41,9 @@ export default function JobDetailScreen({ route, navigation }) {
             return tech === want;
           });
 
-      const mapped = rows.map((r, i) => ({
+      const sorted = [...rows].sort((a, b) => (b.r_dt_rec || '').localeCompare(a.r_dt_rec || ''));
+
+      const mapped = sorted.map((r, i) => ({
         id: i + 1,
         code: r.r_job_num ? `#${r.r_job_num}` : `#${r.r_id}`,
         title: r.r_repair_list || 'งานแจ้งซ่อม',
