@@ -36,7 +36,11 @@ export default function JobDetailScreen({ route, navigation }) {
         code: r.r_job_num ? `#${r.r_job_num}` : `#${r.r_id}`,
         title: r.r_repair_list || 'งานแจ้งซ่อม',
         closed: r.r_close && r.r_close !== '0',
-        vehicle: [r.r_v_plate, r.r_v_brand, r.r_v_model].filter(Boolean).join(' '),
+        vehicleNo: r.r_v_name || '',
+        plate: r.r_v_plate || '',
+        chassis: r.r_v_chassis || '',
+        model: [r.r_v_brand, r.r_v_model].filter(Boolean).join(' '),
+        mile: Number(r.r_mile) || 0,
         company: r.r_v_company || r.r_inv_com || '',
         datetime: r.r_dt_rec,
       }));
@@ -103,11 +107,18 @@ export default function JobDetailScreen({ route, navigation }) {
                   <StatusPill closed={job.closed} />
                 </View>
                 <Text style={styles.jobCode}>{job.code}</Text>
-                <Text style={styles.jobTitle} numberOfLines={3}>
-                  {job.title}
+                <Text style={styles.jobTitle}>{job.title}</Text>
+
+                {job.vehicleNo ? (
+                  <Text style={styles.vehicleNo}>🚚 หมายเลขรถ {job.vehicleNo}</Text>
+                ) : null}
+                <Text style={styles.jobDetail}>
+                  ทะเบียน {job.plate || '-'}
+                  {job.chassis ? ` · คัสซี ${job.chassis}` : ''}
                 </Text>
-                <Text style={styles.jobDetail} numberOfLines={2}>
-                  {job.vehicle}
+                <Text style={styles.jobDetail}>
+                  {job.model}
+                  {job.mile > 0 ? `${job.model ? ' · ' : ''}ไมล์ ${job.mile.toLocaleString()} กม.` : ''}
                   {job.company ? ` · ${job.company}` : ''}
                 </Text>
                 {job.datetime ? <Text style={styles.jobTime}>{job.datetime}</Text> : null}
@@ -121,8 +132,9 @@ export default function JobDetailScreen({ route, navigation }) {
 }
 
 function StatusPill({ closed }) {
+  // กำลังซ่อม = เขียว, ปิดงานแล้ว = แดง
   return (
-    <View style={[styles.pill, { backgroundColor: closed ? '#1FA97A' : colors.barFillAlt }]}>
+    <View style={[styles.pill, { backgroundColor: closed ? '#E5544B' : '#1FA97A' }]}>
       <Text style={styles.pillText}>{closed ? 'ปิดงานแล้ว' : 'กำลังซ่อม'}</Text>
     </View>
   );
@@ -191,7 +203,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
   },
-  jobDetail: { color: colors.textSecondary, fontSize: 12, lineHeight: 18 },
+  vehicleNo: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 3,
+  },
+  jobDetail: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: 2 },
   jobTime: { color: colors.textMuted, fontSize: 11, marginTop: 6 },
   pill: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: 999 },
   pillText: { color: colors.onNavy, fontSize: 11, fontWeight: '700' },

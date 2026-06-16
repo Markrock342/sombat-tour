@@ -23,7 +23,8 @@ try {
     $limit = isset($_GET['limit']) ? max(1, min(2000, (int)$_GET['limit'])) : 500;
     $st = $pdo->prepare("
       SELECT r_id, r_job_num, r_dt_rec, r_close,
-             r_v_plate, r_v_brand, r_v_model, r_repair_list, r_v_company, r_inv_com
+             r_v_name, r_v_plate, r_v_chassis, r_v_brand, r_v_model, r_mile,
+             r_repair_list, r_v_company, r_inv_com
       FROM repair
       WHERE r_technician = ? AND COALESCE(r_close, 0) = 0
       ORDER BY r_dt_rec DESC
