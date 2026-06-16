@@ -109,18 +109,20 @@ export default function JobDetailScreen({ route, navigation }) {
                 <Text style={styles.jobCode}>{job.code}</Text>
                 <Text style={styles.jobTitle}>{job.title}</Text>
 
-                {job.vehicleNo ? (
-                  <Text style={styles.vehicleNo}>🚚 หมายเลขรถ {job.vehicleNo}</Text>
-                ) : null}
-                <Text style={styles.jobDetail}>
-                  ทะเบียน {job.plate || '-'}
-                  {job.chassis ? ` · คัสซี ${job.chassis}` : ''}
-                </Text>
-                <Text style={styles.jobDetail}>
-                  {job.model}
-                  {job.mile > 0 ? `${job.model ? ' · ' : ''}ไมล์ ${job.mile.toLocaleString()} กม.` : ''}
-                  {job.company ? ` · ${job.company}` : ''}
-                </Text>
+                <View style={styles.vehicleBox}>
+                  {job.vehicleNo ? (
+                    <Text style={styles.vehicleNo}>🚚 หมายเลขรถ {job.vehicleNo}</Text>
+                  ) : null}
+                  <Text style={styles.jobDetail}>
+                    ทะเบียน {job.plate || '-'}
+                    {job.chassis ? ` · คัสซี ${job.chassis}` : ''}
+                  </Text>
+                  <Text style={styles.jobDetail}>
+                    {job.model}
+                    {job.mile > 0 ? `${job.model ? ' · ' : ''}ไมล์ ${job.mile.toLocaleString()} กม.` : ''}
+                    {job.company ? ` · ${job.company}` : ''}
+                  </Text>
+                </View>
                 {job.datetime ? <Text style={styles.jobTime}>{job.datetime}</Text> : null}
               </Pressable>
             ))}
@@ -202,6 +204,16 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 8,
     overflow: 'hidden',
+  },
+  vehicleBox: {
+    backgroundColor: '#F3F5FB',
+    borderLeftWidth: 3,
+    borderLeftColor: colors.barFill,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginTop: 2,
+    marginBottom: 2,
   },
   vehicleNo: {
     color: colors.textPrimary,
