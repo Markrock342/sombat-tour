@@ -14,14 +14,15 @@ import TechnicianBar from '../components/TechnicianBar';
 import { SkeletonCardBody } from '../components/Skeleton';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
 import { colors, spacing } from '../theme';
-import { fetchTechnicians, fetchRepairs, fetchPending, fmtDate } from '../data/api';
+import { fetchTechnicians, fetchRepairs, fmtDate, fmtThaiDate } from '../data/api';
+
+const isOpenRepair = (r) => !r.r_close || r.r_close === '0';
 
 export default function DashboardScreen({ navigation }) {
   const [dateRange, setDateRange] = useState(() => presetRange('today'));
   const [datePreset, setDatePreset] = useState('today');
   const [techs, setTechs] = useState([]);
   const [repairs, setRepairs] = useState([]);
-  const [pending, setPending] = useState([]);
   const [meta, setMeta] = useState({ date: null, total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -49,14 +50,6 @@ export default function DashboardScreen({ navigation }) {
       if (!techRows || !techRows.length) {
         const names = [...new Set(rows.map((r) => r.r_technician).filter(Boolean))];
         techRows = names.map((n, i) => ({ id: String(i + 1), name: n }));
-      }
-
-      // งานค้างซ่อม (สะสมข้ามวัน — ไม่ขึ้นกับวันที่เลือก)
-      try {
-        const pend = await fetchPending();
-        setPending(pend.rows || []);
-      } catch (_) {
-        setPending([]);
       }
 
       setRepairs(rows);
@@ -95,11 +88,12 @@ export default function DashboardScreen({ navigation }) {
   const total = meta.total || repairs.length;
   const active = routine.filter((t) => t.today > 0).length;
 
-  // งานค้างซ่อมต่อช่าง (จับคู่ด้วยชื่อ)
+  // งานค้างซ่อมต่อช่าง — งานในช่วงวันที่ที่ยังไม่ปิด
+  const openRepairs = repairs.filter(isOpenRepair);
   const pendingByName = {};
-  pending.forEach((p) => {
-    const name = p.name?.trim() ? p.name.trim() : 'ไม่ระบุช่าง';
-    pendingByName[name] = (pendingByName[name] || 0) + (p.pending || 0);
+  openRepairs.forEach((r) => {
+    const name = r.r_technician?.trim() ? r.r_technician.trim() : 'ไม่ระบุช่าง';
+    pendingByName[name] = (pendingByName[name] || 0) + 1;
   });
   const pendingList = [
     ...techs.map((t) => ({ id: t.id, name: t.name, pending: pendingByName[t.name] || 0 })),
@@ -127,6 +121,9 @@ export default function DashboardScreen({ navigation }) {
   const openPendingJobs = (tech) =>
     navigation.navigate('JobDetail', {
       technician: tech.queryName ?? tech.name,
+      date: dateStart,
+      dateEnd,
+      datePreset,
       mode: 'pending',
     });
 
@@ -209,7 +206,10 @@ export default function DashboardScreen({ navigation }) {
             ) : (
               <>
                 <Text style={styles.summary}>
-                  รวม <Text style={styles.summaryNum}>{pendingSum}</Text> งาน
+                  {dateStart === dateEnd
+                    ? fmtThaiDate(dateStart)
+                    : `${fmtThaiDate(dateStart)} – ${fmtThaiDate(dateEnd)}`}
+                  {' · '}รวม <Text style={styles.summaryNum}>{pendingSum}</Text> งานที่ยังไม่ปิด
                 </Text>
                 <ScrollView style={styles.list} nestedScrollEnabled>
                   {pendingList.map((tech) => (
