@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
+  Image,
   ScrollView,
   Pressable,
   StyleSheet,
@@ -131,8 +132,13 @@ export default function DashboardScreen({ navigation }) {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.headerTitle}>Dashboard</Text>
-          <Text style={styles.headerSub}>โปรแกรมงานซ่อมบำรุง</Text>
+          <View style={styles.brandRow}>
+            <Image source={require('../../assets/sombatlogobg.png')} style={styles.logo} />
+            <View style={styles.brandText}>
+              <Text style={styles.headerTitle}>สมบัติทัวร์</Text>
+              <Text style={styles.headerSub}>โปรแกรมงานซ่อมบำรุง</Text>
+            </View>
+          </View>
         </View>
         <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('VehicleSearch')}>
           <Text style={styles.searchBtnText}>🔍 ค้นหารถ</Text>
@@ -263,6 +269,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerLeft: { flexShrink: 1 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  logo: { width: 44, height: 44, borderRadius: 10, backgroundColor: colors.card },
+  brandText: { flexShrink: 1 },
   searchBtn: {
     backgroundColor: 'rgba(255,255,255,0.12)',
     paddingHorizontal: spacing.md,
