@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Card from '../components/Card';
 import TechnicianBar from '../components/TechnicianBar';
-import { SkeletonCardBody } from '../components/Skeleton';
+import LoadingView from '../components/LoadingView';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
 import { colors, spacing } from '../theme';
 import { fetchTechnicians, fetchRepairs, fmtDate, fmtThaiDate } from '../data/api';
@@ -146,6 +146,9 @@ export default function DashboardScreen({ navigation }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {loading ? (
+          <LoadingView />
+        ) : (
         <View style={[styles.grid, isWide && styles.gridWide]}>
           {/* 1 — งานประจำวัน (ข้อมูลจริง) */}
           <Card
@@ -162,9 +165,7 @@ export default function DashboardScreen({ navigation }) {
               }}
             />
 
-            {loading ? (
-              <SkeletonCardBody lines={6} />
-            ) : error ? (
+            {error ? (
               <View style={styles.errorBox}>
                 <Text style={styles.errorText}>โหลดข้อมูลไม่สำเร็จ</Text>
                 <Text style={styles.errorMsg}>{error}</Text>
@@ -200,9 +201,7 @@ export default function DashboardScreen({ navigation }) {
             title="งานค้างซ่อม"
             style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
           >
-            {loading ? (
-              <SkeletonCardBody lines={6} />
-            ) : error ? (
+            {error ? (
               <View style={styles.errorBox}>
                 <Text style={styles.errorText}>โหลดข้อมูลไม่สำเร็จ</Text>
                 <Pressable style={styles.retryBtn} onPress={load}>
@@ -239,6 +238,7 @@ export default function DashboardScreen({ navigation }) {
           <Placeholder title="ข้อมูลด้านอื่น ๆ" icon="📊" isWide={isWide} />
           <Placeholder title="xxx" icon="➕" isWide={isWide} />
         </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

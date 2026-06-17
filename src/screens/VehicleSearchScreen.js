@@ -5,13 +5,13 @@ import {
   TextInput,
   Pressable,
   ScrollView,
-  ActivityIndicator,
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, shadow } from '../theme';
 import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
+import LoadingView from '../components/LoadingView';
 import { searchVehicles } from '../data/api';
 
 export default function VehicleSearchScreen({ navigation }) {
@@ -69,9 +69,7 @@ export default function VehicleSearchScreen({ navigation }) {
         keyboardShouldPersistTaps="handled"
       >
         {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.navy} />
-          </View>
+          <LoadingView compact />
         ) : error ? (
           <Text style={styles.msg}>{error}</Text>
         ) : !searched ? (

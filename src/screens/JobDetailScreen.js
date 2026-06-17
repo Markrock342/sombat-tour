@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   Pressable,
-  ActivityIndicator,
   StyleSheet,
   useWindowDimensions,
 } from 'react-native';
@@ -12,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, shadow } from '../theme';
 import DateRangePicker from '../components/DateRangePicker';
+import LoadingView from '../components/LoadingView';
 import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
 import { fetchRepairs, fmtThaiDate, fmtDateTime, fmtDate } from '../data/api';
 
@@ -138,10 +138,7 @@ export default function JobDetailScreen({ route, navigation }) {
         />
 
         {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.navy} />
-            <Text style={styles.centerText}>กำลังโหลด...</Text>
-          </View>
+          <LoadingView compact />
         ) : error ? (
           <View style={styles.center}>
             <Text style={styles.centerText}>{error}</Text>
