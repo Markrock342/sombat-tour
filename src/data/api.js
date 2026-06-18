@@ -116,7 +116,7 @@ function mergeRepairRows(parts) {
 // โหลดวันอื่น ๆ ไว้ล่วงหน้า (ไม่บล็อก UI) — เปลี่ยนช่วงวันที่จะเร็วขึ้นมาก
 export function warmRepairCache(daysBack = 29) {
   const today = startOfDay(new Date());
-  const dates = eachDayInRange(addDays(today, -daysBack), today).map((d) => fmtDate(d));
+  const dates = eachDayInRange(addDays(today, -daysBack), today);
   let i = 0;
   const runBatch = () => {
     const batch = dates.slice(i, i + 6);
