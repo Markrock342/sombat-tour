@@ -57,7 +57,23 @@ function eachDayInRange(start, end) {
 const dayCache = new Map();
 let techCache = null;
 let techPromise = null;
-let rangeApiSupported = false; // เปิดเป็น true หลังอัปโหลด api/list_repair.php ขึ้น cPanel
+let rangeApiSupported = null;
+
+// ตรวจว่าเซิร์ฟเวอร์รองรับ ?start=&end= แล้วหรือยัง (หลังแก้ list_repair.php บน cPanel)
+export function probeRangeApiOnce() {
+  if (rangeApiSupported !== null) return;
+  const today = fmtDate(startOfDay(new Date()));
+  fetch(
+    `${API_BASE}/list_repair.php?start=${encodeURIComponent(today)}&end=${encodeURIComponent(today)}`
+  )
+    .then((res) => res.json())
+    .then((data) => {
+      rangeApiSupported = !!(data.ok && data.date === `${today}..${today}`);
+    })
+    .catch(() => {
+      rangeApiSupported = false;
+    });
+}
 
 async function fetchRepairsForDay(dateStr) {
   const key = dateStr || 'latest';

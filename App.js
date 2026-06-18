@@ -9,7 +9,7 @@ import JobDetailScreen from './src/screens/JobDetailScreen';
 import VehicleSearchScreen from './src/screens/VehicleSearchScreen';
 import VehicleDetailScreen from './src/screens/VehicleDetailScreen';
 import { colors } from './src/theme';
-import { warmRepairCache } from './src/data/api';
+import { warmRepairCache, probeRangeApiOnce } from './src/data/api';
 
 const Stack = createNativeStackNavigator();
 
@@ -28,6 +28,7 @@ const navTheme = {
 export default function App() {
   useEffect(() => {
     warmRepairCache();
+    probeRangeApiOnce();
   }, []);
 
   return (
