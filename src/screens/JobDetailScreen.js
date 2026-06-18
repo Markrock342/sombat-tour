@@ -13,7 +13,7 @@ import { colors, spacing, radius, shadow } from '../theme';
 import DateRangePicker from '../components/DateRangePicker';
 import LoadingView from '../components/LoadingView';
 import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
-import { fetchRepairs, fmtThaiDate, fmtDateTime, fmtDate } from '../data/api';
+import { fetchRepairs, prefetchRepairRange, fmtThaiDate, fmtDateTime, fmtDate } from '../data/api';
 
 const isOpenRepair = (r) => !r.r_close || r.r_close === '0';
 
@@ -131,6 +131,7 @@ export default function JobDetailScreen({ route, navigation }) {
         <DateRangePicker
           value={dateRange}
           presetKey={datePreset}
+          onPrefetchRange={prefetchRepairRange}
           onChange={(range, key) => {
             setDateRange(range);
             setDatePreset(key);

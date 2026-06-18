@@ -57,7 +57,7 @@ function eachDayInRange(start, end) {
 const dayCache = new Map();
 let techCache = null;
 let techPromise = null;
-let rangeApiSupported = null;
+let rangeApiSupported = false; // เปิดเป็น true หลังอัปโหลด api/list_repair.php ขึ้น cPanel
 
 async function fetchRepairsForDay(dateStr) {
   const key = dateStr || 'latest';
@@ -81,7 +81,7 @@ async function fetchRepairsForDay(dateStr) {
 }
 
 async function fetchRepairsForRange(startStr, endStr) {
-  if (rangeApiSupported === false) return null;
+  if (!rangeApiSupported) return null;
   try {
     const res = await fetch(
       `${API_BASE}/list_repair.php?start=${encodeURIComponent(startStr)}&end=${encodeURIComponent(endStr)}`
@@ -113,20 +113,34 @@ function mergeRepairRows(parts) {
   return rows;
 }
 
+// โหลดช่วงวันที่ล่วงหน้า (ตอนเปิดปฏิทิน / กด preset)
+export function prefetchRepairRange(start, end) {
+  if (!start) return;
+  const startDate = start instanceof Date ? start : new Date(`${start}T00:00:00`);
+  const endDate = end
+    ? end instanceof Date
+      ? end
+      : new Date(`${end}T00:00:00`)
+    : startDate;
+  eachDayInRange(startDate, endDate).forEach((d) => {
+    fetchRepairsForDay(d).catch(() => null);
+  });
+}
+
 // โหลดวันอื่น ๆ ไว้ล่วงหน้า (ไม่บล็อก UI) — เปลี่ยนช่วงวันที่จะเร็วขึ้นมาก
 export function warmRepairCache(daysBack = 29) {
   const today = startOfDay(new Date());
   const dates = eachDayInRange(addDays(today, -daysBack), today);
   let i = 0;
   const runBatch = () => {
-    const batch = dates.slice(i, i + 6);
-    i += 6;
+    const batch = dates.slice(i, i + 8);
+    i += 8;
     if (!batch.length) return;
     Promise.all(batch.map((d) => fetchRepairsForDay(d).catch(() => null))).finally(() => {
-      if (i < dates.length) setTimeout(runBatch, 50);
+      if (i < dates.length) runBatch();
     });
   };
-  setTimeout(runBatch, 300);
+  runBatch();
 }
 
 // รายชื่อช่างทั้งหมด → [{ id, name, v_sort }]

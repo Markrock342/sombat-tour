@@ -15,7 +15,7 @@ import TechnicianBar from '../components/TechnicianBar';
 import LoadingView from '../components/LoadingView';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
 import { colors, spacing } from '../theme';
-import { fetchTechnicians, fetchRepairs, fmtDate, fmtThaiDate } from '../data/api';
+import { fetchTechnicians, fetchRepairs, prefetchRepairRange, fmtDate, fmtThaiDate } from '../data/api';
 
 const isOpenRepair = (r) => !r.r_close || r.r_close === '0';
 
@@ -154,6 +154,7 @@ export default function DashboardScreen({ navigation }) {
             <DateRangePicker
               value={dateRange}
               presetKey={datePreset}
+              onPrefetchRange={prefetchRepairRange}
               onChange={(range, key) => {
                 setDateRange(range);
                 setDatePreset(key);

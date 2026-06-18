@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, Modal, StyleSheet } from 'react-native';
 import { colors, spacing, radius, shadow } from '../theme';
 
@@ -52,7 +52,7 @@ const rangeLabel = (r) =>
     ? fmtThai(r.start)
     : `${fmtThai(r.start)} – ${fmtThai(r.end)}`;
 
-export default function DateRangePicker({ value, presetKey, onChange }) {
+export default function DateRangePicker({ value, presetKey, onChange, onPrefetchRange }) {
   const [open, setOpen] = useState(false);
   const [tempStart, setTempStart] = useState(value.start);
   const [tempEnd, setTempEnd] = useState(value.end);
@@ -71,6 +71,11 @@ export default function DateRangePicker({ value, presetKey, onChange }) {
     setViewMonth(new Date(value.start.getFullYear(), value.start.getMonth(), 1));
     setViewMode('days');
     setOpen(true);
+    onPrefetchRange?.(value.start, value.end);
+    PRESETS.forEach((p) => {
+      const r = presetRange(p.key);
+      onPrefetchRange?.(r.start, r.end);
+    });
   };
 
   const openYears = (y) => {
@@ -84,6 +89,7 @@ export default function DateRangePicker({ value, presetKey, onChange }) {
     setTempEnd(r.end);
     setTempKey(key);
     setViewMonth(new Date(r.start.getFullYear(), r.start.getMonth(), 1));
+    onPrefetchRange?.(r.start, r.end);
   };
 
   const pickDay = (day) => {
@@ -102,9 +108,16 @@ export default function DateRangePicker({ value, presetKey, onChange }) {
   const confirm = () => {
     const start = tempStart;
     const end = tempEnd ?? tempStart;
+    onPrefetchRange?.(start, end);
     onChange({ start, end }, tempKey);
     setOpen(false);
   };
+
+  useEffect(() => {
+    if (!open || !tempStart) return;
+    const end = tempEnd ?? tempStart;
+    onPrefetchRange?.(tempStart, end);
+  }, [open, tempStart, tempEnd, onPrefetchRange]);
 
   // calendar cells for viewMonth
   const year = viewMonth.getFullYear();
