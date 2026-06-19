@@ -90,7 +90,7 @@ export default function JobDetailScreen({ route, navigation }) {
         vModel: r.r_v_model || '',
         meter: r.r_v_metr || '',
         mile: Number(r.r_mile) || 0,
-        company: r.r_v_company || r.r_inv_com || '',
+        company: (r.r_technician || '').trim() ? (r.r_v_company || '') : '',
         billing: r.r_inv_com || '',
         technician: (r.r_technician || '').trim() || 'ไม่ระบุช่าง',
         recorder: (r.r_recorder || '').trim(),

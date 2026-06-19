@@ -221,7 +221,9 @@ export default function JobSummaryModal({ job, onClose }) {
                   <InfoRow label="ผู้บันทึก" value={detail.recorder} />
                   <InfoRow label="ยานพาหนะ" value={vehicleLine} />
                   <InfoRow label="ยี่ห้อ" value={brandLine} />
-                  <InfoRow label="ผู้ประกอบการ" value={detail.company} />
+                  {detail.technician && detail.technician !== 'ไม่ระบุช่าง' ? (
+                    <InfoRow label="ผู้ประกอบการ" value={detail.company} />
+                  ) : null}
                   <InfoRow label="วางบิล" value={detail.billing} />
                   {detail.mile > 0 ? (
                     <InfoRow label="เลขไมล์" value={detail.mile.toLocaleString()} />
