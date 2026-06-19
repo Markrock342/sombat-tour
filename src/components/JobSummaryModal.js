@@ -179,7 +179,7 @@ export default function JobSummaryModal({ job, onClose }) {
     : '';
 
   return (
-    <Modal transparent visible={!!job} animationType="slide" onRequestClose={onClose}>
+    <Modal transparent visible={!!job} animationType="none" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Pressable style={styles.backdropFill} onPress={onClose} />
         <View
