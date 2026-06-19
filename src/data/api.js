@@ -214,18 +214,30 @@ function isRepairRow(row) {
   return row && (row.r_id || row.r_job_num);
 }
 
+async function fetchRepairsByDayBatches(start, end, batchSize = 7) {
+  const days = eachDayInRange(start, end);
+  const parts = [];
+  for (let i = 0; i < days.length; i += batchSize) {
+    const batch = days.slice(i, i + batchSize);
+    const chunk = await Promise.all(batch.map((d) => fetchRepairsForDay(d).catch(() => ({ rows: [] }))));
+    parts.push(...chunk);
+  }
+  const rows = mergeRepairRows(parts);
+  return { ok: true, rows };
+}
+
 async function fetchPendingJobsFromRepairs(techKey) {
   const end = startOfDay(new Date());
   const ranges = [
-    [addDays(end, -400), end],
-    [new Date(2023, 0, 1), addDays(end, -401)],
-    [new Date(2020, 0, 1), new Date(2022, 11, 31)],
+    [addDays(end, -120), end],
+    [addDays(end, -365), addDays(end, -121)],
+    [new Date(2022, 0, 1), addDays(end, -366)],
   ];
   const seen = new Set();
   const rows = [];
   for (const [start, endD] of ranges) {
     try {
-      const rep = await fetchRepairs(start, endD);
+      const rep = await fetchRepairsByDayBatches(start, endD);
       for (const r of rep.rows || []) {
         const id = String(r.r_id || r.r_job_num || '');
         if (!id || seen.has(id)) continue;
@@ -249,16 +261,17 @@ export async function fetchPendingJobs(tech) {
   try {
     const res = await fetch(`${API_BASE}/backlog.php?tech=${encodeURIComponent(techKey)}`);
     const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'backlog jobs failed');
-
-    const rows = data.rows || [];
-    // เซิร์ฟเวอร์เก่า: ?tech= ส่งรายชื่อช่างแทนรายการงาน → ใช้ fallback
-    if (rows.length && !isRepairRow(rows[0])) {
-      throw new Error('backlog returned summary instead of job rows');
+    if (data.ok) {
+      const rows = data.rows || [];
+      if (!rows.length || isRepairRow(rows[0])) return data;
     }
-    return data;
   } catch (_) {
-    return fetchPendingJobsFromRepairs(techKey);
+    /* backlog.php?tech= พังบนเซิร์ฟเวอร์ — ใช้ fallback */
+  }
+  try {
+    return await fetchPendingJobsFromRepairs(techKey);
+  } catch (_) {
+    return { ok: true, tech: techKey, rows: [] };
   }
 }
 

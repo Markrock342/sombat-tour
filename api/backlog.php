@@ -16,12 +16,6 @@ require_once __DIR__ . '/db.php';
 
 function out($d, $c = 200) { http_response_code($c); echo json_encode($d, JSON_UNESCAPED_UNICODE); exit; }
 
-// คอลัมน์เดียวกับ list_repair.php — กันชื่อฟิลด์ไม่ตรงกันระหว่าง endpoint
-$cols = 'r_id, r_job_num, r_dt_rec, r_close, r_dt_close,
-         r_v_name, r_v_plate, r_v_chassis, r_v_brand, r_v_model, r_v_metr,
-         r_repair_list, r_work_report, r_mile, r_recorder, r_technician,
-         r_inv_com, r_v_company, r_inv_com_id';
-
 try {
   if (isset($_GET['tech'])) {
     $tech = trim($_GET['tech']);
@@ -29,7 +23,7 @@ try {
 
     if ($tech === '') {
       $st = $pdo->prepare("
-        SELECT $cols
+        SELECT *
         FROM repair
         WHERE COALESCE(r_close, 0) = 0
           AND (r_technician = '' OR r_technician IS NULL)
@@ -41,7 +35,7 @@ try {
     }
 
     $st = $pdo->prepare("
-      SELECT $cols
+      SELECT *
       FROM repair
       WHERE r_technician = ? AND COALESCE(r_close, 0) = 0
       ORDER BY r_dt_rec DESC
