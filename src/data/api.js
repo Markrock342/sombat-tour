@@ -209,9 +209,10 @@ export async function fetchPending() {
   return data;
 }
 
-// รายการงานค้างของช่างคนเดียว → { rows: [...] }
+// รายการงานค้างของช่างคนเดียว (รวมทั้งหมด) → { rows: [...] }
 export async function fetchPendingJobs(tech) {
-  const res = await fetch(`${API_BASE}/backlog.php?tech=${encodeURIComponent(tech)}`);
+  const q = `?tech=${encodeURIComponent(tech ?? '')}`;
+  const res = await fetch(`${API_BASE}/backlog.php${q}`);
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'backlog jobs failed');
   return data;

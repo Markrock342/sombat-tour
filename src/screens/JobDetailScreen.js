@@ -13,9 +13,7 @@ import { colors, spacing, radius, shadow } from '../theme';
 import DateRangePicker from '../components/DateRangePicker';
 import LoadingView from '../components/LoadingView';
 import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
-import { fetchRepairs, prefetchRepairRange, fmtThaiDate, fmtDateTime, fmtDate } from '../data/api';
-
-const isOpenRepair = (r) => !r.r_close || r.r_close === '0';
+import { fetchRepairs, fetchPendingJobs, prefetchRepairRange, fmtThaiDate, fmtDateTime, fmtDate } from '../data/api';
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'ทั้งหมด' },
@@ -58,14 +56,19 @@ export default function JobDetailScreen({ route, navigation }) {
     setLoading(true);
     setError(null);
     try {
-      // โหมดงานค้าง: งานในช่วงวันที่ที่ยังไม่ปิด; โหมดปกติ: งานทั้งหมดในช่วงวันที่
-      const rows = ((await fetchRepairs(dateRange.start, dateRange.end)).rows || []).filter((r) => {
-        if (isPending && !isOpenRepair(r)) return false;
-        const tech = (r.r_technician || '').trim();
+      let rows = [];
+      if (isPending) {
         const want = (technician || '').trim();
-        if (!want || want === 'ไม่ระบุช่าง') return !tech;
-        return tech === want;
-      });
+        const techKey = want === 'ไม่ระบุช่าง' ? '' : want;
+        rows = (await fetchPendingJobs(techKey)).rows || [];
+      } else {
+        rows = ((await fetchRepairs(dateRange.start, dateRange.end)).rows || []).filter((r) => {
+          const tech = (r.r_technician || '').trim();
+          const want = (technician || '').trim();
+          if (!want || want === 'ไม่ระบุช่าง') return !tech;
+          return tech === want;
+        });
+      }
 
       const sorted = [...rows].sort((a, b) => (b.r_dt_rec || '').localeCompare(a.r_dt_rec || ''));
 
@@ -89,7 +92,7 @@ export default function JobDetailScreen({ route, navigation }) {
     } finally {
       setLoading(false);
     }
-  }, [technician, dateRange.start, dateRange.end, isPending]);
+  }, isPending ? [technician, isPending] : [technician, dateRange.start, dateRange.end, isPending]);
 
   useEffect(() => {
     load();
@@ -118,7 +121,7 @@ export default function JobDetailScreen({ route, navigation }) {
         </Text>
         <Text style={styles.headerSub}>
           {techLabel}
-          {` · ${dateLabel}`}
+          {isPending ? ' · รวมทั้งหมด' : ` · ${dateLabel}`}
           {!loading && !error ? ` · ${jobs.length === 0 ? '0 งาน' : countLabel}` : ''}
         </Text>
       </View>
@@ -128,15 +131,17 @@ export default function JobDetailScreen({ route, navigation }) {
         contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
         showsVerticalScrollIndicator={false}
       >
-        <DateRangePicker
-          value={dateRange}
-          presetKey={datePreset}
-          onPrefetchRange={prefetchRepairRange}
-          onChange={(range, key) => {
-            setDateRange(range);
-            setDatePreset(key);
-          }}
-        />
+        {!isPending ? (
+          <DateRangePicker
+            value={dateRange}
+            presetKey={datePreset}
+            onPrefetchRange={prefetchRepairRange}
+            onChange={(range, key) => {
+              setDateRange(range);
+              setDatePreset(key);
+            }}
+          />
+        ) : null}
 
         {loading ? (
           <LoadingView compact message="กำลังโหลดข้อมูล..." />
@@ -171,7 +176,7 @@ export default function JobDetailScreen({ route, navigation }) {
             {jobs.length === 0 ? (
               <View style={styles.center}>
                 <Text style={styles.centerText}>
-              {isPending ? 'ไม่มีงานค้างของช่างคนนี้ในช่วงวันที่เลือก' : 'ไม่มีงานของช่างคนนี้ในวันที่เลือก'}
+              {isPending ? 'ไม่มีงานค้างของช่างคนนี้' : 'ไม่มีงานของช่างคนนี้ในวันที่เลือก'}
             </Text>
               </View>
             ) : visibleJobs.length === 0 ? (

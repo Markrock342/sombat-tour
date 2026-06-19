@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,9 +15,7 @@ import TechnicianBar from '../components/TechnicianBar';
 import LoadingView from '../components/LoadingView';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
 import { colors, spacing } from '../theme';
-import { fetchTechnicians, fetchRepairs, prefetchRepairRange, fmtDate, fmtThaiDate } from '../data/api';
-
-const isOpenRepair = (r) => !r.r_close || r.r_close === '0';
+import { fetchTechnicians, fetchRepairs, fetchPending, prefetchRepairRange, fmtDate, fmtThaiDate } from '../data/api';
 
 export default function DashboardScreen({ navigation }) {
   const [dateRange, setDateRange] = useState(() => presetRange('today'));
@@ -25,6 +23,9 @@ export default function DashboardScreen({ navigation }) {
   const [techs, setTechs] = useState([]);
   const [repairs, setRepairs] = useState([]);
   const [meta, setMeta] = useState({ date: null, total: 0 });
+  const [pendingRows, setPendingRows] = useState([]);
+  const [pendingTotal, setPendingTotal] = useState(0);
+  const pendingLoaded = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -37,11 +38,23 @@ export default function DashboardScreen({ navigation }) {
     setLoading(true);
     setError(null);
     try {
-      const [rep, techResult] = await Promise.all([
+      const tasks = [
         fetchRepairs(dateRange.start, dateRange.end),
         fetchTechnicians().catch(() => null),
-      ]);
+      ];
+      if (!pendingLoaded.current) tasks.push(fetchPending().catch(() => null));
+
+      const results = await Promise.all(tasks);
+      const rep = results[0];
+      const techResult = results[1];
+      const pendingResult = results[2];
       const rows = rep.rows || [];
+
+      if (!pendingLoaded.current && pendingResult) {
+        setPendingRows(pendingResult.rows || []);
+        setPendingTotal(pendingResult.total || 0);
+        pendingLoaded.current = true;
+      }
 
       // รายชื่อช่าง: เอาจาก technician_list; ถ้าโหลดไม่ได้ (เช่น CORS ตอน dev)
       // ให้ดึงรายชื่อจากตัวงานแทน เพื่อให้ยังแสดงผลได้
@@ -87,12 +100,11 @@ export default function DashboardScreen({ navigation }) {
   const total = meta.total || repairs.length;
   const active = routine.filter((t) => t.today > 0).length;
 
-  // งานค้างซ่อมต่อช่าง — งานในช่วงวันที่ที่ยังไม่ปิด
-  const openRepairs = repairs.filter(isOpenRepair);
+  // งานค้างซ่อมต่อช่าง — รวมทั้งหมดจาก backlog.php (ไม่ตามช่วงวันที่)
   const pendingByName = {};
-  openRepairs.forEach((r) => {
-    const name = r.r_technician?.trim() ? r.r_technician.trim() : 'ไม่ระบุช่าง';
-    pendingByName[name] = (pendingByName[name] || 0) + 1;
+  pendingRows.forEach((r) => {
+    const name = (r.name || '').trim() ? r.name.trim() : 'ไม่ระบุช่าง';
+    pendingByName[name] = r.pending || 0;
   });
   const pendingList = [
     ...techs.map((t) => ({ id: t.id, name: t.name, pending: pendingByName[t.name] || 0 })),
@@ -106,7 +118,7 @@ export default function DashboardScreen({ navigation }) {
       })),
   ].sort((a, b) => b.pending - a.pending);
   const pendingMax = Math.max(...pendingList.map((t) => t.pending), 1);
-  const pendingSum = pendingList.reduce((s, t) => s + t.pending, 0);
+  const pendingSum = pendingTotal || pendingList.reduce((s, t) => s + t.pending, 0);
 
   const openJobs = (tech) =>
     navigation.navigate('JobDetail', {
@@ -120,9 +132,6 @@ export default function DashboardScreen({ navigation }) {
   const openPendingJobs = (tech) =>
     navigation.navigate('JobDetail', {
       technician: tech.queryName ?? tech.name,
-      date: dateStart,
-      dateEnd,
-      datePreset,
       mode: 'pending',
     });
 
@@ -207,10 +216,7 @@ export default function DashboardScreen({ navigation }) {
             ) : (
               <>
                 <Text style={styles.summary}>
-                  {dateStart === dateEnd
-                    ? fmtThaiDate(dateStart)
-                    : `${fmtThaiDate(dateStart)} – ${fmtThaiDate(dateEnd)}`}
-                  {' · '}รวม <Text style={styles.summaryNum}>{pendingSum}</Text> งานที่ยังไม่ปิด
+                  รวมทั้งหมด · <Text style={styles.summaryNum}>{pendingSum}</Text> งานที่ยังไม่ปิด
                 </Text>
                 <ScrollView style={styles.list} nestedScrollEnabled>
                   {pendingList.map((tech) => (
