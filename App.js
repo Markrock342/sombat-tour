@@ -10,6 +10,7 @@ import VehicleSearchScreen from './src/screens/VehicleSearchScreen';
 import VehicleDetailScreen from './src/screens/VehicleDetailScreen';
 import { colors } from './src/theme';
 import { warmRepairCache, probeRangeApiOnce } from './src/data/api';
+import JobPreviewLauncher from './src/components/JobPreviewLauncher';
 
 const Stack = createNativeStackNavigator();
 
@@ -42,6 +43,7 @@ export default function App() {
           <Stack.Screen name="VehicleDetail" component={VehicleDetailScreen} />
         </Stack.Navigator>
       </NavigationContainer>
+      <JobPreviewLauncher />
     </SafeAreaProvider>
   );
 }

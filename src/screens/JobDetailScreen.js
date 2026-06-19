@@ -243,7 +243,6 @@ export default function JobDetailScreen({ route, navigation }) {
                     </View>
 
                     <Text style={styles.jobTitle}>{job.title}</Text>
-                    <Text style={styles.jobDetail}>ช่าง: {job.technician}</Text>
                     <Text style={styles.jobHint}>ดูสรุปงาน ›</Text>
                   </Pressable>
                 ))}

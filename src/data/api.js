@@ -214,30 +214,52 @@ function isRepairRow(row) {
   return row && (row.r_id || row.r_job_num);
 }
 
-async function fetchUnassignedPendingFallback() {
+async function fetchPendingJobsFromRepairs(techKey) {
   const end = startOfDay(new Date());
-  const start = addDays(end, -365);
-  const rep = await fetchRepairs(start, end);
-  const rows = (rep.rows || []).filter((r) => {
-    if (r.r_close && r.r_close !== '0') return false;
-    return !(r.r_technician || '').trim();
-  });
-  return { ok: true, tech: '', rows };
+  const ranges = [
+    [addDays(end, -400), end],
+    [new Date(2023, 0, 1), addDays(end, -401)],
+    [new Date(2020, 0, 1), new Date(2022, 11, 31)],
+  ];
+  const seen = new Set();
+  const rows = [];
+  for (const [start, endD] of ranges) {
+    try {
+      const rep = await fetchRepairs(start, endD);
+      for (const r of rep.rows || []) {
+        const id = String(r.r_id || r.r_job_num || '');
+        if (!id || seen.has(id)) continue;
+        if (r.r_close && r.r_close !== '0') continue;
+        const tech = (r.r_technician || '').trim();
+        const match = techKey === '' ? !tech : tech === techKey;
+        if (!match) continue;
+        seen.add(id);
+        rows.push(r);
+      }
+    } catch (_) {
+      /* ข้ามช่วงที่ล้ม */
+    }
+  }
+  rows.sort((a, b) => (b.r_dt_rec || '').localeCompare(a.r_dt_rec || ''));
+  return { ok: true, tech: techKey, rows };
 }
 
 export async function fetchPendingJobs(tech) {
   const techKey = tech ?? '';
-  const res = await fetch(`${API_BASE}/backlog.php?tech=${encodeURIComponent(techKey)}`);
-  const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'backlog jobs failed');
+  try {
+    const res = await fetch(`${API_BASE}/backlog.php?tech=${encodeURIComponent(techKey)}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'backlog jobs failed');
 
-  const rows = data.rows || [];
-  // เซิร์ฟเวอร์เก่า: ?tech= ส่งรายชื่อช่างแทนรายการงาน → ใช้ fallback
-  if (rows.length && !isRepairRow(rows[0])) {
-    if (techKey === '') return fetchUnassignedPendingFallback();
-    throw new Error('backlog returned summary instead of job rows');
+    const rows = data.rows || [];
+    // เซิร์ฟเวอร์เก่า: ?tech= ส่งรายชื่อช่างแทนรายการงาน → ใช้ fallback
+    if (rows.length && !isRepairRow(rows[0])) {
+      throw new Error('backlog returned summary instead of job rows');
+    }
+    return data;
+  } catch (_) {
+    return fetchPendingJobsFromRepairs(techKey);
   }
-  return data;
 }
 
 // คืนค่าแรกที่ไม่ว่างจากชื่อคอลัมน์ที่เป็นไปได้หลายแบบ (กันชื่อฟิลด์ใน DB ต่างจากที่คาด)
@@ -314,4 +336,54 @@ export async function searchVehicles(term) {
     }
   }
   return rows;
+}
+
+// แปลงแถว repair → object สำหรับ JobSummaryModal
+export function mapRepairRow(r, i = 0) {
+  return {
+    id: i + 1,
+    rawId: r.r_id || r.r_job_num || '',
+    jobNum: r.r_job_num || '',
+    code: r.r_job_num ? `#${r.r_job_num}` : r.r_id ? `#${r.r_id}` : '—',
+    title: r.r_repair_list || 'งานแจ้งซ่อม',
+    repairList: r.r_repair_list || '',
+    closed: r.r_close && r.r_close !== '0',
+    vehicleNo: r.r_v_name || '',
+    plate: r.r_v_plate || '',
+    chassis: r.r_v_chassis || '',
+    model: [r.r_v_brand, r.r_v_model].filter(Boolean).join(' • '),
+    vBrand: r.r_v_brand || '',
+    vModel: r.r_v_model || '',
+    meter: r.r_v_metr || '',
+    mile: Number(r.r_mile) || 0,
+    company: r.r_v_company || r.r_inv_com || '',
+    billing: r.r_inv_com || '',
+    technician: (r.r_technician || '').trim() || 'ไม่ระบุช่าง',
+    recorder: (r.r_recorder || '').trim(),
+    datetime: r.r_dt_rec || '',
+    closeDatetime: r.r_dt_close || '',
+    workReport: r.r_work_report || '',
+  };
+}
+
+// โหลดงานตามเลข job สำหรับ preview layout (?previewJob=120516)
+export async function fetchJobByNumber(jobNum) {
+  const id = String(jobNum || '').trim();
+  if (!id) return null;
+  const tryFind = (rows) =>
+    rows.find((r) => String(r.r_job_num) === id || String(r.r_id) === id);
+
+  const today = startOfDay(new Date());
+  const ranges = [
+    [addDays(today, -7), today],
+    [new Date(2026, 5, 1), new Date(2026, 5, 30)],
+    [addDays(today, -90), today],
+  ];
+
+  for (const [start, end] of ranges) {
+    const rep = await fetchRepairs(start, end);
+    const row = tryFind(rep.rows || []);
+    if (row) return mapRepairRow(row);
+  }
+  return null;
 }
