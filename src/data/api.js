@@ -240,6 +240,50 @@ export async function fetchPendingJobs(tech) {
   return data;
 }
 
+// คืนค่าแรกที่ไม่ว่างจากชื่อคอลัมน์ที่เป็นไปได้หลายแบบ (กันชื่อฟิลด์ใน DB ต่างจากที่คาด)
+function pickField(row, keys, dflt = '') {
+  for (const k of keys) {
+    const v = row?.[k];
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return dflt;
+}
+
+// รายการเบิกอะไหล่ของงาน 1 ใบ (ตาราง used_parts) → [{ id, dt, partId, code, name, lotId, qty, unit }]
+export async function fetchJobParts(jobId) {
+  if (!jobId) return [];
+  const res = await fetch(`${API_BASE}/used_parts.php?job_id=${encodeURIComponent(jobId)}`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.message || data.error || 'used_parts failed');
+  return (data.rows || []).map((r, i) => ({
+    seq: i + 1,
+    id: pickField(r, ['up_id', 'id']),
+    dt: pickField(r, ['up_dt_rec', 'up_dt', 'up_date', 'up_datetime', 'up_time']),
+    partId: pickField(r, ['up_parts_id', 'up_p_id', 'up_part_id']),
+    code: pickField(r, ['up_parts_num', 'up_parts_code', 'up_p_code', 'up_code', 'up_part_code']),
+    name: pickField(r, ['up_parts_name', 'up_p_name', 'up_name', 'up_part_name']),
+    lotId: pickField(r, ['up_lot_id', 'up_lot']),
+    qty: pickField(r, ['up_qty', 'up_amount', 'up_num', 'up_quantity']),
+    unit: pickField(r, ['up_unit', 'up_uom']),
+  }));
+}
+
+// รายการค่าใช้จ่ายอื่นๆ ของงาน 1 ใบ (ตาราง other_cost) → [{ id, dt, name, qty, unit }]
+export async function fetchJobOtherCosts(jobId) {
+  if (!jobId) return [];
+  const res = await fetch(`${API_BASE}/other_cost.php?job_id=${encodeURIComponent(jobId)}`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.message || data.error || 'other_cost failed');
+  return (data.rows || []).map((r, i) => ({
+    seq: i + 1,
+    id: pickField(r, ['oc_id', 'id']),
+    dt: pickField(r, ['oc_dt_rec', 'oc_dt', 'oc_date', 'oc_datetime', 'oc_time']),
+    name: pickField(r, ['oc_listname', 'oc_list', 'oc_name', 'oc_detail', 'oc_desc', 'oc_item', 'oc_title']),
+    qty: pickField(r, ['oc_qty', 'oc_amount', 'oc_num', 'oc_quantity']),
+    unit: pickField(r, ['oc_unit', 'oc_uom']),
+  }));
+}
+
 // ดึงรถ 1 คันจาก v_id (ตาราง vihicle)
 export async function getVehicle(id) {
   const res = await fetch(`${API_BASE}/vehicle_get.php?id=${encodeURIComponent(id)}`);

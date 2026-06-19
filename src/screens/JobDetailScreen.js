@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, shadow } from '../theme';
 import DateRangePicker from '../components/DateRangePicker';
+import JobSummaryModal from '../components/JobSummaryModal';
 import LoadingView from '../components/LoadingView';
 import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
 import { fetchRepairs, fetchPendingJobs, prefetchRepairRange, fmtThaiDate, fmtDateTime, fmtDate } from '../data/api';
@@ -44,6 +45,7 @@ export default function JobDetailScreen({ route, navigation }) {
       : fmtThaiDate(dateStart);
   const techLabel = technician?.trim() ? technician : 'ไม่ระบุช่าง';
   const [jobs, setJobs] = useState([]);
+  const [selectedJob, setSelectedJob] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -74,16 +76,25 @@ export default function JobDetailScreen({ route, navigation }) {
 
       const mapped = sorted.map((r, i) => ({
         id: i + 1,
+        rawId: r.r_id || r.r_job_num || '',
+        jobNum: r.r_job_num || '',
         code: r.r_job_num ? `#${r.r_job_num}` : r.r_id ? `#${r.r_id}` : '—',
         title: r.r_repair_list || 'งานแจ้งซ่อม',
+        repairList: r.r_repair_list || '',
         closed: r.r_close && r.r_close !== '0',
         vehicleNo: r.r_v_name || '',
         plate: r.r_v_plate || '',
         chassis: r.r_v_chassis || '',
         model: [r.r_v_brand, r.r_v_model].filter(Boolean).join(' • '),
+        vBrand: r.r_v_brand || '',
+        vModel: r.r_v_model || '',
+        meter: r.r_v_metr || '',
         mile: Number(r.r_mile) || 0,
         company: r.r_v_company || r.r_inv_com || '',
+        billing: r.r_inv_com || '',
         datetime: r.r_dt_rec || '',
+        closeDatetime: r.r_dt_close || '',
+        workReport: r.r_work_report || '',
       }));
       setJobs(mapped);
       setStatusFilter('all');
@@ -188,6 +199,7 @@ export default function JobDetailScreen({ route, navigation }) {
                 {visibleJobs.map((job) => (
                   <Pressable
                     key={job.code}
+                    onPress={() => setSelectedJob(job)}
                     style={({ pressed }) => [
                       styles.jobCard,
                       isWide ? styles.jobCardWide : styles.jobCardFull,
@@ -229,6 +241,7 @@ export default function JobDetailScreen({ route, navigation }) {
                     </View>
 
                     <Text style={styles.jobTitle}>{job.title}</Text>
+                    <Text style={styles.jobHint}>ดูสรุปงาน ›</Text>
                   </Pressable>
                 ))}
               </View>
@@ -238,6 +251,7 @@ export default function JobDetailScreen({ route, navigation }) {
       </ScrollView>
       {isMobile ? <MobileBackBar onPress={goBack} /> : null}
       </View>
+      <JobSummaryModal job={selectedJob} onClose={() => setSelectedJob(null)} />
     </SafeAreaView>
   );
 }
@@ -344,6 +358,7 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   jobDetail: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: 2 },
+  jobHint: { color: colors.barFill, fontSize: 12, fontWeight: '700', alignSelf: 'flex-end', marginTop: 4 },
   jobTime: { color: colors.textMuted, fontSize: 11, marginTop: 6 },
   pill: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: 999 },
   pillText: { color: colors.onNavy, fontSize: 11, fontWeight: '700' },
