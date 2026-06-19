@@ -201,6 +201,8 @@ export default function JobSummaryModal({ job, onClose }) {
                     <Text style={styles.vehicleNo}>🚚 {job.vehicleNo}</Text>
                   ) : null}
                   <InfoRow label="เปิด-ปิดงาน" value={openClose} />
+                  <InfoRow label="ผู้ซ่อม" value={job.technician} />
+                  <InfoRow label="ผู้บันทึก" value={job.recorder} />
                   <InfoRow label="ยานพาหนะ" value={vehicleLine} />
                   <InfoRow label="ยี่ห้อ" value={brandLine} />
                   <InfoRow label="ผู้ประกอบการ" value={job.company} />

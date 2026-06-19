@@ -92,6 +92,8 @@ export default function JobDetailScreen({ route, navigation }) {
         mile: Number(r.r_mile) || 0,
         company: r.r_v_company || r.r_inv_com || '',
         billing: r.r_inv_com || '',
+        technician: (r.r_technician || '').trim() || 'ไม่ระบุช่าง',
+        recorder: (r.r_recorder || '').trim(),
         datetime: r.r_dt_rec || '',
         closeDatetime: r.r_dt_close || '',
         workReport: r.r_work_report || '',
@@ -241,6 +243,7 @@ export default function JobDetailScreen({ route, navigation }) {
                     </View>
 
                     <Text style={styles.jobTitle}>{job.title}</Text>
+                    <Text style={styles.jobDetail}>ช่าง: {job.technician}</Text>
                     <Text style={styles.jobHint}>ดูสรุปงาน ›</Text>
                   </Pressable>
                 ))}
