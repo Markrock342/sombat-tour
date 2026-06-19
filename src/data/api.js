@@ -344,6 +344,38 @@ export function mapRepairRow(r, i = 0) {
   };
 }
 
+// เติมรายงานปฏิบัติงาน/ผู้ซ่อม ถ้า backlog.php ส่งมาไม่ครบ (1 query ตามวันเปิดงาน)
+export async function enrichJobSummary(job) {
+  if (!job) return job;
+  const hasReport = !!(job.workReport || '').trim();
+  const hasTech = job.technician && job.technician !== 'ไม่ระบุช่าง';
+  if (hasReport && hasTech) return job;
+
+  const dateStr = String(job.datetime || '').slice(0, 10);
+  const jobNum = String(job.jobNum || job.rawId || '').trim();
+  if (!dateStr || !jobNum) return job;
+
+  try {
+    const rep = await fetchRepairs(dateStr, dateStr);
+    const row = (rep.rows || []).find(
+      (r) => String(r.r_job_num) === jobNum || String(r.r_id) === jobNum,
+    );
+    if (!row) return job;
+    const mapped = mapRepairRow(row);
+    return {
+      ...job,
+      workReport: mapped.workReport || job.workReport,
+      technician: mapped.technician !== 'ไม่ระบุช่าง' ? mapped.technician : job.technician,
+      recorder: mapped.recorder || job.recorder,
+      meter: mapped.meter || job.meter,
+      vBrand: mapped.vBrand || job.vBrand,
+      vModel: mapped.vModel || job.vModel,
+    };
+  } catch (_) {
+    return job;
+  }
+}
+
 // โหลดงานตามเลข job สำหรับ preview layout (?previewJob=120516)
 export async function fetchJobByNumber(jobNum) {
   const id = String(jobNum || '').trim();

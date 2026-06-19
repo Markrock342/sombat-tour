@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { fetchJobParts, fetchJobOtherCosts, fmtDateTime } from '../data/api';
+import { fetchJobParts, fetchJobOtherCosts, enrichJobSummary, fmtDateTime } from '../data/api';
 
 // แถวข้อมูลหัวงาน (ป้าย : ค่า)
 function InfoRow({ label, value }) {
@@ -118,12 +118,28 @@ export default function JobSummaryModal({ job, onClose }) {
   const { width, height } = useWindowDimensions();
   const isWide = width >= 720;
 
+  const [detail, setDetail] = useState(null);
   const [parts, setParts] = useState([]);
   const [costs, setCosts] = useState([]);
   const [partsState, setPartsState] = useState({ loading: true, error: false });
   const [costsState, setCostsState] = useState({ loading: true, error: false });
 
-  const jobId = job?.rawId;
+  const jobId = detail?.rawId;
+
+  useEffect(() => {
+    if (!job) {
+      setDetail(null);
+      return;
+    }
+    setDetail(job);
+    let cancelled = false;
+    enrichJobSummary(job).then((enriched) => {
+      if (!cancelled) setDetail(enriched);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [job]);
 
   const load = useCallback(async () => {
     if (!jobId) return;
@@ -149,17 +165,17 @@ export default function JobSummaryModal({ job, onClose }) {
     if (jobId) load();
   }, [jobId, load]);
 
-  const openClose = job
-    ? `${job.datetime ? fmtDateTime(job.datetime) : '—'} – ${
-        job.closed ? (job.closeDatetime ? fmtDateTime(job.closeDatetime) : 'ปิดงานแล้ว') : 'Working...'
+  const openClose = detail
+    ? `${detail.datetime ? fmtDateTime(detail.datetime) : '—'} – ${
+        detail.closed ? (detail.closeDatetime ? fmtDateTime(detail.closeDatetime) : 'ปิดงานแล้ว') : 'Working...'
       }`
     : '';
 
-  const vehicleLine = job
-    ? [job.plate, job.chassis].filter(Boolean).join('  ')
+  const vehicleLine = detail
+    ? [detail.plate, detail.chassis].filter(Boolean).join('  ')
     : '';
-  const brandLine = job
-    ? [job.vBrand, job.vModel, job.meter ? `${job.meter} เมตร` : ''].filter(Boolean).join('  ')
+  const brandLine = detail
+    ? [detail.vBrand, detail.vModel, detail.meter ? `${detail.meter} เมตร` : ''].filter(Boolean).join('  ')
     : '';
 
   return (
@@ -176,10 +192,10 @@ export default function JobSummaryModal({ job, onClose }) {
           <View style={styles.sheetHeader}>
             <View style={styles.sheetHeaderText}>
               <Text style={styles.sheetTitle}>สรุปงาน</Text>
-              {job ? (
+              {detail ? (
                 <Text style={styles.sheetSub}>
-                  {job.code}
-                  {job.jobNum ? ` · เลขที่ ${job.jobNum}` : ''}
+                  {detail.code}
+                  {detail.jobNum ? ` · เลขที่ ${detail.jobNum}` : ''}
                 </Text>
               ) : null}
             </View>
@@ -193,31 +209,31 @@ export default function JobSummaryModal({ job, onClose }) {
             contentContainerStyle={styles.sheetContent}
             showsVerticalScrollIndicator={false}
           >
-            {job ? (
+            {detail ? (
               <>
                 {/* ===== ข้อมูลหัวงาน ===== */}
                 <View style={styles.infoCard}>
-                  {job.vehicleNo ? (
-                    <Text style={styles.vehicleNo}>🚚 {job.vehicleNo}</Text>
+                  {detail.vehicleNo ? (
+                    <Text style={styles.vehicleNo}>🚚 {detail.vehicleNo}</Text>
                   ) : null}
                   <InfoRow label="เปิด-ปิดงาน" value={openClose} />
-                  <InfoRow label="ผู้ซ่อม" value={job.technician} />
-                  <InfoRow label="ผู้บันทึก" value={job.recorder} />
+                  <InfoRow label="ผู้ซ่อม" value={detail.technician} />
+                  <InfoRow label="ผู้บันทึก" value={detail.recorder} />
                   <InfoRow label="ยานพาหนะ" value={vehicleLine} />
                   <InfoRow label="ยี่ห้อ" value={brandLine} />
-                  <InfoRow label="ผู้ประกอบการ" value={job.company} />
-                  <InfoRow label="วางบิล" value={job.billing} />
-                  {job.mile > 0 ? (
-                    <InfoRow label="เลขไมล์" value={job.mile.toLocaleString()} />
+                  <InfoRow label="ผู้ประกอบการ" value={detail.company} />
+                  <InfoRow label="วางบิล" value={detail.billing} />
+                  {detail.mile > 0 ? (
+                    <InfoRow label="เลขไมล์" value={detail.mile.toLocaleString()} />
                   ) : null}
-                  <InfoRow label="รายการซ่อม" value={job.repairList} />
+                  <InfoRow label="รายการซ่อม" value={detail.repairList} />
                 </View>
 
                 {/* ===== 1. รายงานการปฏิบัติงาน ===== */}
                 <SectionTitle>รายงานการปฏิบัติงาน</SectionTitle>
                 <View style={styles.reportBox}>
                   <Text style={styles.reportText}>
-                    {job.workReport?.trim() ? job.workReport : 'ยังไม่มีรายงานการปฏิบัติงาน'}
+                    {detail.workReport?.trim() ? detail.workReport : 'ยังไม่มีรายงานการปฏิบัติงาน'}
                   </Text>
                 </View>
 
