@@ -329,9 +329,23 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: spacing.sm,
   },
-  infoRow: { flexDirection: 'row', marginTop: 5 },
-  infoLabel: { width: 96, color: colors.textSecondary, fontSize: 13, fontWeight: '700' },
-  infoValue: { flex: 1, color: colors.textPrimary, fontSize: 13, lineHeight: 19, fontWeight: '600' },
+  infoRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 6 },
+  infoLabel: {
+    width: 100,
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: '700',
+    paddingTop: 1,
+  },
+  infoValue: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: '600',
+    paddingTop: 1,
+  },
 
   sectionTitleRow: {
     flexDirection: 'row',

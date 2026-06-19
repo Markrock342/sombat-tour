@@ -199,13 +199,11 @@ export default function JobDetailScreen({ route, navigation }) {
             ) : (
               <View style={[styles.grid, isWide && styles.gridWide]}>
                 {visibleJobs.map((job) => (
-                  <Pressable
+                  <View
                     key={job.code}
-                    onPress={() => setSelectedJob(job)}
-                    style={({ pressed }) => [
+                    style={[
                       styles.jobCard,
                       isWide ? styles.jobCardWide : styles.jobCardFull,
-                      pressed && styles.pressed,
                     ]}
                   >
                     <View style={styles.jobTopRow}>
@@ -243,8 +241,14 @@ export default function JobDetailScreen({ route, navigation }) {
                     </View>
 
                     <Text style={styles.jobTitle}>{job.title}</Text>
-                    <Text style={styles.jobHint}>ดูสรุปงาน ›</Text>
-                  </Pressable>
+                    <Pressable
+                      onPress={() => setSelectedJob(job)}
+                      style={({ pressed }) => [styles.jobHintBtn, pressed && styles.jobHintPressed]}
+                      hitSlop={6}
+                    >
+                      <Text style={styles.jobHint}>ดูสรุปงาน ›</Text>
+                    </Pressable>
+                  </View>
                 ))}
               </View>
             )}
@@ -360,7 +364,9 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   jobDetail: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: 2 },
-  jobHint: { color: colors.barFill, fontSize: 12, fontWeight: '700', alignSelf: 'flex-end', marginTop: 4 },
+  jobHintBtn: { alignSelf: 'flex-end', marginTop: 4, paddingVertical: 4, paddingHorizontal: 2 },
+  jobHintPressed: { opacity: 0.7 },
+  jobHint: { color: colors.barFill, fontSize: 13, fontWeight: '700' },
   jobTime: { color: colors.textMuted, fontSize: 11, marginTop: 6 },
   pill: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: 999 },
   pillText: { color: colors.onNavy, fontSize: 11, fontWeight: '700' },
