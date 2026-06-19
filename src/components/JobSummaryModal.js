@@ -52,7 +52,12 @@ function PartRow({ item }) {
       <View style={styles.lineBody}>
         <Text style={styles.lineName}>{item.name || 'ไม่ระบุชื่ออะไหล่'}</Text>
         {meta ? <Text style={styles.lineMeta}>{meta}</Text> : null}
-        {item.dt ? <Text style={styles.lineDate}>🕐 {fmtDateTime(item.dt)}</Text> : null}
+        {item.dt || item.id ? (
+          <Text style={styles.lineDate}>
+            {item.dt ? `🕐 ${fmtDateTime(item.dt)}` : ''}
+            {item.id ? `${item.dt ? '  ' : ''}#${item.id}` : ''}
+          </Text>
+        ) : null}
       </View>
       {item.qty !== '' && item.qty != null ? (
         <View style={styles.qtyBox}>
@@ -73,7 +78,12 @@ function CostRow({ item }) {
       </View>
       <View style={styles.lineBody}>
         <Text style={styles.lineName}>{item.name || 'ไม่ระบุรายการ'}</Text>
-        {item.dt ? <Text style={styles.lineDate}>🕐 {fmtDateTime(item.dt)}</Text> : null}
+        {item.dt || item.id ? (
+          <Text style={styles.lineDate}>
+            {item.dt ? `🕐 ${fmtDateTime(item.dt)}` : ''}
+            {item.id ? `${item.dt ? '  ' : ''}#${item.id}` : ''}
+          </Text>
+        ) : null}
       </View>
       {item.qty !== '' && item.qty != null ? (
         <View style={styles.qtyBox}>
