@@ -210,11 +210,33 @@ export async function fetchPending() {
 }
 
 // รายการงานค้างของช่างคนเดียว (รวมทั้งหมด) → { rows: [...] }
+function isRepairRow(row) {
+  return row && (row.r_id || row.r_job_num);
+}
+
+async function fetchUnassignedPendingFallback() {
+  const end = startOfDay(new Date());
+  const start = addDays(end, -365);
+  const rep = await fetchRepairs(start, end);
+  const rows = (rep.rows || []).filter((r) => {
+    if (r.r_close && r.r_close !== '0') return false;
+    return !(r.r_technician || '').trim();
+  });
+  return { ok: true, tech: '', rows };
+}
+
 export async function fetchPendingJobs(tech) {
-  const q = `?tech=${encodeURIComponent(tech ?? '')}`;
-  const res = await fetch(`${API_BASE}/backlog.php${q}`);
+  const techKey = tech ?? '';
+  const res = await fetch(`${API_BASE}/backlog.php?tech=${encodeURIComponent(techKey)}`);
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'backlog jobs failed');
+
+  const rows = data.rows || [];
+  // เซิร์ฟเวอร์เก่า: ?tech= ส่งรายชื่อช่างแทนรายการงาน → ใช้ fallback
+  if (rows.length && !isRepairRow(rows[0])) {
+    if (techKey === '') return fetchUnassignedPendingFallback();
+    throw new Error('backlog returned summary instead of job rows');
+  }
   return data;
 }
 

@@ -74,7 +74,7 @@ export default function JobDetailScreen({ route, navigation }) {
 
       const mapped = sorted.map((r, i) => ({
         id: i + 1,
-        code: r.r_job_num ? `#${r.r_job_num}` : `#${r.r_id}`,
+        code: r.r_job_num ? `#${r.r_job_num}` : r.r_id ? `#${r.r_id}` : '—',
         title: r.r_repair_list || 'งานแจ้งซ่อม',
         closed: r.r_close && r.r_close !== '0',
         vehicleNo: r.r_v_name || '',
@@ -83,7 +83,7 @@ export default function JobDetailScreen({ route, navigation }) {
         model: [r.r_v_brand, r.r_v_model].filter(Boolean).join(' • '),
         mile: Number(r.r_mile) || 0,
         company: r.r_v_company || r.r_inv_com || '',
-        datetime: r.r_dt_rec,
+        datetime: r.r_dt_rec || '',
       }));
       setJobs(mapped);
       setStatusFilter('all');
@@ -208,11 +208,16 @@ export default function JobDetailScreen({ route, navigation }) {
                     <View style={styles.vehicleBox}>
                       {job.vehicleNo ? (
                         <Text style={styles.vehicleNo}>🚚 {job.vehicleNo}</Text>
+                      ) : (
+                        <Text style={styles.jobDetail}>ไม่ระบุเบอร์รถ</Text>
+                      )}
+                      {job.plate || job.chassis ? (
+                        <Text style={styles.jobDetail}>
+                          {job.plate || ''}
+                          {job.plate && job.chassis ? ' • ' : ''}
+                          {job.chassis || ''}
+                        </Text>
                       ) : null}
-                      <Text style={styles.jobDetail}>
-                        {job.plate || '-'}
-                        {job.chassis ? ` • ${job.chassis}` : ''}
-                      </Text>
                       {job.model ? <Text style={styles.jobDetail}>{job.model}</Text> : null}
                       {job.mile > 0 || job.company ? (
                         <Text style={styles.jobDetail}>
