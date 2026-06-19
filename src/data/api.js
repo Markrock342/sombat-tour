@@ -214,65 +214,30 @@ function isRepairRow(row) {
   return row && (row.r_id || row.r_job_num);
 }
 
-async function fetchRepairsByDayBatches(start, end, batchSize = 7) {
-  const days = eachDayInRange(start, end);
-  const parts = [];
-  for (let i = 0; i < days.length; i += batchSize) {
-    const batch = days.slice(i, i + batchSize);
-    const chunk = await Promise.all(batch.map((d) => fetchRepairsForDay(d).catch(() => ({ rows: [] }))));
-    parts.push(...chunk);
-  }
-  const rows = mergeRepairRows(parts);
-  return { ok: true, rows };
-}
-
-async function fetchPendingJobsFromRepairs(techKey) {
+async function fetchUnassignedPendingFallback() {
   const end = startOfDay(new Date());
-  const ranges = [
-    [addDays(end, -120), end],
-    [addDays(end, -365), addDays(end, -121)],
-    [new Date(2022, 0, 1), addDays(end, -366)],
-  ];
-  const seen = new Set();
-  const rows = [];
-  for (const [start, endD] of ranges) {
-    try {
-      const rep = await fetchRepairsByDayBatches(start, endD);
-      for (const r of rep.rows || []) {
-        const id = String(r.r_id || r.r_job_num || '');
-        if (!id || seen.has(id)) continue;
-        if (r.r_close && r.r_close !== '0') continue;
-        const tech = (r.r_technician || '').trim();
-        const match = techKey === '' ? !tech : tech === techKey;
-        if (!match) continue;
-        seen.add(id);
-        rows.push(r);
-      }
-    } catch (_) {
-      /* ข้ามช่วงที่ล้ม */
-    }
-  }
-  rows.sort((a, b) => (b.r_dt_rec || '').localeCompare(a.r_dt_rec || ''));
-  return { ok: true, tech: techKey, rows };
+  const start = addDays(end, -365);
+  const rep = await fetchRepairs(start, end);
+  const rows = (rep.rows || []).filter((r) => {
+    if (r.r_close && r.r_close !== '0') return false;
+    return !(r.r_technician || '').trim();
+  });
+  return { ok: true, tech: '', rows };
 }
 
 export async function fetchPendingJobs(tech) {
   const techKey = tech ?? '';
-  try {
-    const res = await fetch(`${API_BASE}/backlog.php?tech=${encodeURIComponent(techKey)}`);
-    const data = await res.json();
-    if (data.ok) {
-      const rows = data.rows || [];
-      if (!rows.length || isRepairRow(rows[0])) return data;
-    }
-  } catch (_) {
-    /* backlog.php?tech= พังบนเซิร์ฟเวอร์ — ใช้ fallback */
+  const res = await fetch(`${API_BASE}/backlog.php?tech=${encodeURIComponent(techKey)}`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'backlog jobs failed');
+
+  const rows = data.rows || [];
+  // เซิร์ฟเวอร์เก่า: ?tech= ส่งรายชื่อช่างแทนรายการงาน → ใช้ fallback
+  if (rows.length && !isRepairRow(rows[0])) {
+    if (techKey === '') return fetchUnassignedPendingFallback();
+    throw new Error('backlog returned summary instead of job rows');
   }
-  try {
-    return await fetchPendingJobsFromRepairs(techKey);
-  } catch (_) {
-    return { ok: true, tech: techKey, rows: [] };
-  }
+  return data;
 }
 
 // คืนค่าแรกที่ไม่ว่างจากชื่อคอลัมน์ที่เป็นไปได้หลายแบบ (กันชื่อฟิลด์ใน DB ต่างจากที่คาด)
