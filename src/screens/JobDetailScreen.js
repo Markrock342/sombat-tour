@@ -29,9 +29,17 @@ function parseDateStr(str) {
 }
 
 export default function JobDetailScreen({ route, navigation }) {
-  const { technician, date, dateEnd, datePreset: initialPreset = 'custom', mode = 'day' } =
-    route.params ?? {};
+  const {
+    technician,
+    date,
+    dateEnd,
+    datePreset: initialPreset = 'custom',
+    mode = 'day',
+    subtypeId = null,
+    headerTitle,
+  } = route.params ?? {};
   const isPending = mode === 'pending';
+  const isBreakdown = mode === 'breakdown';
   const [dateRange, setDateRange] = useState(() => ({
     start: parseDateStr(date),
     end: parseDateStr(dateEnd || date),
@@ -63,6 +71,11 @@ export default function JobDetailScreen({ route, navigation }) {
         const want = (technician || '').trim();
         const techKey = want === 'ไม่ระบุช่าง' ? '' : want;
         rows = (await fetchPendingJobs(techKey)).rows || [];
+      } else if (isBreakdown) {
+        // งานเสียกลางทาง: กรองด้วย r_job_subtype_id — รวมทุกช่าง
+        rows = ((await fetchRepairs(dateRange.start, dateRange.end)).rows || []).filter(
+          (r) => String(r.r_job_subtype_id) === String(subtypeId)
+        );
       } else {
         rows = ((await fetchRepairs(dateRange.start, dateRange.end)).rows || []).filter((r) => {
           const tech = (r.r_technician || '').trim();
@@ -105,7 +118,9 @@ export default function JobDetailScreen({ route, navigation }) {
     } finally {
       setLoading(false);
     }
-  }, isPending ? [technician, isPending] : [technician, dateRange.start, dateRange.end, isPending]);
+  }, isPending
+    ? [technician, isPending]
+    : [technician, dateRange.start, dateRange.end, isPending, isBreakdown, subtypeId]);
 
   useEffect(() => {
     load();
@@ -130,11 +145,11 @@ export default function JobDetailScreen({ route, navigation }) {
       <View style={styles.header}>
         {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
         <Text style={styles.headerTitle}>
-          {isPending ? 'งานค้างซ่อม' : 'รายการแจ้งซ่อม'}
+          {headerTitle || (isPending ? 'งานค้างซ่อม' : 'รายการแจ้งซ่อม')}
         </Text>
         <Text style={styles.headerSub}>
-          {techLabel}
-          {isPending ? ' · รวมทั้งหมด' : ` · ${dateLabel}`}
+          {isBreakdown ? dateLabel : techLabel}
+          {isPending ? ' · รวมทั้งหมด' : isBreakdown ? '' : ` · ${dateLabel}`}
           {!loading && !error ? ` · ${jobs.length === 0 ? '0 งาน' : countLabel}` : ''}
         </Text>
       </View>
@@ -189,7 +204,11 @@ export default function JobDetailScreen({ route, navigation }) {
             {jobs.length === 0 ? (
               <View style={styles.center}>
                 <Text style={styles.centerText}>
-              {isPending ? 'ไม่มีงานค้างของช่างคนนี้' : 'ไม่มีงานของช่างคนนี้ในวันที่เลือก'}
+              {isPending
+                ? 'ไม่มีงานค้างของช่างคนนี้'
+                : isBreakdown
+                ? 'ไม่มีงานเสียกลางทางในช่วงวันที่เลือก'
+                : 'ไม่มีงานของช่างคนนี้ในวันที่เลือก'}
             </Text>
               </View>
             ) : visibleJobs.length === 0 ? (

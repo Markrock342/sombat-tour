@@ -1,6 +1,22 @@
 // เชื่อมต่อ API จริงของ 425store
 export const API_BASE = 'https://425store.com/api';
 
+// ล็อกอิน — logic เดียวกับ login_ss.php (m_status = ON, bcrypt)
+export async function fetchLogin(username, password) {
+  const body = new URLSearchParams();
+  body.append('inpUser', username);
+  body.append('inpPass', password);
+
+  const res = await fetch(`${API_BASE}/login.php`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.message || data.error || 'login failed');
+  return data.user;
+}
+
 // แปลง Date → "YYYY-MM-DD" (เวลาท้องถิ่น)
 export function fmtDate(d) {
   const y = d.getFullYear();
