@@ -32,6 +32,7 @@ import {
   parseRepairList,
   withRepairLocation,
   workshopNamesFromTechs,
+  personTechsFromTechs,
 } from '../data/repairNotes';
 import { statusColor } from '../data/repairTracking';
 import StatusPicker from '../components/StatusPicker';
@@ -77,11 +78,12 @@ export default function RepairDetailScreen({ route, navigation }) {
   const [workshopPicked, setWorkshopPicked] = useState(false);
 
   const workshops = useMemo(() => workshopNamesFromTechs(techs), [techs]);
+  const personTechs = useMemo(() => personTechsFromTechs(techs), [techs]);
   const workshopHits = useMemo(() => {
     if (workshopPicked) return [];
     const term = workshopQ.trim().toLowerCase();
-    if (!term) return workshops.slice(0, 8);
-    return workshops.filter((n) => n.toLowerCase().includes(term)).slice(0, 8);
+    if (!term) return workshops.slice(0, 12);
+    return workshops.filter((n) => n.toLowerCase().includes(term)).slice(0, 12);
   }, [workshopPicked, workshopQ, workshops]);
 
   const load = useCallback(async () => {
@@ -417,7 +419,7 @@ export default function RepairDetailScreen({ route, navigation }) {
 
               <Text style={styles.assignLabel}>ช่าง</Text>
               <View style={styles.techGrid}>
-                {techs.map((t) => {
+                {personTechs.map((t) => {
                   const active = String(assignTechId) === String(t.id);
                   return (
                     <Pressable
@@ -441,7 +443,7 @@ export default function RepairDetailScreen({ route, navigation }) {
                   );
                 })}
               </View>
-              {techs.length === 0 ? (
+              {personTechs.length === 0 ? (
                 <Text style={styles.assignHint}>โหลดรายชื่อช่างไม่สำเร็จ — ลองรีเฟรช</Text>
               ) : null}
 

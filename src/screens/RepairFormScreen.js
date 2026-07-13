@@ -20,7 +20,7 @@ import {
   searchVehicles,
   uploadRepairImage,
 } from '../data/api';
-import { composeRepairList, REPAIR_TYPES, workshopNamesFromTechs } from '../data/repairNotes';
+import { composeRepairList, REPAIR_TYPES, workshopNamesFromTechs, personTechsFromTechs } from '../data/repairNotes';
 import { showAlert } from '../utils/dialog';
 
 export default function RepairFormScreen({ navigation, route }) {
@@ -51,11 +51,12 @@ export default function RepairFormScreen({ navigation, route }) {
 
   const isBreakdown = jobType === 'breakdown';
   const workshops = useMemo(() => workshopNamesFromTechs(techs), [techs]);
+  const personTechs = useMemo(() => personTechsFromTechs(techs), [techs]);
   const workshopHits = useMemo(() => {
     if (isBreakdown || workshopPicked || jobType === 'offsite') return [];
     const term = location.trim().toLowerCase();
-    if (!term) return workshops.slice(0, 8);
-    return workshops.filter((n) => n.toLowerCase().includes(term)).slice(0, 8);
+    if (!term) return workshops.slice(0, 12);
+    return workshops.filter((n) => n.toLowerCase().includes(term)).slice(0, 12);
   }, [isBreakdown, workshopPicked, jobType, location, workshops]);
 
   useEffect(() => {
@@ -395,7 +396,7 @@ export default function RepairFormScreen({ navigation, route }) {
             <Text style={styles.sectionTitle}>ช่างผู้ซ่อม</Text>
             <Text style={styles.hint}>เลือกด้วยรหัสช่าง (ID) — เปลี่ยนชื่อเล่นได้โดยไม่หลุดงาน</Text>
             <View style={styles.techGrid}>
-              {techs.map((t) => {
+              {personTechs.map((t) => {
                 const active = String(techId) === String(t.id);
                 return (
                   <Pressable

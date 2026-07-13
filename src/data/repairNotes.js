@@ -14,16 +14,43 @@ export const REPAIR_TYPES = [
   { key: 'offsite', label: 'งานนอกพื้นที่' },
 ];
 
-/** Fallback when technician API has no อู่* names yet */
-export const FALLBACK_WORKSHOPS = ['อู่เชียงราย', 'อู่นางแล'];
+/** Known workshops / sites (ไม่จำกัดคำว่า「อู่」อย่างเดียว) */
+export const FALLBACK_WORKSHOPS = [
+  'อาคารสถานที่',
+  'ศูนย์บริการ SCANIA',
+  'ศูนย์บริการ BENZ',
+  'ศูนย์บริการตั้งศูนย์ล้อ',
+  'อู่เชียงราย',
+  'อู่เชียงใหม่',
+  'อู่ขอนแก่น',
+  'อู่นางแล',
+  'พิษณุโลก',
+  'ส่งซ่อมภายนอก',
+];
 
-/** Names that look like workshops (อู่…) from technician rows */
+/** อู่ / ศูนย์ / จุดซ่อม — ไม่ใช่ช่างบุคคล */
+export function isWorkshopName(name) {
+  const n = String(name || '').trim();
+  if (!n) return false;
+  if (/^ช่าง/.test(n)) return false;
+  if (FALLBACK_WORKSHOPS.some((w) => w === n || n.includes(w) || w.includes(n))) return true;
+  return /อู่|ศูนย์บริการ|ศูนย์ซ่อม|อาคารสถานที่|ส่งซ่อม|พิษณุโลก|นางแล|สนาม/i.test(n);
+}
+
 export function workshopNamesFromTechs(techs) {
   const fromApi = (techs || [])
     .map((t) => String(t?.name || t?.t_name || t?.technician || '').trim())
-    .filter((n) => /อู่/.test(n));
+    .filter(isWorkshopName);
   const merged = [...new Set([...fromApi, ...FALLBACK_WORKSHOPS])];
   return merged.sort((a, b) => a.localeCompare(b, 'th'));
+}
+
+/** ช่างบุคคล — กรองอู่/ศูนย์ออกจากรายการเลือกช่าง */
+export function personTechsFromTechs(techs) {
+  return (techs || []).filter((t) => {
+    const n = String(t?.name || t?.t_name || '').trim();
+    return n && !isWorkshopName(n);
+  });
 }
 
 export function composeRepairList({ type, symptom, location, parts, action }) {
