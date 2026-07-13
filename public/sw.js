@@ -1,11 +1,19 @@
 /* Minimal service worker — enables installability without aggressive offline cache */
-const CACHE = 'sombat-tour-v1';
+const CACHE = 'sombat-tour-v2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE).then((cache) =>
-      cache.addAll(['/', '/manifest.json', '/logo192.png', '/logo512.png', '/favicon.png'])
+      cache.addAll([
+        '/',
+        '/manifest.json',
+        '/logo192.png',
+        '/logo512.png',
+        '/favicon.png',
+        '/splash-mark.png',
+        '/splash-wordmark.png',
+      ])
     )
   );
 });

@@ -1,14 +1,14 @@
 {
   "name": "โปรแกรมซ่อมบำรุง",
   "short_name": "โปรแกรมซ่อมบำรุง",
-  "description": "โปรแกรมซ่อมบำรุง",
+  "description": "โปรแกรมซ่อมบำรุง สมบัติทัวร์",
   "lang": "th",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#16234A",
-  "theme_color": "#16234A",
+  "background_color": "#0F1A38",
+  "theme_color": "#0F1A38",
   "icons": [
     {
       "src": "/favicon-32.png",

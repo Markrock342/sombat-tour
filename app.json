@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/sombattourbg.png",
       "resizeMode": "contain",
-      "backgroundColor": "#16234A"
+      "backgroundColor": "#0F1A38"
     },
     "ios": {
       "supportsTablet": true,
@@ -19,7 +19,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#16234A"
+        "backgroundColor": "#0F1A38"
       }
     },
     "web": {
@@ -28,9 +28,9 @@
       "name": "โปรแกรมซ่อมบำรุง",
       "shortName": "โปรแกรมซ่อมบำรุง",
       "lang": "th",
-      "themeColor": "#16234A",
-      "backgroundColor": "#16234A",
-      "description": "โปรแกรมซ่อมบำรุง"
+      "themeColor": "#0F1A38",
+      "backgroundColor": "#0F1A38",
+      "description": "โปรแกรมซ่อมบำรุง สมบัติทัวร์"
     },
     "plugins": [
       "expo-asset"

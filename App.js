@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
@@ -55,7 +55,17 @@ const linking = {
   },
 };
 
+function dismissPwaSplash() {
+  if (typeof window === 'undefined') return;
+  const hide = window.__hidePwaSplash;
+  if (typeof hide === 'function') hide();
+}
+
 export default function App() {
+  useEffect(() => {
+    dismissPwaSplash();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AuthProvider>
