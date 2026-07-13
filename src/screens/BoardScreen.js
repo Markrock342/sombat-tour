@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -41,6 +42,7 @@ export default function BoardScreen({ navigation }) {
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [techs, setTechs] = useState([]);
 
@@ -58,8 +60,9 @@ export default function BoardScreen({ navigation }) {
   const [saving, setSaving] = useState(false);
   const [showComposer, setShowComposer] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts = {}) => {
+    if (opts.soft) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     try {
       setRows(await fetchBoard());
@@ -74,6 +77,7 @@ export default function BoardScreen({ navigation }) {
       }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -212,6 +216,13 @@ export default function BoardScreen({ navigation }) {
           style={styles.scrollView}
           contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
           keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => load({ soft: true })}
+              tintColor={colors.navy}
+            />
+          }
         >
           {showComposer ? (
             <View style={styles.composer}>

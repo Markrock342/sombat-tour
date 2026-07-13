@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -16,16 +17,27 @@ import CircularLoader from '../components/CircularLoader';
 import { fetchBreakdowns, fetchRepairs, fmtDateTime, isOpenRepair, isBreakdownRepair } from '../data/api';
 import { presetRange } from '../components/DateRangePicker';
 
+function StatusPill({ closed }) {
+  return (
+    <View style={[styles.pill, { backgroundColor: closed ? '#E5544B' : '#1FA97A' }]}>
+      <Text style={styles.pillText}>{closed ? 'ปิดงานแล้ว' : 'กำลังซ่อม'}</Text>
+    </View>
+  );
+}
+
 export default function BreakdownScreen({ navigation }) {
-  const { isMobile, pad, titleSize } = useScreenLayout();
+  const { isMobile, isWide, pad, titleSize } = useScreenLayout();
   const goBack = () => navigation.goBack();
   const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const hasLoaded = useRef(false);
 
-  const load = useCallback(async (term = q) => {
-    setLoading(true);
+  const load = useCallback(async (term = q, opts = {}) => {
+    if (opts.soft) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     try {
       let list = [];
@@ -54,13 +66,15 @@ export default function BreakdownScreen({ navigation }) {
       setError(e.message || 'โหลดไม่สำเร็จ');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [q]);
 
   useFocusEffect(
     useCallback(() => {
-      load('');
-    }, [])
+      load('', { soft: hasLoaded.current });
+      hasLoaded.current = true;
+    }, [load])
   );
 
   const filtered = rows.filter((r) => {
@@ -116,48 +130,94 @@ export default function BreakdownScreen({ navigation }) {
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
+          contentContainerStyle={[
+            styles.scroll,
+            isMobile && mobileScrollInset,
+            sorted.length === 0 && !loading && styles.scrollEmpty,
+          ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => load(q, { soft: true })}
+              tintColor={colors.navy}
+            />
+          }
         >
-          {loading ? (
+          {loading && !refreshing ? (
             <View style={styles.center}>
               <CircularLoader size={52} />
               <Text style={styles.loadingText}>กำลังโหลด...</Text>
             </View>
           ) : error ? (
-            <Text style={styles.msg}>{error}</Text>
+            <View style={styles.center}>
+              <Text style={styles.msg}>{error}</Text>
+              <Pressable style={styles.retryBtn} onPress={() => load(q)}>
+                <Text style={styles.retryText}>ลองใหม่</Text>
+              </Pressable>
+            </View>
           ) : sorted.length === 0 ? (
             <Text style={styles.msg}>ไม่มีรายการเสียกลางทาง</Text>
           ) : (
-            sorted.map((r) => {
-              const open = isOpenRepair(r);
-              return (
-                <Pressable
-                  key={r.r_id}
-                  style={({ pressed }) => [
-                    styles.card,
-                    open && styles.cardPriority,
-                    pressed && { opacity: 0.85 },
-                  ]}
-                  onPress={() => navigation.navigate('RepairDetail', { repair: r, rId: r.r_id })}
-                >
-                  <View style={styles.topRow}>
-                    <Text style={styles.time}>{r.r_dt_rec ? fmtDateTime(r.r_dt_rec) : '-'}</Text>
-                    <Text style={styles.id}>#{r.r_job_num || r.r_id}</Text>
-                  </View>
-                  <Text style={styles.tech}>{r.r_technician || 'ไม่ระบุช่าง'}</Text>
-                  <Text style={styles.vehicle}>
-                    {[r.r_v_brand, r.r_v_model].filter(Boolean).join(' ') || 'ไม่ระบุรุ่น'}
-                    {r.r_v_name ? ` · ${r.r_v_name}` : ''}
-                    {r.r_tank_m ? ` · ถัง ${r.r_tank_m} ม.` : ''}
-                  </Text>
-                  <Text style={styles.plate}>{r.r_v_plate || '-'}</Text>
-                  <Text style={styles.list} numberOfLines={2}>{r.r_repair_list}</Text>
-                  <Text style={[styles.status, { color: open ? '#1FA97A' : '#9AA3B8' }]}>
-                    {open ? 'กำลังซ่อม' : 'ปิดงานแล้ว'}
-                  </Text>
-                </Pressable>
-              );
-            })
+            <View style={[styles.grid, isWide && styles.gridWide]}>
+              {sorted.map((r, idx) => {
+                const open = isOpenRepair(r);
+                const code = r.r_job_num || r.r_id;
+                const model = [r.r_v_brand, r.r_v_model].filter(Boolean).join(' ');
+                return (
+                  <Pressable
+                    key={r.r_id}
+                    style={({ pressed }) => [
+                      styles.jobCard,
+                      isWide ? styles.jobCardWide : styles.jobCardFull,
+                      !open && styles.jobCardClosed,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => navigation.navigate('RepairDetail', { repair: r, rId: r.r_id })}
+                  >
+                    <View style={styles.jobTopRow}>
+                      <View style={styles.indexBadge}>
+                        <Text style={styles.indexText}>{idx + 1}</Text>
+                      </View>
+                      <StatusPill closed={!open} />
+                    </View>
+
+                    <Text style={styles.jobCode}>
+                      {r.r_dt_rec ? `${fmtDateTime(r.r_dt_rec)} | ` : ''}
+                      {code}
+                    </Text>
+
+                    <View style={styles.vehicleBox}>
+                      {r.r_v_name ? (
+                        <Text style={styles.vehicleNo} numberOfLines={1}>
+                          🚚 {r.r_v_name}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.jobDetail} numberOfLines={2}>
+                        {r.r_v_plate || '-'}
+                        {r.r_v_chassis ? ` • ${r.r_v_chassis}` : ''}
+                      </Text>
+                      {model ? <Text style={styles.jobDetail}>{model}</Text> : null}
+                      <Text style={styles.jobDetail}>
+                        ผู้ซ่อม: {r.r_technician || 'ไม่ระบุ'}
+                        {r.r_mile && Number(r.r_mile) > 0
+                          ? ` • ไมล์ ${Number(r.r_mile).toLocaleString()}`
+                          : ''}
+                        {r.r_tank_m ? ` • ถัง ${r.r_tank_m} ม.` : ''}
+                      </Text>
+                      {r.r_v_company ? (
+                        <Text style={styles.jobDetail} numberOfLines={1}>
+                          {r.r_v_company}
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    <Text style={styles.jobTitle} numberOfLines={3}>
+                      {r.r_repair_list || 'ไม่ระบุอาการ'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           )}
         </ScrollView>
         {isMobile ? <MobileBackBar onPress={goBack} /> : null}
@@ -216,29 +276,86 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: spacing.md,
-    paddingBottom: spacing.xl * 2,
-    minHeight: '100%',
-    gap: spacing.md,
+    paddingBottom: spacing.xl,
   },
-  card: {
+  scrollEmpty: { flexGrow: 1 },
+  grid: { gap: spacing.sm },
+  gridWide: { flexDirection: 'row', flexWrap: 'wrap' },
+  jobCard: {
     backgroundColor: colors.card,
     borderRadius: radius.lg,
-    padding: spacing.lg,
-    ...shadow,
-  },
-  cardPriority: {
+    padding: spacing.md,
     borderLeftWidth: 4,
     borderLeftColor: '#E5544B',
+    ...shadow,
   },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  time: { color: colors.textPrimary, fontSize: 13, fontWeight: '700' },
-  id: { color: colors.textMuted, fontSize: 11, fontWeight: '600' },
-  tech: { color: colors.navy, fontSize: 15, fontWeight: '800', marginTop: 2 },
-  vehicle: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
-  plate: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
-  list: { color: colors.textPrimary, fontSize: 13, marginTop: 8, lineHeight: 18 },
-  status: { marginTop: 8, fontSize: 11, fontWeight: '700' },
-  center: { alignItems: 'center', paddingVertical: spacing.xl * 2, gap: spacing.md },
+  jobCardFull: { width: '100%' },
+  jobCardWide: { flexBasis: '31%', flexGrow: 1, minWidth: 260 },
+  jobCardClosed: { borderLeftColor: colors.textMuted, opacity: 0.92 },
+  pressed: { opacity: 0.85 },
+  jobTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  indexBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.navyTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  indexText: { color: colors.textMuted, fontWeight: '700', fontSize: 12 },
+  jobCode: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    marginBottom: 2,
+  },
+  vehicleBox: {
+    backgroundColor: '#F3F5FB',
+    borderLeftWidth: 3,
+    borderLeftColor: colors.barFill,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  vehicleNo: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  jobDetail: { color: colors.textSecondary, fontSize: 13, lineHeight: 18, marginBottom: 1 },
+  jobTitle: {
+    color: colors.navy,
+    fontSize: 16,
+    fontWeight: '800',
+    lineHeight: 22,
+    marginTop: 4,
+    backgroundColor: '#FFF0C2',
+    alignSelf: 'stretch',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  pill: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: 999 },
+  pillText: { color: colors.onNavy, fontSize: 11, fontWeight: '700' },
+  center: { alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.md },
   loadingText: { color: colors.textSecondary, fontWeight: '600' },
   msg: { textAlign: 'center', color: colors.textSecondary, marginTop: spacing.xl },
+  retryBtn: {
+    backgroundColor: colors.navy,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    marginTop: spacing.sm,
+  },
+  retryText: { color: colors.onNavy, fontWeight: '700' },
 });
