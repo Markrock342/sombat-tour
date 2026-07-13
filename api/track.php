@@ -9,9 +9,17 @@ try {
   $token = isset($_GET['token']) ? trim((string)$_GET['token']) : '';
   if ($token === '') out(array('ok' => false, 'error' => 'MISSING_TOKEN'), 400);
 
-  $st = $pdo->prepare('SELECT * FROM repair_public_meta WHERE track_token = ? LIMIT 1');
-  $st->execute(array($token));
-  $meta = $st->fetch();
+  try {
+    $st = $pdo->prepare('SELECT * FROM repair_public_meta WHERE track_token = ? LIMIT 1');
+    $st->execute(array($token));
+    $meta = $st->fetch();
+  } catch (Exception $e) {
+    out(array(
+      'ok' => false,
+      'error' => 'SCHEMA_MISSING',
+      'message' => 'ตาราง repair_public_meta ยังไม่มี — รัน schema_public_report.sql ใน phpMyAdmin',
+    ), 503);
+  }
   if (!$meta) out(array('ok' => false, 'error' => 'NOT_FOUND'), 404);
 
   $rId = (int)$meta['r_id'];

@@ -9,3 +9,6 @@ export const RefreshControl =
   Platform.OS === 'web'
     ? require('react-native-web-refresh-control').RefreshControl
     : NativeRefreshControl;
+
+/** Default export — some screens import AppRefreshControl as default */
+export default RefreshControl;

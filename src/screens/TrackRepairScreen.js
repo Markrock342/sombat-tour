@@ -15,7 +15,7 @@ import { colors, spacing, radius, shadow } from '../theme';
 import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
 import LoadingView from '../components/LoadingView';
 import RepairStatusTimeline from '../components/RepairStatusTimeline';
-import AppRefreshControl from '../components/AppRefreshControl';
+import { RefreshControl } from '../components/AppRefreshControl';
 import StatusHero from '../components/StatusHero';
 import ContactActionRow from '../components/ContactActionRow';
 import { fetchTrackByToken, fmtDateTime } from '../data/api';
@@ -25,7 +25,10 @@ import { parseRepairList } from '../data/repairNotes';
 export default function TrackRepairScreen({ navigation, route }) {
   const initialToken = route?.params?.token || '';
   const { isMobile, pad, titleSize } = useScreenLayout();
-  const goBack = () => navigation.goBack();
+  const goBack = () => {
+    if (navigation.canGoBack()) navigation.goBack();
+    else navigation.navigate('Dashboard');
+  };
 
   const [tokenInput, setTokenInput] = useState(initialToken);
   const [activeToken, setActiveToken] = useState(initialToken);
@@ -40,6 +43,7 @@ export default function TrackRepairScreen({ navigation, route }) {
     if (!t) {
       setData(null);
       setLoading(false);
+      setRefreshing(false);
       return;
     }
     setError(null);
@@ -51,7 +55,12 @@ export default function TrackRepairScreen({ navigation, route }) {
       setShowSearch(false);
     } catch (e) {
       setData(null);
-      setError(e.message || 'ไม่พบใบงานนี้ — ตรวจลิงก์ / QR อีกครั้ง');
+      const msg = e.message || '';
+      if (/1146|doesn't exist|repair_public_meta/i.test(msg)) {
+        setError('ระบบติดตามยังไม่พร้อม — รอแผนกติดตั้งตารางฐานข้อมูล');
+      } else {
+        setError(msg || 'ไม่พบใบงานนี้ — ตรวจลิงก์ / QR อีกครั้ง');
+      }
       setShowSearch(true);
     } finally {
       setLoading(false);
@@ -92,7 +101,7 @@ export default function TrackRepairScreen({ navigation, route }) {
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
-          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.navy} />}
         >
           {showSearch ? (
             <View style={[styles.searchCard, isMobile && styles.searchCardMobile]}>
