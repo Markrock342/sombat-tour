@@ -102,6 +102,35 @@ function make_token($bytes = 24) {
 }
 
 /**
+ * Compact LIKE pattern — "euro5" matches "EURO 5" / "euro-5".
+ * Returns null when compact form equals the raw query (no extra OR needed).
+ */
+function like_compact($q) {
+  $raw = trim((string)$q);
+  if ($raw === '') return null;
+  $c = preg_replace('/[\s\-_]+/u', '', $raw);
+  if ($c === '' || $c === $raw) return null;
+  return '%' . $c . '%';
+}
+
+/** SQL expr with spaces/hyphens/underscores removed (MySQL). */
+function sql_compact_expr($expr) {
+  return "REPLACE(REPLACE(REPLACE(COALESCE($expr,''), ' ', ''), '-', ''), '_', '')";
+}
+
+/**
+ * Append LIKE + optional compact-LIKE OR parts for a text column.
+ */
+function search_add_text_or(&$parts, &$params, $expr, $like, $likeC) {
+  $parts[] = $expr . ' LIKE ?';
+  $params[] = $like;
+  if ($likeC !== null) {
+    $parts[] = sql_compact_expr($expr) . ' LIKE ?';
+    $params[] = $likeC;
+  }
+}
+
+/**
  * Detect image MIME + extension without requiring ext-fileinfo (disabled on
  * some PHP 5.6 cPanel hosts — finfo_open() fatals and kills uploads).
  * Returns array(mime => '...', ext => 'jpg'|...) or null if not an image.

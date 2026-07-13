@@ -183,15 +183,33 @@ export async function getVehicle(id) {
 }
 
 export async function searchVehicles(term) {
-  const res = await fetch(
-    `${API_BASE}/vehicle_search.php?name=${encodeURIComponent(term)}&limit=50`
-  );
-  const data = await parseJson(res);
-  let rows = data.rows || [];
+  const t = String(term || '').trim();
+  if (!t) return [];
 
-  if (/^\d+$/.test(term)) {
+  let rows = [];
+  // Prefer search.php (model/brand + compact match after API deploy)
+  try {
+    const data = await globalSearch({ q: t, type: 'vehicle', limit: 50, sort: 'name' });
+    rows = data.vehicles || [];
+  } catch (_) {
+    rows = [];
+  }
+
+  if (!rows.length) {
     try {
-      const row = await getVehicle(term);
+      const res = await fetch(
+        `${API_BASE}/vehicle_search.php?name=${encodeURIComponent(t)}&limit=50`
+      );
+      const data = await parseJson(res);
+      rows = data.rows || [];
+    } catch (_) {
+      rows = [];
+    }
+  }
+
+  if (/^\d+$/.test(t)) {
+    try {
+      const row = await getVehicle(t);
       if (row && !rows.some((v) => String(v.v_id) === String(row.v_id))) {
         rows = [row, ...rows];
       }
@@ -216,20 +234,32 @@ export async function globalSearch({
   limit = 50,
   offset = 0,
 } = {}) {
-  const params = new URLSearchParams();
-  if (q) params.set('q', q);
-  if (type) params.set('type', type);
-  if (dateStart) params.set('date_start', dateStart);
-  if (dateEnd) params.set('date_end', dateEnd);
-  if (technicianId) params.set('technician_id', String(technicianId));
-  if (technician) params.set('technician', technician);
-  if (status) params.set('status', status);
-  if (jobKind) params.set('job_kind', jobKind);
-  if (sort) params.set('sort', sort);
-  params.set('limit', String(limit));
-  params.set('offset', String(offset));
-  const res = await fetch(`${API_BASE}/search.php?${params}`);
-  return parseJson(res);
+  const run = async (query) => {
+    const params = new URLSearchParams();
+    if (query) params.set('q', query);
+    if (type) params.set('type', type);
+    if (dateStart) params.set('date_start', dateStart);
+    if (dateEnd) params.set('date_end', dateEnd);
+    if (technicianId) params.set('technician_id', String(technicianId));
+    if (technician) params.set('technician', technician);
+    if (status) params.set('status', status);
+    if (jobKind) params.set('job_kind', jobKind);
+    if (sort) params.set('sort', sort);
+    params.set('limit', String(limit));
+    params.set('offset', String(offset));
+    const res = await fetch(`${API_BASE}/search.php?${params}`);
+    return parseJson(res);
+  };
+
+  let data = await run(q);
+  // "euro5" → also try "euro 5" when no hits (จน API compact อัปขึ้นเซิร์ฟเวอร์)
+  if ((data.total || 0) === 0 && q) {
+    const spaced = String(q)
+      .replace(/([A-Za-z\u0E00-\u0E7F])(\d)/g, '$1 $2')
+      .replace(/(\d)([A-Za-z\u0E00-\u0E7F])/g, '$1 $2');
+    if (spaced !== q) data = await run(spaced);
+  }
+  return data;
 }
 
 export async function getRepair(id) {

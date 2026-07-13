@@ -50,19 +50,26 @@ try {
 
     if ($q !== '') {
       $like = '%' . $q . '%';
-      $parts = array(
-        'CAST(r_id AS CHAR) LIKE ?',
-        'CAST(r_job_num AS CHAR) LIKE ?',
-        'r_v_name LIKE ?',
-        'r_v_plate LIKE ?',
-        'r_v_chassis LIKE ?',
-        'r_v_brand LIKE ?',
-        'r_v_model LIKE ?',
-        'r_repair_list LIKE ?',
-        'r_technician LIKE ?',
-        'r_v_company LIKE ?',
-      );
-      $params = array_merge($params, array_fill(0, count($parts), $like));
+      $likeC = like_compact($q);
+      $parts = array();
+      $params = array();
+      $parts[] = 'CAST(r_id AS CHAR) LIKE ?';
+      $params[] = $like;
+      $parts[] = 'CAST(r_job_num AS CHAR) LIKE ?';
+      $params[] = $like;
+      search_add_text_or($parts, $params, 'r_v_name', $like, $likeC);
+      search_add_text_or($parts, $params, 'r_v_plate', $like, $likeC);
+      search_add_text_or($parts, $params, 'r_v_chassis', $like, $likeC);
+      search_add_text_or($parts, $params, 'r_v_brand', $like, $likeC);
+      search_add_text_or($parts, $params, 'r_v_model', $like, $likeC);
+      search_add_text_or($parts, $params, 'r_repair_list', $like, $likeC);
+      search_add_text_or($parts, $params, 'r_technician', $like, $likeC);
+      search_add_text_or($parts, $params, 'r_v_company', $like, $likeC);
+      if ($likeC !== null) {
+        // brand+model glued: "scaniaeuro5" → SCANIA + EURO 5
+        $parts[] = sql_compact_expr("CONCAT(COALESCE(r_v_brand,''), COALESCE(r_v_model,''))") . ' LIKE ?';
+        $params[] = $likeC;
+      }
       $where[] = '(' . implode(' OR ', $parts) . ')';
     }
 
@@ -125,18 +132,31 @@ try {
 
     if ($q !== '') {
       $like = '%' . $q . '%';
-      $whereV = array(
-        'CAST(v_id AS CHAR) LIKE ?',
-        'v_name LIKE ?',
-        'v_plate LIKE ?',
-        'v_brand LIKE ?',
-        'v_model LIKE ?',
-        'v_chassis LIKE ?',
-      );
-      $paramsV = array($like, $like, $like, $like, $like, $like);
+      $likeC = like_compact($q);
+      $whereV = array();
+      $paramsV = array();
+      $whereV[] = 'CAST(v_id AS CHAR) LIKE ?';
+      $paramsV[] = $like;
+      search_add_text_or($whereV, $paramsV, 'v_name', $like, $likeC);
+      search_add_text_or($whereV, $paramsV, 'v_plate', $like, $likeC);
+      search_add_text_or($whereV, $paramsV, 'v_brand', $like, $likeC);
+      search_add_text_or($whereV, $paramsV, 'v_model', $like, $likeC);
+      search_add_text_or($whereV, $paramsV, 'v_chassis', $like, $likeC);
       if (isset($vSet['v_note'])) {
-        $whereV[] = "COALESCE(v_note,'') LIKE ?";
-        $paramsV[] = $like;
+        search_add_text_or($whereV, $paramsV, "COALESCE(v_note,'')", $like, $likeC);
+      }
+      if (isset($vSet['v_class'])) {
+        search_add_text_or($whereV, $paramsV, 'v_class', $like, $likeC);
+      }
+      if (isset($vSet['v_engine'])) {
+        search_add_text_or($whereV, $paramsV, 'v_engine', $like, $likeC);
+      }
+      if (isset($vSet['v_company'])) {
+        search_add_text_or($whereV, $paramsV, 'v_company', $like, $likeC);
+      }
+      if ($likeC !== null) {
+        $whereV[] = sql_compact_expr("CONCAT(COALESCE(v_brand,''), COALESCE(v_model,''))") . ' LIKE ?';
+        $paramsV[] = $likeC;
       }
       $st = $pdo->prepare("
         SELECT " . $selectSql . "
