@@ -9,6 +9,11 @@ export function normalizePhone(phone) {
   return raw;
 }
 
+/** Thai mobile input: digits only, max 10 (เช่น 08xxxxxxxx) */
+export function limitPhoneInput(value) {
+  return String(value || '').replace(/\D/g, '').slice(0, 10);
+}
+
 export function telHref(phone) {
   const p = normalizePhone(phone);
   return p ? `tel:${p}` : '';

@@ -21,6 +21,7 @@ import {
   uploadPublicRepairImage,
 } from '../data/api';
 import { composeRepairList, REPAIR_TYPES } from '../data/repairNotes';
+import { limitPhoneInput } from '../data/contactActions';
 
 export default function PublicReportScreen({ navigation, route }) {
   const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
@@ -108,7 +109,7 @@ export default function PublicReportScreen({ navigation, route }) {
       });
       const payload = {
         reporter_name: reporterName.trim(),
-        reporter_phone: reporterPhone.trim(),
+        reporter_phone: limitPhoneInput(reporterPhone),
         r_repair_list: repairList,
         r_mile: Number(mile) || 0,
         r_type: jobType === 'breakdown' ? 'breakdown' : 'normal',
@@ -196,9 +197,10 @@ export default function PublicReportScreen({ navigation, route }) {
             <TextInput
               style={inputStyle}
               value={reporterPhone}
-              onChangeText={setReporterPhone}
+              onChangeText={(v) => setReporterPhone(limitPhoneInput(v))}
               keyboardType="phone-pad"
-              placeholder="ถ้ามี — แผนกติดต่อกลับได้"
+              maxLength={10}
+              placeholder="เช่น 0812345678"
               placeholderTextColor={colors.textMuted}
             />
           </View>

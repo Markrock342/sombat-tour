@@ -20,7 +20,8 @@ try {
   $reporterName = trim((string)pick($b, array('reporter_name', 'r_reporter_name')));
   if ($reporterName === '') out(array('ok' => false, 'error' => 'MISSING_REPORTER'), 400);
 
-  $reporterPhone = trim((string)pick($b, array('reporter_phone', 'r_reporter_phone')));
+  $reporterPhone = preg_replace('/\D+/', '', trim((string)pick($b, array('reporter_phone', 'r_reporter_phone'))));
+  if (strlen($reporterPhone) > 10) $reporterPhone = substr($reporterPhone, 0, 10);
   $repairList = trim((string)pick($b, array('r_repair_list', 'repair_list')));
   if ($repairList === '') out(array('ok' => false, 'error' => 'MISSING_REPAIR_LIST'), 400);
 
