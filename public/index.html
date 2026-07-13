@@ -67,17 +67,6 @@
         padding: 24px;
         text-align: center;
       }
-      #pwa-splash .splash-mark {
-        width: 72px;
-        height: 72px;
-        margin-bottom: 18px;
-        border-radius: 16px;
-        object-fit: cover;
-        mix-blend-mode: screen;
-        opacity: 0;
-        transform: translateY(10px) scale(0.96);
-        animation: splash-in 700ms cubic-bezier(0.16, 1, 0.3, 1) 40ms forwards;
-      }
       #pwa-splash .splash-wordmark {
         width: min(100%, 340px);
         height: auto;
@@ -86,7 +75,7 @@
         mix-blend-mode: screen;
         opacity: 0;
         transform: translateY(12px);
-        animation: splash-in 780ms cubic-bezier(0.16, 1, 0.3, 1) 120ms forwards;
+        animation: splash-in 780ms cubic-bezier(0.16, 1, 0.3, 1) 80ms forwards;
       }
       #pwa-splash .splash-rule {
         width: 48px;
@@ -156,7 +145,6 @@
         }
       }
       @media (prefers-reduced-motion: reduce) {
-        #pwa-splash .splash-mark,
         #pwa-splash .splash-wordmark,
         #pwa-splash .splash-product,
         #pwa-splash .splash-tag,
@@ -181,7 +169,6 @@
   <body>
     <div id="pwa-splash" role="status" aria-live="polite" aria-label="กำลังเปิดโปรแกรมซ่อมบำรุง">
       <div class="splash-inner">
-        <img class="splash-mark" src="/splash-mark.png" width="72" height="72" alt="" />
         <img
           class="splash-wordmark"
           src="/splash-wordmark.png"
