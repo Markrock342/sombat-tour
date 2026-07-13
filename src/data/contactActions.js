@@ -98,6 +98,58 @@ export async function shareViaLine({ jobNum, status, trackToken, note }) {
   }
 }
 
+/** Download / save any image URL (web → Downloads, native → Share) */
+export async function saveImageToDevice(imageUrl, fileName = 'sombat-image.jpg', opts = {}) {
+  const url = String(imageUrl || '').trim();
+  const imageId = opts.imageId;
+  if (!url && !imageId) {
+    showAlert('ไม่มีรูป', 'ไม่พบลิงก์รูปภาพ');
+    return false;
+  }
+  const filename = String(fileName || 'sombat-image.jpg').replace(/[^\w.\-]+/gi, '_');
+
+  // Prefer CORS-friendly API download when we have image id
+  const fetchUrl = imageId
+    ? `https://425store.com/api/download_image.php?id=${encodeURIComponent(imageId)}`
+    : url;
+
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    try {
+      const res = await fetch(fetchUrl, { mode: 'cors' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const obj = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = obj;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(obj);
+      showAlert('บันทึกแล้ว', 'เปิดดูได้จากโฟลเดอร์ Downloads');
+      return true;
+    } catch (_) {
+      const openUrl = url || fetchUrl;
+      if (typeof window !== 'undefined') window.open(openUrl, '_blank', 'noopener,noreferrer');
+      showAlert('เปิดรูปแล้ว', 'กดค้างที่รูป → บันทึกลงรูปภาพ / Save image');
+      return false;
+    }
+  }
+
+  try {
+    await Share.share({ url: url || fetchUrl, message: url || fetchUrl, title: filename });
+    return true;
+  } catch (_) {
+    try {
+      await Linking.openURL(url || fetchUrl);
+      return true;
+    } catch (e) {
+      showAlert('บันทึกไม่ได้', e.message || url || fetchUrl);
+      return false;
+    }
+  }
+}
+
 /** Download / share QR PNG so it can be opened from the device gallery */
 export async function saveQrToGallery(trackToken, jobNum) {
   const link = trackToken ? trackUrl(trackToken) : '';

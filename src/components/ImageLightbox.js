@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Modal,
   View,
@@ -10,20 +10,24 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, radius } from '../theme';
+import { spacing, radius } from '../theme';
+import { saveImageToDevice } from '../data/contactActions';
 
 /**
- * Fullscreen image viewer. Optional delete (staff).
+ * Fullscreen image viewer. Optional delete (staff). Save on expand.
  */
 export default function ImageLightbox({
   visible,
   uri,
+  fileName,
+  imageId,
   onClose,
   canDelete = false,
   onDelete,
   deleting = false,
 }) {
   const { width, height } = useWindowDimensions();
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!visible || Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
@@ -33,6 +37,16 @@ export default function ImageLightbox({
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [visible, onClose]);
+
+  const onSave = async () => {
+    if ((!uri && !imageId) || saving) return;
+    setSaving(true);
+    try {
+      await saveImageToDevice(uri, fileName || 'sombat-repair.jpg', { imageId });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!uri) return null;
 
@@ -52,12 +66,23 @@ export default function ImageLightbox({
               <Text style={styles.toolText}>{deleting ? 'กำลังลบ…' : 'ลบ'}</Text>
             </Pressable>
           ) : (
-            <View style={{ width: 72 }} />
+            <View style={{ width: 8 }} />
           )}
-          <Pressable style={styles.toolBtn} onPress={onClose} accessibilityLabel="ปิด">
-            <Ionicons name="close" size={22} color="#fff" />
-            <Text style={styles.toolText}>ปิด</Text>
-          </Pressable>
+          <View style={styles.toolbarRight}>
+            <Pressable
+              style={[styles.toolBtn, styles.saveBtn]}
+              onPress={onSave}
+              disabled={saving}
+              accessibilityLabel="บันทึกรูป"
+            >
+              <Ionicons name="download-outline" size={20} color="#fff" />
+              <Text style={styles.toolText}>{saving ? 'กำลังบันทึก…' : 'บันทึก'}</Text>
+            </Pressable>
+            <Pressable style={styles.toolBtn} onPress={onClose} accessibilityLabel="ปิด">
+              <Ionicons name="close" size={22} color="#fff" />
+              <Text style={styles.toolText}>ปิด</Text>
+            </Pressable>
+          </View>
         </View>
         <Image
           source={{ uri }}
@@ -89,8 +114,10 @@ const styles = StyleSheet.create({
     right: spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     zIndex: 2,
   },
+  toolbarRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   toolBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -101,6 +128,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 999,
   },
+  saveBtn: { backgroundColor: 'rgba(31, 169, 122, 0.95)' },
   deleteBtn: { backgroundColor: 'rgba(229, 84, 75, 0.9)' },
   toolText: { color: '#fff', fontWeight: '800', fontSize: 14 },
   hint: {

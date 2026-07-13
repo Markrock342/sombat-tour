@@ -295,6 +295,8 @@ export default function TrackRepairScreen({ navigation, route }) {
       <ImageLightbox
         visible={!!preview}
         uri={preview?.url}
+        imageId={preview?.id}
+        fileName={`sombat-track-${preview?.id || 'photo'}.jpg`}
         onClose={() => setPreview(null)}
       />
     </SafeAreaView>

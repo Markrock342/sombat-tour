@@ -692,6 +692,8 @@ export default function RepairDetailScreen({ route, navigation }) {
       <ImageLightbox
         visible={!!preview}
         uri={preview?.url}
+        imageId={preview?.id}
+        fileName={`sombat-repair-${rId}-${preview?.id || 'photo'}.jpg`}
         onClose={() => setPreview(null)}
         canDelete={canWrite}
         onDelete={removePhoto}
