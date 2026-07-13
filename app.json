@@ -25,12 +25,12 @@
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png",
-      "name": "สมบัติทัวร์",
-      "shortName": "สมบัติทัวร์",
+      "name": "โปรแกรมซ่อมบำรุง",
+      "shortName": "โปรแกรมซ่อมบำรุง",
       "lang": "th",
       "themeColor": "#16234A",
       "backgroundColor": "#16234A",
-      "description": "โปรแกรมงานซ่อมบำรุง สมบัติทัวร์"
+      "description": "โปรแกรมซ่อมบำรุง"
     },
     "plugins": [
       "expo-asset"

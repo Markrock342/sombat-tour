@@ -19,7 +19,7 @@ STAMP=$(date +%Y%m%d_%H%M%S)
 OUT="$BACKUP_DIR/sombat_${STAMP}.sql.gz"
 
 mysqldump -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" \
-  --single-transaction --routines --triggers \
+  --single-transaction --routines --triggers --no-tablespaces \
   "$DB_NAME" | gzip -c > "$OUT"
 
 # prune old backups
