@@ -49,7 +49,7 @@ export async function getExistingSubscription() {
 
 export async function subscribeStaffPush() {
   if (!pushSupported()) {
-    const err = new Error('อุปกรณ์นี้ไม่รองรับแจ้งเตือน PWA');
+    const err = new Error('อุปกรณ์นี้ยังไม่รองรับแจ้งเตือน — ลองติดตั้งแอปลงจอโฮม');
     err.code = 'UNSUPPORTED';
     throw err;
   }

@@ -157,7 +157,7 @@ export default function SettingsScreen({ navigation }) {
       return;
     }
     if (!pushSupported()) {
-      showAlert('ยังใช้ไม่ได้', 'ต้องเปิดผ่าน PWA ที่ติดตั้งลงจอโฮม (iOS 16.4+)');
+      showAlert('ยังใช้ไม่ได้', 'ต้องติดตั้งแอปลงจอโฮมแล้วเปิดจากไอคอนนั้น (iPhone iOS 16.4+)');
       return;
     }
     setBusy(true);
@@ -288,11 +288,11 @@ export default function SettingsScreen({ navigation }) {
           <View style={styles.group}>
             <SettingRow
               icon="phone-portrait-outline"
-              title="สถานะ PWA"
+              title="สถานะแอป"
               subtitle={
                 asPwa
-                  ? 'เปิดจากหน้าจอโฮมแล้ว — พร้อมแจ้งเตือนเต็มรูปแบบ'
-                  : 'ยังเปิดในแท็บเบราว์เซอร์ ติดตั้งลงจอโฮมจะเสถียรกว่า'
+                  ? 'เปิดจากไอคอนบนจอโฮมแล้ว — พร้อมแจ้งเตือนเต็มรูปแบบ'
+                  : 'ยังเปิดในแท็บบราวเซอร์ ติดตั้งลงจอโฮมจะเสถียรกว่า'
               }
               right={<StatusPill ok={asPwa} label={asPwa ? 'พร้อม' : 'ยังไม่ติดตั้ง'} />}
             />
@@ -334,7 +334,7 @@ export default function SettingsScreen({ navigation }) {
             <SettingRow
               icon="flash-outline"
               title="ทดสอบแจ้งเตือน (เครื่องนี้)"
-              subtitle="เด้งทันทีผ่านเบราว์เซอร์ / PWA"
+              subtitle="เด้งทันทีบนเครื่องนี้"
               onPress={busy ? undefined : onTestLocal}
             />
             <View style={styles.divider} />
