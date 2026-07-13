@@ -120,6 +120,7 @@ try {
 
   log_repair_status($pdo, $rId, 'submitted', 'แจ้งซ่อมออนไลน์', $reporterName);
 
+  ignore_user_abort(true);
   out_flush(array(
     'ok' => true,
     'r_id' => $rId,

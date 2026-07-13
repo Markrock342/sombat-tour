@@ -66,6 +66,8 @@ function out($data, $code = 200) {
  * can continue after the browser already received the response.
  */
 function out_flush($data, $code = 200) {
+  ignore_user_abort(true);
+  @set_time_limit(45);
   http_response_code($code);
   header('Connection: close');
   $flags = defined('JSON_UNESCAPED_UNICODE') ? JSON_UNESCAPED_UNICODE : 0;
@@ -81,7 +83,6 @@ function out_flush($data, $code = 200) {
   if (function_exists('fastcgi_finish_request')) {
     @fastcgi_finish_request();
   } else {
-    ignore_user_abort(true);
     while (ob_get_level() > 0) {
       @ob_end_flush();
     }

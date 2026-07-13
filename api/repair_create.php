@@ -94,24 +94,28 @@ try {
 
   $rId = (int)$pdo->lastInsertId();
 
+  // Persist response first, keep script alive for push (shared hosts abort otherwise)
+  ignore_user_abort(true);
   out_flush(array(
     'ok' => true,
     'r_id' => $rId,
     'r_job_num' => $jobNum,
     'created_by' => $user['username'],
+    'r_type' => $type,
   ));
 
-  if ($type === 'breakdown') {
-    try {
-      require_push_lib();
-      $label = $vPlate !== '' ? $vPlate : ($vName !== '' ? $vName : ('#' . $jobNum));
-      push_notify_staff($pdo, array(
-        'title' => 'สมบัติทัวร์ · เสียกลางทาง',
-        'body' => $label . ' · ' . $techName,
-        'url' => 'https://425service.vercel.app/',
-      ));
-    } catch (Exception $e) { /* ignore */ }
-  }
+  // Alert desk staff for every new job from this form (ซ่อมปกติ / เสียกลางทาง)
+  try {
+    require_push_lib();
+    $kind = ($type === 'breakdown') ? 'เสียกลางทาง' : 'แจ้งซ่อม';
+    $label = $vPlate !== '' ? $vPlate : ($vName !== '' ? $vName : ('#' . $jobNum));
+    $who = $techName !== '' ? $techName : (isset($user['username']) ? $user['username'] : '');
+    push_notify_staff($pdo, array(
+      'title' => 'สมบัติทัวร์ · ' . $kind,
+      'body' => $label . ($who !== '' ? (' · ' . $who) : ''),
+      'url' => 'https://425service.vercel.app/',
+    ));
+  } catch (Exception $e) { /* ignore */ }
   exit;
 } catch (Exception $e) {
   out(array('ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()), 500);
