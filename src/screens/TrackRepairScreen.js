@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
+import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset, contentSheetStyle } from '../components/BackNavigation';
 import LoadingView from '../components/LoadingView';
 import RepairStatusTimeline from '../components/RepairStatusTimeline';
 import { RefreshControl } from '../components/AppRefreshControl';
@@ -24,7 +24,8 @@ import { parseRepairList } from '../data/repairNotes';
 
 export default function TrackRepairScreen({ navigation, route }) {
   const initialToken = route?.params?.token || '';
-  const { isMobile, pad, titleSize } = useScreenLayout();
+  const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
+  const sheetStyle = contentSheetStyle(centerContent, contentMaxWidth);
   const goBack = () => {
     if (navigation.canGoBack()) navigation.goBack();
     else navigation.navigate('Dashboard');
@@ -92,17 +93,20 @@ export default function TrackRepairScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={[styles.header, { paddingHorizontal: pad }]}>
-          {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
-          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>ติดตามสถานะ</Text>
-          <Text style={styles.headerSub}>เปิดจาก QR หรือวางลิงก์ที่ได้ตอนแจ้ง</Text>
+        <View style={[styles.header, { paddingHorizontal: pad }, centerContent && styles.headerCentered]}>
+          <View style={[styles.headerInner, sheetStyle]}>
+            {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
+            <Text style={[styles.headerTitle, { fontSize: titleSize }]}>ติดตามสถานะ</Text>
+            <Text style={styles.headerSub}>เปิดจาก QR หรือวางลิงก์ที่ได้ตอนแจ้ง</Text>
+          </View>
         </View>
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
+          contentContainerStyle={[styles.scroll, centerContent && styles.scrollCentered, isMobile && mobileScrollInset]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.navy} />}
         >
+          <View style={sheetStyle}>
           {showSearch ? (
             <View style={[styles.searchCard, isMobile && styles.searchCardMobile]}>
               <Text style={styles.searchLabel}>วางลิงก์หรือรหัสจาก QR</Text>
@@ -204,6 +208,7 @@ export default function TrackRepairScreen({ navigation, route }) {
               </Pressable>
             </View>
           )}
+          </View>
         </ScrollView>
         {isMobile ? <MobileBackBar onPress={goBack} /> : null}
       </View>

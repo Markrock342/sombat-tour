@@ -15,6 +15,7 @@ import {
   MobileBackBar,
   useScreenLayout,
   mobileScrollInset,
+  contentSheetStyle,
 } from '../components/BackNavigation';
 import {
   FilterChipRow,
@@ -88,8 +89,9 @@ export default function SearchScreen({ navigation, route }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const timer = useRef(null);
   const reqSeq = useRef(0);
-  const { isMobile, isWide, pad, titleSize } = useScreenLayout();
+  const { isMobile, isWide, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
   const goBack = () => navigation.goBack();
+  const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, 720));
 
   useEffect(() => {
     if (type === 'vehicle' && !['date_desc', 'date_asc', 'plate', 'name'].includes(sort)) {
@@ -164,12 +166,15 @@ export default function SearchScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={[styles.header, { paddingHorizontal: pad }]}>
-          {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
-          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>ค้นหา</Text>
+        <View style={[styles.header, { paddingHorizontal: pad }, centerContent && styles.headerCentered]}>
+          <View style={[styles.headerInner, sheetStyle]}>
+            {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
+            <Text style={[styles.headerTitle, { fontSize: titleSize }]}>ค้นหา</Text>
+          </View>
         </View>
 
-        <View style={[styles.controls, { paddingHorizontal: isMobile ? spacing.md : spacing.lg }]}>
+        <View style={[styles.controls, { paddingHorizontal: isMobile ? spacing.md : spacing.lg }, centerContent && styles.controlsCentered]}>
+          <View style={sheetStyle}>
           <View style={[styles.searchShell, styles.searchShellCompact]}>
             <Text style={styles.searchIcon}>⌕</Text>
             <TextInput
@@ -235,13 +240,15 @@ export default function SearchScreen({ navigation, route }) {
           <Text style={styles.mobileMeta}>
             {loading ? 'กำลังค้นหา...' : searched ? `พบ ${total} รายการ` : 'พิมพ์คำค้นเพื่อเริ่ม'}
           </Text>
+          </View>
         </View>
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
+          contentContainerStyle={[styles.scroll, centerContent && styles.scrollCentered, isMobile && mobileScrollInset]}
           keyboardShouldPersistTaps="handled"
         >
+          <View style={sheetStyle}>
           {loading ? (
             <LoadingView compact />
           ) : error ? (
@@ -262,7 +269,7 @@ export default function SearchScreen({ navigation, route }) {
               <Text style={styles.stateMsg}>ลองเปลี่ยนคำค้น หรือรีเซ็ตฟิลเตอร์</Text>
             </View>
           ) : (
-            <View style={[styles.grid, isWide && styles.gridWide]}>
+            <View style={styles.grid}>
               {type !== 'vehicle' &&
                 repairs.map((r) => {
                   const open = isOpenRepair(r);
@@ -274,7 +281,7 @@ export default function SearchScreen({ navigation, route }) {
                       key={`r-${r.r_id}`}
                       style={({ pressed }) => [
                         styles.card,
-                        isWide && styles.cardWide,
+                        false && styles.cardWide,
                         pressed && styles.pressed,
                       ]}
                       onPress={() =>
@@ -322,7 +329,7 @@ export default function SearchScreen({ navigation, route }) {
                     key={`v-${v.v_id}`}
                     style={({ pressed }) => [
                       styles.card,
-                      isWide && styles.cardWide,
+                      false && styles.cardWide,
                       pressed && styles.pressed,
                     ]}
                     onPress={() => navigation.navigate('VehicleDetail', { vehicle: v })}
@@ -337,6 +344,7 @@ export default function SearchScreen({ navigation, route }) {
                 ))}
             </View>
           )}
+          </View>
         </ScrollView>
         {isMobile ? <MobileBackBar onPress={goBack} /> : null}
       </View>
@@ -352,6 +360,10 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.xs,
   },
+  headerCentered: { alignItems: 'center' },
+  headerInner: { width: '100%' },
+  controlsCentered: { alignItems: 'center' },
+  scrollCentered: { paddingHorizontal: spacing.xl },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
   headerTitle: { color: colors.onNavy, fontWeight: '800', letterSpacing: 0.2 },
   controls: {

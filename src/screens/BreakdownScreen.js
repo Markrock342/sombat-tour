@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
+import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset, contentSheetStyle } from '../components/BackNavigation';
 import CircularLoader from '../components/CircularLoader';
 import { fetchBreakdowns, fetchRepairs, fmtDateTime, isOpenRepair, isBreakdownRepair } from '../data/api';
 import { presetRange } from '../components/DateRangePicker';
@@ -26,7 +26,8 @@ function StatusPill({ closed }) {
 }
 
 export default function BreakdownScreen({ navigation }) {
-  const { isMobile, isWide, pad, titleSize } = useScreenLayout();
+  const { isMobile, isWide, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
+  const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, 640));
   const goBack = () => navigation.goBack();
   const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
@@ -99,15 +100,18 @@ export default function BreakdownScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={[styles.header, { paddingHorizontal: pad }]}>
-          {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
-          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>เสียกลางทาง</Text>
-          {!isMobile ? (
-            <Text style={styles.headerSub}>งานแจ้งซ่อมระหว่างทาง · กดเพื่อดูรายละเอียด</Text>
-          ) : null}
+        <View style={[styles.header, { paddingHorizontal: pad }, centerContent && styles.headerCentered]}>
+          <View style={[styles.headerInner, sheetStyle]}>
+            {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
+            <Text style={[styles.headerTitle, { fontSize: titleSize }]}>เสียกลางทาง</Text>
+            {!isMobile ? (
+              <Text style={styles.headerSub}>งานแจ้งซ่อมระหว่างทาง · กดเพื่อดูรายละเอียด</Text>
+            ) : null}
+          </View>
         </View>
 
-        <View style={[styles.toolbar, { paddingHorizontal: pad }]}>
+        <View style={[styles.toolbar, { paddingHorizontal: pad }, centerContent && styles.headerCentered]}>
+          <View style={[sheetStyle, { width: '100%' }]}>
           <View style={styles.searchBar}>
             <TextInput
               style={styles.input}
@@ -126,12 +130,14 @@ export default function BreakdownScreen({ navigation }) {
           >
             <Text style={styles.newBtnText}>{isMobile ? '+ แจ้ง' : '+ แจ้งเสียกลางทาง'}</Text>
           </Pressable>
+          </View>
         </View>
 
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scroll,
+            centerContent && styles.scrollCentered,
             isMobile && mobileScrollInset,
             sorted.length === 0 && !loading && styles.scrollEmpty,
           ]}
@@ -143,6 +149,7 @@ export default function BreakdownScreen({ navigation }) {
             />
           }
         >
+          <View style={sheetStyle}>
           {loading && !refreshing ? (
             <View style={styles.center}>
               <CircularLoader size={52} />
@@ -158,7 +165,7 @@ export default function BreakdownScreen({ navigation }) {
           ) : sorted.length === 0 ? (
             <Text style={styles.msg}>ไม่มีรายการเสียกลางทาง</Text>
           ) : (
-            <View style={[styles.grid, isWide && styles.gridWide]}>
+            <View style={styles.grid}>
               {sorted.map((r, idx) => {
                 const open = isOpenRepair(r);
                 const code = r.r_job_num || r.r_id;
@@ -168,7 +175,7 @@ export default function BreakdownScreen({ navigation }) {
                     key={r.r_id}
                     style={({ pressed }) => [
                       styles.jobCard,
-                      isWide ? styles.jobCardWide : styles.jobCardFull,
+                      styles.jobCardFull,
                       !open && styles.jobCardClosed,
                       pressed && styles.pressed,
                     ]}
@@ -219,6 +226,7 @@ export default function BreakdownScreen({ navigation }) {
               })}
             </View>
           )}
+          </View>
         </ScrollView>
         {isMobile ? <MobileBackBar onPress={goBack} /> : null}
       </View>

@@ -5,6 +5,8 @@ import { colors, spacing, shadow } from '../theme';
 
 export const MOBILE_BREAKPOINT = 768;
 export const WIDE_BREAKPOINT = 900;
+/** Max width for single-column detail cards on PC (centered, not edge-to-edge). */
+export const CONTENT_MAX_WIDTH = 560;
 
 export function useIsMobile() {
   const { width } = useWindowDimensions();
@@ -18,9 +20,22 @@ export function useScreenLayout() {
   return {
     isMobile,
     isWide,
+    /** Use for centering one-column pages on tablet/PC */
+    centerContent: !isMobile,
     pad: isMobile ? spacing.md : spacing.xl,
     titleSize: isMobile ? 20 : 22,
     heroTitleSize: isMobile ? 22 : 24,
+    contentMaxWidth: CONTENT_MAX_WIDTH,
+  };
+}
+
+/** Centered column sheet — apply to detail/form pages on PC */
+export function contentSheetStyle(centerContent, maxWidth = CONTENT_MAX_WIDTH) {
+  if (!centerContent) return { width: '100%' };
+  return {
+    width: '100%',
+    maxWidth,
+    alignSelf: 'center',
   };
 }
 

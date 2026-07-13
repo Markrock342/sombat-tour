@@ -15,7 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, radius, shadow } from '../theme';
 import DateRangePicker from '../components/DateRangePicker';
 import LoadingView from '../components/LoadingView';
-import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
+import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset, contentSheetStyle } from '../components/BackNavigation';
 import {
   fetchRepairs,
   fetchPendingJobs,
@@ -71,8 +71,9 @@ export default function JobDetailScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const { isMobile, isWide, pad, titleSize } = useScreenLayout();
+  const { isMobile, isWide, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
   const goBack = () => navigation.goBack();
+  const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, 640));
   const lastDeviceDay = useRef(fmtDate(new Date()));
 
   const load = useCallback(async (opts = {}) => {
@@ -174,27 +175,34 @@ export default function JobDetailScreen({ route, navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={[styles.header, { paddingHorizontal: pad }]}>
-          {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
-          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>
-            {isPending ? 'งานค้างซ่อม' : 'รายการแจ้งซ่อม'}
-          </Text>
-          <Text style={styles.headerSub} numberOfLines={isMobile ? 2 : undefined}>
-            {techLabel}
-            {isPending ? ' · สะสมทั้งหมด' : ` · ${dateLabel}`}
-            {!loading && !error ? ` · ${jobs.length === 0 ? '0 งาน' : countLabel}` : ''}
-          </Text>
+        <View style={[styles.header, { paddingHorizontal: pad }, centerContent && styles.headerCentered]}>
+          <View style={[styles.headerInner, sheetStyle]}>
+            {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
+            <Text style={[styles.headerTitle, { fontSize: titleSize }]}>
+              {isPending ? 'งานค้างซ่อม' : 'รายการแจ้งซ่อม'}
+            </Text>
+            <Text style={styles.headerSub} numberOfLines={isMobile ? 2 : undefined}>
+              {techLabel}
+              {isPending ? ' · สะสมทั้งหมด' : ` · ${dateLabel}`}
+              {!loading && !error ? ` · ${jobs.length === 0 ? '0 งาน' : countLabel}` : ''}
+            </Text>
+          </View>
         </View>
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
+          contentContainerStyle={[
+            styles.scroll,
+            centerContent && styles.scrollCentered,
+            isMobile && mobileScrollInset,
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => load({ soft: true })} tintColor={colors.navy} />
           }
           keyboardShouldPersistTaps="handled"
         >
+          <View style={sheetStyle}>
           {!isPending ? (
             <DateRangePicker
               value={dateRange}
@@ -257,13 +265,13 @@ export default function JobDetailScreen({ route, navigation }) {
                   <Text style={styles.centerText}>ไม่มีงานที่ตรงกับตัวกรอง</Text>
                 </View>
               ) : (
-                <View style={[styles.grid, isWide && styles.gridWide]}>
+                <View style={styles.grid}>
                   {visibleJobs.map((job) => (
                     <Pressable
                       key={`${job.rId}-${job.code}`}
                       style={({ pressed }) => [
                         styles.jobCard,
-                        isWide ? styles.jobCardWide : styles.jobCardFull,
+                        styles.jobCardFull,
                         pressed && styles.pressed,
                       ]}
                       onPress={() =>
@@ -305,6 +313,7 @@ export default function JobDetailScreen({ route, navigation }) {
               )}
             </>
           )}
+          </View>
         </ScrollView>
         {isMobile ? <MobileBackBar onPress={goBack} /> : null}
       </View>
@@ -328,6 +337,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
   },
+  headerCentered: { alignItems: 'center' },
+  headerInner: { width: '100%' },
+  scrollCentered: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
   headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },
   headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },

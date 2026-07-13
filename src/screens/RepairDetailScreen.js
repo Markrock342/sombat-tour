@@ -13,7 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
+import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset, contentSheetStyle } from '../components/BackNavigation';
 import LoadingView from '../components/LoadingView';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -51,8 +51,9 @@ export default function RepairDetailScreen({ route, navigation }) {
   const { repair: initial, rId: paramId } = route.params ?? {};
   const rId = paramId || initial?.r_id;
   const { canWrite } = useAuth();
-  const { isMobile, isWide, pad, titleSize } = useScreenLayout();
+  const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
   const goBack = () => navigation.goBack();
+  const sheetStyle = contentSheetStyle(centerContent, contentMaxWidth);
 
   const [repair, setRepair] = useState(initial || null);
   const [images, setImages] = useState([]);
@@ -370,12 +371,12 @@ export default function RepairDetailScreen({ route, navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={[styles.header, { paddingHorizontal: pad }, isWide && styles.headerCentered]}>
-          <View style={[styles.headerInner, isWide && styles.headerInnerWide]}>
+        <View style={[styles.header, { paddingHorizontal: pad }, centerContent && styles.headerCentered]}>
+          <View style={[styles.headerInner, sheetStyle]}>
             {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
             <View style={styles.headerRow}>
               <View style={styles.headerText}>
-                <Text style={[styles.headerTitle, { fontSize: isWide ? 22 : titleSize }]}>
+                <Text style={[styles.headerTitle, { fontSize: titleSize }]}>
                   #{repair?.r_job_num || rId}
                 </Text>
                 <Text style={styles.headerSub} numberOfLines={1}>
@@ -396,7 +397,7 @@ export default function RepairDetailScreen({ route, navigation }) {
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scroll,
-            isWide && styles.scrollWide,
+            centerContent && styles.scrollCentered,
             isMobile && mobileScrollInset,
           ]}
         >
@@ -410,7 +411,7 @@ export default function RepairDetailScreen({ route, navigation }) {
               </Pressable>
             </View>
           ) : repair ? (
-            <View style={[styles.sheet, isWide && styles.sheetWide]}>
+            <View style={[styles.sheet, sheetStyle]}>
               {jobPanel}
               {trackPanel}
               <View style={styles.galleryBlock}>
@@ -444,7 +445,6 @@ const styles = StyleSheet.create({
   header: { paddingTop: spacing.xs, paddingBottom: spacing.sm },
   headerCentered: { alignItems: 'center' },
   headerInner: { width: '100%' },
-  headerInnerWide: { maxWidth: 560, width: '100%' },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 14, marginBottom: spacing.xs },
   headerRow: {
     flexDirection: 'row',
@@ -463,18 +463,12 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl * 2,
     minHeight: '100%',
   },
-  scrollWide: {
-    alignItems: 'center',
+  scrollCentered: {
     paddingTop: spacing.xl,
     paddingHorizontal: spacing.xl,
   },
   sheet: {
-    width: '100%',
     gap: spacing.md,
-  },
-  sheetWide: {
-    maxWidth: 560,
-    width: '100%',
   },
   panel: {
     backgroundColor: colors.card,

@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
+import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset, contentSheetStyle } from '../components/BackNavigation';
 import LoadingView from '../components/LoadingView';
 import {
   fetchVehicleHistory,
@@ -34,8 +34,9 @@ export default function VehicleDetailScreen({ route, navigation }) {
   const { vehicle } = route.params ?? {};
   const v = vehicle || {};
   const rows = FIELDS.filter(([key]) => v[key] !== undefined && v[key] !== null && v[key] !== '');
-  const { isMobile, pad, titleSize } = useScreenLayout();
+  const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
   const goBack = () => navigation.goBack();
+  const sheetStyle = contentSheetStyle(centerContent, contentMaxWidth);
   const [history, setHistory] = useState([]);
   const [loadingHist, setLoadingHist] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -73,22 +74,25 @@ export default function VehicleDetailScreen({ route, navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={[styles.header, { paddingHorizontal: pad }]}>
-          {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
-          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>ข้อมูลรถ</Text>
-          <Text style={styles.headerSub} numberOfLines={2}>
-            {v.v_name || `ID ${v.v_id}`} · {[v.v_brand, v.v_model].filter(Boolean).join(' ')}
-          </Text>
+        <View style={[styles.header, { paddingHorizontal: pad }, centerContent && styles.headerCentered]}>
+          <View style={[styles.headerInner, sheetStyle]}>
+            {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
+            <Text style={[styles.headerTitle, { fontSize: titleSize }]}>ข้อมูลรถ</Text>
+            <Text style={styles.headerSub} numberOfLines={2}>
+              {v.v_name || `ID ${v.v_id}`} · {[v.v_brand, v.v_model].filter(Boolean).join(' ')}
+            </Text>
+          </View>
         </View>
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
+          contentContainerStyle={[styles.scroll, centerContent && styles.scrollCentered, isMobile && mobileScrollInset]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => loadHistory(true)} tintColor={colors.navy} />
           }
         >
+          <View style={sheetStyle}>
           <View style={styles.card}>
             {rows.map(([key, label], i) => (
               <View key={key} style={[styles.row, i === rows.length - 1 && styles.rowLast]}>
@@ -132,6 +136,7 @@ export default function VehicleDetailScreen({ route, navigation }) {
               );
             })
           )}
+          </View>
         </ScrollView>
         {isMobile ? <MobileBackBar onPress={goBack} /> : null}
       </View>
@@ -144,6 +149,9 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   scrollView: { flex: 1 },
   header: { paddingTop: spacing.sm, paddingBottom: spacing.sm },
+  headerCentered: { alignItems: 'center' },
+  headerInner: { width: '100%' },
+  scrollCentered: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
   headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },
   headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },

@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet, Image } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
+import { MobileBackBar, useScreenLayout, mobileScrollInset, contentSheetStyle } from '../components/BackNavigation';
 import { PublicStepBanner } from '../components/PublicFlowUX';
 import ContactActionRow from '../components/ContactActionRow';
 import { qrImageUrl, trackUrl } from '../data/repairTracking';
@@ -12,7 +12,8 @@ import { showAlert } from '../utils/dialog';
 
 export default function ReportSuccessScreen({ navigation, route }) {
   const { rJobNum, trackToken } = route.params ?? {};
-  const { isMobile, pad, titleSize } = useScreenLayout();
+  const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
+  const sheetStyle = contentSheetStyle(centerContent, contentMaxWidth);
   const link = useMemo(() => (trackToken ? trackUrl(trackToken) : ''), [trackToken]);
   const qrSize = isMobile ? 260 : 220;
   const qrSrc = useMemo(() => (link ? qrImageUrl(link, qrSize) : ''), [link, qrSize]);
@@ -27,15 +28,18 @@ export default function ReportSuccessScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={[styles.header, { paddingHorizontal: pad }]}>
-          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>ส่งเรื่องแล้ว</Text>
-          <Text style={styles.headerSub}>ขั้นที่ 3 — เก็บ QR นี้ไว้ดูสถานะ</Text>
+        <View style={[styles.header, { paddingHorizontal: pad }, centerContent && styles.headerCentered]}>
+          <View style={[styles.headerInner, sheetStyle]}>
+            <Text style={[styles.headerTitle, { fontSize: titleSize }]}>ส่งเรื่องแล้ว</Text>
+            <Text style={styles.headerSub}>ขั้นที่ 3 — เก็บ QR นี้ไว้ดูสถานะ</Text>
+          </View>
         </View>
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
+          contentContainerStyle={[styles.scroll, centerContent && styles.scrollCentered, isMobile && mobileScrollInset]}
         >
+          <View style={sheetStyle}>
           <PublicStepBanner activeStep={3} />
 
           <View style={styles.tipBox}>
@@ -87,6 +91,7 @@ export default function ReportSuccessScreen({ navigation, route }) {
           <Pressable style={styles.homeBtn} onPress={() => navigation.navigate('Dashboard')}>
             <Text style={styles.homeBtnText}>กลับหน้าหลัก</Text>
           </Pressable>
+          </View>
         </ScrollView>
         {isMobile ? <MobileBackBar onPress={() => navigation.navigate('Dashboard')} /> : null}
       </View>
@@ -99,6 +104,9 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   scrollView: { flex: 1 },
   header: { paddingTop: spacing.sm, paddingBottom: spacing.md },
+  headerCentered: { alignItems: 'center' },
+  headerInner: { width: '100%' },
+  scrollCentered: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
   headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },
   headerSub: { color: 'rgba(255,255,255,0.75)', fontSize: 13, marginTop: 4 },
   scroll: {
