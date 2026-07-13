@@ -31,6 +31,8 @@ import { repairListSections, parseRepairList } from '../data/repairNotes';
 import { statusColor } from '../data/repairTracking';
 import StatusPicker from '../components/StatusPicker';
 import RepairStatusTimeline from '../components/RepairStatusTimeline';
+import ContactActionRow from '../components/ContactActionRow';
+import { shareTrackLink, shareViaLine, callPhone } from '../data/contactActions';
 
 export default function RepairDetailScreen({ route, navigation }) {
   const { repair: initial, rId: paramId } = route.params ?? {};
@@ -131,15 +133,53 @@ export default function RepairDetailScreen({ route, navigation }) {
     if (!canWrite || !tracking?.meta) return;
     setBusy(true);
     try {
-      const data = await updateRepairStatus({ r_id: rId, status, note: statusNote.trim() });
+      const note = statusNote.trim();
+      const data = await updateRepairStatus({ r_id: rId, status, note });
+      const nextMeta = {
+        ...tracking.meta,
+        public_status: data.public_status,
+        public_status_label: data.public_status_label,
+      };
       setTracking({
         ...tracking,
-        meta: { ...tracking.meta, public_status: data.public_status, public_status_label: data.public_status_label },
+        meta: nextMeta,
         timeline: data.timeline || tracking.timeline,
       });
       if (data.row) setRepair(data.row);
       setStatusNote('');
-      Alert.alert('อัปเดตสถานะแล้ว', data.public_status_label || '');
+
+      const jobNum = (data.row || repair)?.r_job_num || rId;
+      const phone = nextMeta.reporter_phone;
+      const token = nextMeta.track_token;
+      const label = data.public_status_label || '';
+
+      Alert.alert('อัปเดตแล้ว', `${label}\nแจ้งผู้แจ้งต่อไหม?`, [
+        { text: 'ทีหลัง', style: 'cancel' },
+        phone
+          ? { text: 'โทร', onPress: () => callPhone(phone) }
+          : null,
+        token
+          ? {
+              text: 'ส่ง LINE',
+              onPress: () =>
+                shareViaLine({
+                  jobNum,
+                  status: data.public_status,
+                  trackToken: token,
+                  note,
+                }),
+            }
+          : {
+              text: 'แชร์ลิงก์',
+              onPress: () =>
+                shareTrackLink({
+                  jobNum,
+                  status: data.public_status,
+                  trackToken: token,
+                  note,
+                }),
+            },
+      ].filter(Boolean));
     } catch (e) {
       Alert.alert('ไม่สำเร็จ', e.message || '');
     } finally {
@@ -223,6 +263,17 @@ export default function RepairDetailScreen({ route, navigation }) {
                   <Text style={[styles.pill, styles.pillInline, { backgroundColor: statusColor(tracking.meta.public_status) }]}>
                     ผู้แจ้งเห็น: {tracking.meta.public_status_label}
                   </Text>
+
+                  {canWrite ? (
+                    <ContactActionRow
+                      phone={tracking.meta.reporter_phone}
+                      jobNum={repair?.r_job_num || rId}
+                      status={tracking.meta.public_status}
+                      trackToken={tracking.meta.track_token}
+                      note={statusNote.trim()}
+                    />
+                  ) : null}
+
                   {canWrite ? (
                     <>
                       <Text style={styles.trackHint}>กดเลือกสถานะ — ผู้แจ้งจะเห็นใน QR ทันที</Text>

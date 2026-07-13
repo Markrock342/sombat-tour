@@ -17,6 +17,7 @@ import LoadingView from '../components/LoadingView';
 import RepairStatusTimeline from '../components/RepairStatusTimeline';
 import AppRefreshControl from '../components/AppRefreshControl';
 import StatusHero from '../components/StatusHero';
+import ContactActionRow from '../components/ContactActionRow';
 import { fetchTrackByToken, fmtDateTime } from '../data/api';
 import { parseTrackToken } from '../data/repairTracking';
 import { parseRepairList } from '../data/repairNotes';
@@ -134,6 +135,13 @@ export default function TrackRepairScreen({ navigation, route }) {
                     ? `แจ้งโดย ${meta.reporter_name}${meta.reporter_phone ? ` · ${meta.reporter_phone}` : ''}`
                     : undefined
                 }
+              />
+
+              <ContactActionRow
+                jobNum={row.r_job_num || row.r_id}
+                status={meta?.public_status}
+                trackToken={activeToken}
+                compact={isMobile}
               />
 
               <View style={styles.card}>

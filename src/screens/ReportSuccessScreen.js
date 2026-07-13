@@ -1,19 +1,14 @@
 import React, { useMemo } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, Image, Platform, Alert } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, shadow } from '../theme';
 import { MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
 import { PublicStepBanner } from '../components/PublicFlowUX';
+import ContactActionRow from '../components/ContactActionRow';
 import { qrImageUrl, trackUrl } from '../data/repairTracking';
-
-async function copyText(text) {
-  if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
-    await navigator.clipboard.writeText(text);
-    return true;
-  }
-  return false;
-}
+import { copyText } from '../data/contactActions';
+import { Alert } from 'react-native';
 
 export default function ReportSuccessScreen({ navigation, route }) {
   const { rJobNum, trackToken } = route.params ?? {};
@@ -46,7 +41,7 @@ export default function ReportSuccessScreen({ navigation, route }) {
           <View style={styles.tipBox}>
             <Text style={styles.tipTitle}>📌 สำคัญ</Text>
             <Text style={styles.tipText}>
-              ไม่ต้อง login — แค่เก็บ QR หรือลิงก์นี้ แล้วเปิดดูได้ตลอดว่างานถึงไหนแล้ว
+              ไม่ต้อง login — แชร์ลิงก์หรือเก็บ QR แล้วเปิดดูได้ว่างานถึงไหนแล้ว
             </Text>
           </View>
 
@@ -61,7 +56,14 @@ export default function ReportSuccessScreen({ navigation, route }) {
                 accessibilityLabel="QR ติดตามสถานะ"
               />
             ) : null}
-            <Text style={styles.qrHint}>สแกนด้วยกล้องมือถือ</Text>
+            <Text style={styles.qrHint}>สแกนด้วยกล้องมือถือ · หรือแชร์ลิงก์ด้านล่าง</Text>
+
+            <ContactActionRow
+              jobNum={rJobNum}
+              status="submitted"
+              trackToken={trackToken}
+              compact
+            />
 
             <Pressable
               style={styles.btnPrimary}
@@ -114,13 +116,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: radius.lg,
     padding: spacing.xl,
-    alignItems: 'center',
+    alignItems: 'stretch',
     ...shadow,
   },
-  jobLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
-  jobNum: { color: colors.navy, fontWeight: '800', fontSize: 32, marginTop: 4 },
-  qr: { marginTop: spacing.lg, borderRadius: radius.sm, backgroundColor: '#fff' },
-  qrHint: { color: colors.textMuted, fontSize: 12, marginTop: spacing.sm },
+  jobLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  jobNum: { color: colors.navy, fontWeight: '800', fontSize: 32, marginTop: 4, textAlign: 'center' },
+  qr: { marginTop: spacing.lg, borderRadius: radius.sm, backgroundColor: '#fff', alignSelf: 'center' },
+  qrHint: { color: colors.textMuted, fontSize: 12, marginTop: spacing.sm, textAlign: 'center' },
   btnPrimary: {
     marginTop: spacing.lg,
     backgroundColor: colors.navy,
