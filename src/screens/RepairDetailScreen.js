@@ -267,7 +267,7 @@ export default function RepairDetailScreen({ route, navigation }) {
       <View style={styles.actions}>
         {open ? (
           <Pressable
-            style={[styles.btn, styles.btnPrimary, busy && styles.btnDisabled]}
+            style={[styles.btn, styles.btnClose, busy && styles.btnDisabled]}
             onPress={closeJob}
             disabled={busy}
           >
@@ -569,6 +569,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   btnPrimary: { minWidth: 120 },
+  btnClose: { minWidth: 120, backgroundColor: '#E5544B' },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: colors.onNavy, fontWeight: '800' },
   btnAlt: {
