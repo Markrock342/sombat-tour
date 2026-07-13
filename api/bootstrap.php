@@ -61,6 +61,34 @@ function out($data, $code = 200) {
   exit;
 }
 
+/**
+ * Echo JSON and flush to the client without exiting, so slow work (curl push)
+ * can continue after the browser already received the response.
+ */
+function out_flush($data, $code = 200) {
+  http_response_code($code);
+  header('Connection: close');
+  $flags = defined('JSON_UNESCAPED_UNICODE') ? JSON_UNESCAPED_UNICODE : 0;
+  $json = json_encode($data, $flags);
+  if ($json === false) {
+    $json = json_encode(utf8_clean($data), $flags);
+  }
+  if ($json === false) {
+    $json = '{"ok":false,"error":"ENCODING_ERROR"}';
+  }
+  header('Content-Length: ' . strlen($json));
+  echo $json;
+  if (function_exists('fastcgi_finish_request')) {
+    @fastcgi_finish_request();
+  } else {
+    ignore_user_abort(true);
+    while (ob_get_level() > 0) {
+      @ob_end_flush();
+    }
+    @flush();
+  }
+}
+
 function read_json_body() {
   $raw = file_get_contents('php://input');
   if ($raw === false || $raw === '') return array();

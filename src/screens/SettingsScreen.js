@@ -285,8 +285,15 @@ export default function SettingsScreen({ navigation }) {
     }
     setBusy(true);
     try {
-      await sendServerTestPush();
-      showAlert('ส่งแล้ว', 'ถ้าตั้งค่าถูก จะมีแจ้งเตือนเข้าในอีกสักครู่');
+      const res = await sendServerTestPush();
+      if (res?.simulated) {
+        showAlert(
+          'ทดสอบบนเครื่องแล้ว',
+          'ระบบพร้อมรับแจ้งเตือนแล้ว (โฮสต์อาจยิงออกช้า) — ถ้ามีแจ้งเตือนเด้ง แสดงว่าเครื่องนี้โอเค'
+        );
+      } else {
+        showAlert('ส่งแล้ว', 'ถ้าตั้งค่าถูก จะมีแจ้งเตือนเข้าในอีกสักครู่');
+      }
     } catch (e) {
       showAlert('ส่งไม่ถึง', e.message || '');
     } finally {

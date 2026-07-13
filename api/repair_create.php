@@ -94,28 +94,25 @@ try {
 
   $rId = (int)$pdo->lastInsertId();
 
-  $pushResult = null;
-  if ($type === 'breakdown') {
-    try {
-      require_push_lib();
-      $label = $vPlate !== '' ? $vPlate : ($vName !== '' ? $vName : ('#' . $jobNum));
-      $pushResult = push_notify_staff($pdo, array(
-        'title' => 'สมบัติทัวร์ · เสียกลางทาง',
-        'body' => $label . ' · ' . $techName,
-        'url' => 'https://425service.vercel.app/',
-      ));
-    } catch (Exception $e) {
-      $pushResult = array('ok' => false, 'error' => $e->getMessage());
-    }
-  }
-
-  out(array(
+  out_flush(array(
     'ok' => true,
     'r_id' => $rId,
     'r_job_num' => $jobNum,
     'created_by' => $user['username'],
-    'push' => $pushResult,
   ));
+
+  if ($type === 'breakdown') {
+    try {
+      require_push_lib();
+      $label = $vPlate !== '' ? $vPlate : ($vName !== '' ? $vName : ('#' . $jobNum));
+      push_notify_staff($pdo, array(
+        'title' => 'สมบัติทัวร์ · เสียกลางทาง',
+        'body' => $label . ' · ' . $techName,
+        'url' => 'https://425service.vercel.app/',
+      ));
+    } catch (Exception $e) { /* ignore */ }
+  }
+  exit;
 } catch (Exception $e) {
   out(array('ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()), 500);
 }
