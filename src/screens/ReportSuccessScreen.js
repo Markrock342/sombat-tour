@@ -8,7 +8,7 @@ import { PublicStepBanner } from '../components/PublicFlowUX';
 import ContactActionRow from '../components/ContactActionRow';
 import { qrImageUrl, trackUrl } from '../data/repairTracking';
 import { copyText } from '../data/contactActions';
-import { Alert } from 'react-native';
+import { showAlert } from '../utils/dialog';
 
 export default function ReportSuccessScreen({ navigation, route }) {
   const { rJobNum, trackToken } = route.params ?? {};
@@ -20,8 +20,8 @@ export default function ReportSuccessScreen({ navigation, route }) {
   const onCopy = async () => {
     if (!link) return;
     const ok = await copyText(link);
-    if (ok) Alert.alert('คัดลอกแล้ว', 'วางในแชทหรือจดเก็บไว้ได้เลย');
-    else Alert.alert('ลิงก์ติดตาม', link);
+    if (ok) showAlert('คัดลอกแล้ว', 'วางในแชทหรือจดเก็บไว้ได้เลย');
+    else showAlert('ลิงก์ติดตาม', link);
   };
 
   return (

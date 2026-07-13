@@ -7,7 +7,6 @@ import {
   TextInput,
   ScrollView,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -33,6 +32,7 @@ import StatusPicker from '../components/StatusPicker';
 import RepairStatusTimeline from '../components/RepairStatusTimeline';
 import ContactActionRow from '../components/ContactActionRow';
 import { shareTrackLink, shareViaLine, callPhone } from '../data/contactActions';
+import { showAlert, chooseAction } from '../utils/dialog';
 
 export default function RepairDetailScreen({ route, navigation }) {
   const { repair: initial, rId: paramId } = route.params ?? {};
@@ -96,9 +96,9 @@ export default function RepairDetailScreen({ route, navigation }) {
     try {
       const data = await updateRepair({ r_id: rId, r_close: 1 });
       setRepair(data.row || { ...repair, r_close: 1 });
-      Alert.alert('ปิดงานแล้ว');
+      showAlert('ปิดงานแล้ว');
     } catch (e) {
-      Alert.alert('ไม่สำเร็จ', e.message || '');
+      showAlert('ไม่สำเร็จ', e.message || '');
     } finally {
       setBusy(false);
     }
@@ -121,12 +121,10 @@ export default function RepairDetailScreen({ route, navigation }) {
       setImages(await fetchRepairImages(rId));
     } catch (e) {
       if (e.code === 'UNAUTHORIZED') navigation.navigate('Login');
-      else Alert.alert('อัปโหลดไม่สำเร็จ', e.message || '');
+      else showAlert('อัปโหลดไม่สำเร็จ', e.message || '');
     } finally {
       setBusy(false);
     }
-  };
-
   };
 
   const setPublicStatus = async (status) => {
@@ -153,7 +151,7 @@ export default function RepairDetailScreen({ route, navigation }) {
       const token = nextMeta.track_token;
       const label = data.public_status_label || '';
 
-      Alert.alert('อัปเดตแล้ว', `${label}\nแจ้งผู้แจ้งต่อไหม?`, [
+      await chooseAction('อัปเดตแล้ว', `${label}\nแจ้งผู้แจ้งต่อไหม?`, [
         { text: 'ทีหลัง', style: 'cancel' },
         phone
           ? { text: 'โทร', onPress: () => callPhone(phone) }
@@ -179,9 +177,9 @@ export default function RepairDetailScreen({ route, navigation }) {
                   note,
                 }),
             },
-      ].filter(Boolean));
+      ]);
     } catch (e) {
-      Alert.alert('ไม่สำเร็จ', e.message || '');
+      showAlert('ไม่สำเร็จ', e.message || '');
     } finally {
       setBusy(false);
     }

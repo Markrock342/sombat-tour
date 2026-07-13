@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Alert,
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,6 +21,7 @@ import {
   uploadRepairImage,
 } from '../data/api';
 import { composeRepairList, REPAIR_TYPES } from '../data/repairNotes';
+import { showAlert } from '../utils/dialog';
 
 export default function RepairFormScreen({ navigation, route }) {
   const { canWrite, user } = useAuth();
@@ -137,7 +137,7 @@ export default function RepairFormScreen({ navigation, route }) {
           /* continue */
         }
       }
-      Alert.alert('สำเร็จ', `แจ้งซ่อมแล้ว #${created.r_job_num || created.r_id}`);
+      showAlert('สำเร็จ', `แจ้งซ่อมแล้ว #${created.r_job_num || created.r_id}`);
       navigation.replace('RepairDetail', { rId: created.r_id });
     } catch (e) {
       if (e.code === 'UNAUTHORIZED') {

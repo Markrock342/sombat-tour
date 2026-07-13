@@ -1,10 +1,10 @@
-import { Linking, Platform, Share, Alert } from 'react-native';
+import { Linking, Platform, Share } from 'react-native';
 import { statusLabel, trackUrl } from './repairTracking';
+import { showAlert } from '../utils/dialog';
 
 export function normalizePhone(phone) {
   const raw = String(phone || '').replace(/[^\d+]/g, '');
   if (!raw) return '';
-  // Thai local 08xxxxxxxx → +668xxxxxxxx for LINE/SMS links when needed
   if (raw.startsWith('0') && raw.length >= 9) return raw;
   return raw;
 }
@@ -17,19 +17,19 @@ export function telHref(phone) {
 export async function callPhone(phone) {
   const href = telHref(phone);
   if (!href) {
-    Alert.alert('ไม่มีเบอร์', 'ผู้แจ้งไม่ได้ใส่เบอร์โทร');
+    showAlert('ไม่มีเบอร์', 'ผู้แจ้งไม่ได้ใส่เบอร์โทร');
     return false;
   }
   try {
     const can = await Linking.canOpenURL(href);
     if (!can && Platform.OS !== 'web') {
-      Alert.alert('โทรไม่ได้', 'อุปกรณ์นี้ไม่รองรับการโทร');
+      showAlert('โทรไม่ได้', 'อุปกรณ์นี้ไม่รองรับการโทร');
       return false;
     }
     await Linking.openURL(href);
     return true;
   } catch (_) {
-    Alert.alert('โทรไม่ได้', href);
+    showAlert('โทรไม่ได้', href);
     return false;
   }
 }
@@ -73,10 +73,10 @@ export async function shareTrackLink({ jobNum, status, trackToken, note }) {
     if (e?.name === 'AbortError') return 'cancelled';
     const ok = await copyText(link || message);
     if (ok) {
-      Alert.alert('คัดลอกแล้ว', 'วางใน LINE / แชทได้เลย');
+      showAlert('คัดลอกแล้ว', 'วางใน LINE / แชทได้เลย');
       return 'copied';
     }
-    Alert.alert('ลิงก์ติดตาม', link || message);
+    showAlert('ลิงก์ติดตาม', link || message);
     return 'shown';
   }
 }

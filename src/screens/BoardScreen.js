@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { RefreshControl } from '../components/AppRefreshControl';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +15,7 @@ import { colors, spacing, radius, shadow } from '../theme';
 import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
 import LoadingView from '../components/LoadingView';
 import { useAuth } from '../auth/AuthContext';
+import { showAlert, confirmDialog } from '../utils/dialog';
 import {
   fetchBoard,
   createBoardNote,
@@ -120,7 +120,7 @@ export default function BoardScreen({ navigation }) {
       return;
     }
     if (!draftTitle.trim()) {
-      Alert.alert('กรุณาใส่หัวข้อ', 'เช่น เบอร์รถ / โซน / ชื่องาน');
+      showAlert('กรุณาใส่หัวข้อ', 'เช่น เบอร์รถ / โซน / ชื่องาน');
       return;
     }
     setSaving(true);
@@ -147,7 +147,7 @@ export default function BoardScreen({ navigation }) {
       if (e.code === 'UNAUTHORIZED') navigation.navigate('Login');
       else {
         const msg = e.message || '';
-        Alert.alert(
+        showAlert(
           'ไม่สำเร็จ',
           /1142|denied/i.test(msg)
             ? 'ฐานข้อมูลยังไม่อนุญาตเขียนตาราง board — กด Repair Privileges ใน cPanel ก่อน'
@@ -168,7 +168,7 @@ export default function BoardScreen({ navigation }) {
       await updateBoardNote({ id: note.id, pin: !note.pin });
       await load();
     } catch (e) {
-      Alert.alert('ไม่สำเร็จ', e.message || '');
+      showAlert('ไม่สำเร็จ', e.message || '');
     }
   };
 
@@ -177,11 +177,16 @@ export default function BoardScreen({ navigation }) {
       navigation.navigate('Login');
       return;
     }
+    const ok = await confirmDialog('ลบโน้ต', `ลบ “${note.title || 'โน้ต'}” ใช่ไหม?`, {
+      confirmText: 'ลบ',
+      cancelText: 'ยกเลิก',
+    });
+    if (!ok) return;
     try {
       await deleteBoardNote(note.id);
       await load();
     } catch (e) {
-      Alert.alert('ไม่สำเร็จ', e.message || '');
+      showAlert('ไม่สำเร็จ', e.message || '');
     }
   };
 

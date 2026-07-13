@@ -7,8 +7,6 @@ import {
   Pressable,
   StyleSheet,
   AppState,
-  Alert,
-  Platform,
 } from 'react-native';
 import { RefreshControl } from '../components/AppRefreshControl';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -31,6 +29,7 @@ import {
 } from '../data/api';
 import { useAuth } from '../auth/AuthContext';
 import { useScreenLayout } from '../components/BackNavigation';
+import { confirmDialog } from '../utils/dialog';
 
 export default function DashboardScreen({ navigation }) {
   const { user, logout, canWrite, canSeePartsPrice } = useAuth();
@@ -284,19 +283,14 @@ export default function DashboardScreen({ navigation }) {
     load();
   };
 
-  const confirmLogout = () => {
+  const confirmLogout = async () => {
     const name = user?.username || '';
     const msg = name ? `ออกจากบัญชี ${name} ใช่ไหม?` : 'ออกจากระบบใช่ไหม?';
-    if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined' && window.confirm(msg)) {
-        logout();
-      }
-      return;
-    }
-    Alert.alert('ออกจากระบบ', msg, [
-      { text: 'ยกเลิก', style: 'cancel' },
-      { text: 'ออกจากระบบ', style: 'destructive', onPress: logout },
-    ]);
+    const ok = await confirmDialog('ออกจากระบบ', msg, {
+      confirmText: 'ออกจากระบบ',
+      cancelText: 'ยกเลิก',
+    });
+    if (ok) logout();
   };
 
   return (
@@ -461,10 +455,18 @@ export default function DashboardScreen({ navigation }) {
               onPress={() => navigation.navigate('PublicReport')}
               headerRight={
                 <View style={styles.previewHeaderActions}>
-                  <Pressable onPress={() => navigation.navigate('PublicReport')}>
+                  <Pressable
+                    style={styles.headerActionHit}
+                    onPress={() => navigation.navigate('PublicReport')}
+                    hitSlop={4}
+                  >
                     <Text style={styles.viewAll}>+ แจ้ง</Text>
                   </Pressable>
-                  <Pressable onPress={() => navigation.navigate('TrackRepair')}>
+                  <Pressable
+                    style={styles.headerActionHit}
+                    onPress={() => navigation.navigate('TrackRepair')}
+                    hitSlop={4}
+                  >
                     <Text style={styles.viewAllMuted}>QR</Text>
                   </Pressable>
                 </View>
@@ -512,7 +514,10 @@ export default function DashboardScreen({ navigation }) {
               isWide={isWide}
               onPress={() => navigation.navigate('Search', { q: '' })}
               headerRight={
-                <Pressable onPress={() => navigation.navigate('Search', { q: '' })}>
+                <Pressable
+                  style={styles.headerActionHit}
+                  onPress={() => navigation.navigate('Search', { q: '' })}
+                >
                   <Text style={styles.viewAll}>ค้นหา ›</Text>
                 </Pressable>
               }
@@ -542,7 +547,7 @@ export default function DashboardScreen({ navigation }) {
               isWide={isWide}
               onPress={() => navigation.navigate('Board')}
               headerRight={
-                <Pressable onPress={() => navigation.navigate('Board')}>
+                <Pressable style={styles.headerActionHit} onPress={() => navigation.navigate('Board')}>
                   <Text style={styles.viewAll}>ดูทั้งหมด ›</Text>
                 </Pressable>
               }
@@ -572,7 +577,7 @@ export default function DashboardScreen({ navigation }) {
               isWide={isWide}
               onPress={() => navigation.navigate('Locations')}
               headerRight={
-                <Pressable onPress={() => navigation.navigate('Locations')}>
+                <Pressable style={styles.headerActionHit} onPress={() => navigation.navigate('Locations')}>
                   <Text style={styles.viewAll}>ดูทั้งหมด ›</Text>
                 </Pressable>
               }
@@ -623,18 +628,16 @@ function clipText(str, max = 36) {
 
 function PreviewCard({ title, isWide, onPress, disabled, headerRight, children }) {
   return (
-    <Pressable
-      onPress={disabled ? undefined : onPress}
-      style={({ pressed }) => [
-        styles.card,
-        isWide ? styles.cardWide : styles.cardFull,
-        pressed && !disabled && { opacity: 0.9 },
-      ]}
-    >
-      <Card title={title} style={styles.navInner} headerRight={headerRight}>
+    <View style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}>
+      <Card
+        title={title}
+        style={styles.navInner}
+        headerRight={headerRight}
+        onTitlePress={disabled ? undefined : onPress}
+      >
         <View style={styles.previewBody}>{children}</View>
       </Card>
-    </Pressable>
+    </View>
   );
 }
 
@@ -661,13 +664,16 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
+    minHeight: 44,
+    justifyContent: 'center',
   },
   searchBtnMobile: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 44,
   },
   searchBtnText: { color: colors.onNavy, fontSize: 13, fontWeight: '700' },
-  searchBtnTextMobile: { fontSize: 11, maxWidth: 72 },
+  searchBtnTextMobile: { fontSize: 12, maxWidth: 110 },
   headerTitle: { color: colors.onNavy, fontSize: 24, fontWeight: '800', letterSpacing: 0.3 },
   headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
   headerSubMobile: { fontSize: 11 },
@@ -699,8 +705,15 @@ const styles = StyleSheet.create({
   summary: { fontSize: 13, color: colors.textSecondary, flex: 1 },
   summaryNum: { color: colors.navy, fontWeight: '800', fontSize: 15 },
   viewAll: { color: colors.barFillAlt, fontWeight: '800', fontSize: 12 },
-  viewAllMuted: { color: 'rgba(255,255,255,0.65)', fontWeight: '700', fontSize: 12 },
-  previewHeaderActions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  viewAllMuted: { color: colors.textSecondary, fontWeight: '700', fontSize: 12 },
+  previewHeaderActions: { flexDirection: 'row', gap: 4, alignItems: 'center' },
+  headerActionHit: {
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   list: { maxHeight: 320 },
   errorBox: { paddingVertical: spacing.xl, alignItems: 'center' },
   errorText: { color: colors.textPrimary, fontWeight: '700', marginBottom: 4 },
@@ -719,10 +732,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FEF3C7',
     borderRadius: 8,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 8,
     alignItems: 'center',
-    minHeight: 44,
+    minHeight: 48,
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#FDE68A',
@@ -732,14 +745,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.navyTint,
     borderRadius: 8,
-    paddingVertical: 10,
+    paddingVertical: 12,
     alignItems: 'center',
-    minHeight: 44,
+    minHeight: 48,
     justifyContent: 'center',
   },
   quickBtnAltText: { fontSize: 13, fontWeight: '800', color: colors.navy },
   previewRow: {
-    paddingVertical: spacing.sm,
+    paddingVertical: 12,
+    minHeight: 48,
+    justifyContent: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.barTrack,
   },

@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -16,6 +15,7 @@ import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '
 import LoadingView from '../components/LoadingView';
 import { useAuth } from '../auth/AuthContext';
 import { fetchLocations, saveLocation, deleteLocation, fmtDateTime } from '../data/api';
+import { showAlert, confirmDialog } from '../utils/dialog';
 
 export default function LocationScreen({ navigation }) {
   const { canWrite } = useAuth();
@@ -34,7 +34,7 @@ export default function LocationScreen({ navigation }) {
     try {
       setRows(await fetchLocations());
     } catch (e) {
-      Alert.alert('โหลดไม่สำเร็จ', e.message || '');
+      showAlert('โหลดไม่สำเร็จ', e.message || '');
     } finally {
       setLoading(false);
     }
@@ -52,7 +52,7 @@ export default function LocationScreen({ navigation }) {
       return;
     }
     if (!title.trim()) {
-      Alert.alert('กรุณาใส่หัวข้อตำแหน่ง');
+      showAlert('กรุณาใส่หัวข้อตำแหน่ง');
       return;
     }
     setSaving(true);
@@ -70,7 +70,7 @@ export default function LocationScreen({ navigation }) {
       await load();
     } catch (e) {
       if (e.code === 'UNAUTHORIZED') navigation.navigate('Login');
-      else Alert.alert('ไม่สำเร็จ', e.message || '');
+      else showAlert('ไม่สำเร็จ', e.message || '');
     } finally {
       setSaving(false);
     }
@@ -124,11 +124,16 @@ export default function LocationScreen({ navigation }) {
                       navigation.navigate('Login');
                       return;
                     }
+                    const ok = await confirmDialog('ลบตำแหน่ง', `ลบ “${r.title || 'จุดจอด'}” ใช่ไหม?`, {
+                      confirmText: 'ลบ',
+                      cancelText: 'ยกเลิก',
+                    });
+                    if (!ok) return;
                     try {
                       await deleteLocation(r.id);
                       await load();
                     } catch (e) {
-                      Alert.alert('ลบไม่สำเร็จ', e.message || '');
+                      showAlert('ลบไม่สำเร็จ', e.message || '');
                     }
                   }}
                 >
