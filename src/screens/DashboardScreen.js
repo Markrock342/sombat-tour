@@ -478,6 +478,7 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.previewSummary}>
                 วันนี้เปิดอยู่ <Text style={styles.summaryNum}>{openToday}</Text> งาน
               </Text>
+              {recentRepairs.length ? (
                 recentRepairs.map((r) => (
                   <Pressable
                     key={r.r_id}
