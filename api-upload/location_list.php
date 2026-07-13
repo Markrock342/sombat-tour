@@ -1,66 +1,63 @@
 <?php
-// Vehicle parking location
-// GET  /api/location_list.php
-// POST /api/location_save.php  (create/update)
-// POST /api/location_delete.php
+// GET /api/location_list.php — parking spots (PHP 5.6 safe)
 require_once __DIR__ . '/bootstrap.php';
-
-$script = basename((isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : 'location_list.php'));
-
-if ($script === 'location_list.php' || req_method() === 'GET') {
-  cors_headers(['GET', 'OPTIONS']);
-  require_once __DIR__ . '/db.php';
-  ensure_schema($pdo);
-  try {
-    $vId = isset($_GET['v_id']) ? (int)$_GET['v_id'] : 0;
-    if ($vId > 0) {
-      $st = $pdo->prepare("SELECT * FROM vehicle_location WHERE v_id = ? ORDER BY updated_at DESC");
-      $st->execute([$vId]);
-      $rows = $st->fetchAll();
-    } else {
-      $rows = $pdo->query("SELECT * FROM vehicle_location ORDER BY updated_at DESC LIMIT 200")->fetchAll();
-    }
-    out(['ok' => true, 'rows' => $rows]);
-  } catch (Exception $e) {
-    out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
-  }
-}
-
-cors_headers(['POST', 'OPTIONS']);
+cors_headers(array('GET', 'OPTIONS'));
 require_once __DIR__ . '/db.php';
-ensure_schema($pdo);
 
 try {
-  $user = auth_user($pdo, true);
-  require_roles($user, ['admin', 'staff', 'technician']);
-  $b = read_json_body();
-
-  if ($script === 'location_delete.php') {
-    $id = (int)((isset($b['id']) ? $b['id'] : 0));
-    if ($id <= 0) out(['ok' => false, 'error' => 'MISSING_ID'], 400);
-    $st = $pdo->prepare('DELETE FROM vehicle_location WHERE id = ?');
-    $st->execute([$id]);
-    out(['ok' => true]);
+  try {
+    ensure_schema($pdo);
+  } catch (Exception $e) {
+    /* CREATE may be denied — continue and query/verify */
   }
 
-  // location_save.php
-  $id = isset($b['id']) ? (int)$b['id'] : 0;
-  $title = trim((string)((isset($b['title']) ? $b['title'] : '')));
-  if ($title === '') out(['ok' => false, 'error' => 'MISSING_TITLE'], 400);
-  $detail = (string)((isset($b['detail']) ? $b['detail'] : ''));
-  $spot = trim((string)((isset($b['spot']) ? $b['spot'] : '')));
-  $vId = isset($b['v_id']) ? (int)$b['v_id'] : null;
-  $vName = trim((string)((isset($b['v_name']) ? $b['v_name'] : '')));
-
-  if ($id > 0) {
-    $st = $pdo->prepare("UPDATE vehicle_location SET v_id=?, v_name=?, title=?, detail=?, spot=?, created_by=? WHERE id=?");
-    $st->execute([$vId ?: null, $vName, $title, $detail, $spot, $user['username'], $id]);
-    out(['ok' => true, 'id' => $id]);
+  $hasTable = false;
+  try {
+    $chk = $pdo->query("SHOW TABLES LIKE 'vehicle_location'");
+    $hasTable = $chk && $chk->fetch();
+  } catch (Exception $e) {
+    $hasTable = false;
   }
 
-  $st = $pdo->prepare("INSERT INTO vehicle_location (v_id, v_name, title, detail, spot, created_by) VALUES (?,?,?,?,?,?)");
-  $st->execute([$vId ?: null, $vName, $title, $detail, $spot, $user['username']]);
-  out(['ok' => true, 'id' => (int)$pdo->lastInsertId()]);
+  if (!$hasTable) {
+    // Try create once more with simpler DDL for older MySQL
+    try {
+      $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS vehicle_location (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          v_id INT DEFAULT NULL,
+          v_name VARCHAR(128) DEFAULT '',
+          title VARCHAR(255) NOT NULL,
+          detail TEXT,
+          spot VARCHAR(255) DEFAULT '',
+          created_by VARCHAR(128) DEFAULT '',
+          created_at DATETIME DEFAULT NULL,
+          updated_at DATETIME DEFAULT NULL,
+          INDEX (v_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8"
+      );
+      $hasTable = true;
+    } catch (Exception $e) {
+      out(array(
+        'ok' => false,
+        'error' => 'NO_TABLE',
+        'message' => 'ยังไม่มีตาราง vehicle_location — ให้สิทธิ์ CREATE หรือสร้างตารางใน phpMyAdmin',
+        'detail' => $e->getMessage(),
+      ), 500);
+    }
+  }
+
+  $vId = isset($_GET['v_id']) ? (int)$_GET['v_id'] : 0;
+  if ($vId > 0) {
+    $st = $pdo->prepare('SELECT * FROM vehicle_location WHERE v_id = ? ORDER BY updated_at DESC, id DESC');
+    $st->execute(array($vId));
+    $rows = $st->fetchAll();
+  } else {
+    $st = $pdo->query('SELECT * FROM vehicle_location ORDER BY updated_at DESC, id DESC LIMIT 200');
+    $rows = $st ? $st->fetchAll() : array();
+  }
+  if (!is_array($rows)) $rows = array();
+  out(array('ok' => true, 'rows' => $rows));
 } catch (Exception $e) {
-  out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
+  out(array('ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()), 500);
 }

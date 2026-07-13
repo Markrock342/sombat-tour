@@ -30,7 +30,7 @@ async function parseJson(res) {
       const looksHtml = /<b>Fatal error|<!DOCTYPE|<html/i.test(text || '');
       const err = new Error(
         looksHtml
-          ? 'เซิร์ฟเวอร์อัปโหลดรูปพัง (PHP) — อัป bootstrap + upload_image*.php ขึ้น cPanel'
+          ? `API ฝั่ง PHP พัง (HTTP ${res.status}) — ตรวจไฟล์ใน cPanel หรือดู error log`
           : res.ok
             ? 'เซิร์ฟเวอร์ตอบกลับไม่ใช่ JSON'
             : `เซิร์ฟเวอร์ผิดพลาด (HTTP ${res.status})`
