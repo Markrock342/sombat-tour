@@ -19,8 +19,9 @@ import {
   createPublicRepair,
   searchVehicles,
   uploadPublicRepairImage,
+  fetchTechnicians,
 } from '../data/api';
-import { composeRepairList, REPAIR_TYPES } from '../data/repairNotes';
+import { composeRepairList, REPAIR_TYPES, workshopNamesFromTechs } from '../data/repairNotes';
 import { limitPhoneInput } from '../data/contactActions';
 
 export default function PublicReportScreen({ navigation, route }) {
@@ -37,6 +38,8 @@ export default function PublicReportScreen({ navigation, route }) {
   const [vehicle, setVehicle] = useState(null);
   const [symptom, setSymptom] = useState('');
   const [location, setLocation] = useState('');
+  const [workshopPicked, setWorkshopPicked] = useState(false);
+  const [workshops, setWorkshops] = useState(() => workshopNamesFromTechs([]));
   const [mile, setMile] = useState('');
   const [tankM, setTankM] = useState('');
   const [images, setImages] = useState([]);
@@ -46,6 +49,16 @@ export default function PublicReportScreen({ navigation, route }) {
   const [fieldError, setFieldError] = useState(null);
   const [vehicleSearching, setVehicleSearching] = useState(false);
 
+  const isBreakdown = jobType === 'breakdown';
+
+  const workshopHits = useMemo(() => {
+    if (isBreakdown || workshopPicked) return [];
+    const term = location.trim().toLowerCase();
+    const list = workshops;
+    if (!term) return list.slice(0, 8);
+    return list.filter((n) => n.toLowerCase().includes(term)).slice(0, 8);
+  }, [isBreakdown, workshopPicked, location, workshops]);
+
   const activeStep = useMemo(() => {
     if (!reporterName.trim()) return 1;
     if (!symptom.trim()) return 2;
@@ -53,6 +66,20 @@ export default function PublicReportScreen({ navigation, route }) {
   }, [reporterName, symptom]);
 
   const canSubmit = reporterName.trim() && symptom.trim() && !saving;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchTechnicians()
+      .then((rows) => {
+        if (!cancelled) setWorkshops(workshopNamesFromTechs(rows));
+      })
+      .catch(() => {
+        if (!cancelled) setWorkshops(workshopNamesFromTechs([]));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const term = vehicleQ.trim();
@@ -74,6 +101,12 @@ export default function PublicReportScreen({ navigation, route }) {
     }, 200);
     return () => clearTimeout(t);
   }, [vehicleQ, vehicle]);
+
+  const setType = (key) => {
+    setJobType(key);
+    setLocation('');
+    setWorkshopPicked(false);
+  };
 
   const pickImage = useCallback(async () => {
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -214,7 +247,7 @@ export default function PublicReportScreen({ navigation, route }) {
                   <Pressable
                     key={t.key}
                     style={[styles.typeChip, isMobile && styles.typeChipMobile, active && styles.typeChipActive]}
-                    onPress={() => setJobType(t.key)}
+                    onPress={() => setType(t.key)}
                   >
                     <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>{t.label}</Text>
                   </Pressable>
@@ -290,27 +323,93 @@ export default function PublicReportScreen({ navigation, route }) {
               placeholderTextColor={colors.textMuted}
             />
 
-            <Text style={styles.label}>อยู่ที่ไหน</Text>
-            <TextInput
-              style={inputStyle}
-              value={location}
-              onChangeText={setLocation}
-              placeholder={jobType === 'breakdown' ? 'จุดที่รถเสีย / กม.' : 'อู่ / สนาม / ที่ทำงาน'}
-              placeholderTextColor={colors.textMuted}
-            />
-
-            {jobType === 'breakdown' ? (
-              <View style={[styles.row2, isMobile && styles.row2Stack]}>
-                <View style={styles.half}>
-                  <Text style={styles.label}>ไมล์</Text>
-                  <TextInput style={inputStyle} value={mile} onChangeText={setMile} keyboardType="number-pad" placeholder="0" placeholderTextColor={colors.textMuted} />
+            {isBreakdown ? (
+              <>
+                <Text style={styles.label}>จุดที่รถเสีย</Text>
+                <Text style={styles.sectionHint}>บอกตำแหน่งให้แผนกหาเจอเร็ว เช่น กม. / แยก / หลักกิโล</Text>
+                <TextInput
+                  style={inputStyle}
+                  value={location}
+                  onChangeText={setLocation}
+                  placeholder="เช่น กม.45 ถ.พหลโยธิน · หน้าปั๊ม"
+                  placeholderTextColor={colors.textMuted}
+                />
+                <View style={[styles.row2, isMobile && styles.row2Stack]}>
+                  <View style={styles.half}>
+                    <Text style={styles.label}>ไมล์</Text>
+                    <TextInput
+                      style={inputStyle}
+                      value={mile}
+                      onChangeText={setMile}
+                      keyboardType="number-pad"
+                      placeholder="0"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                  </View>
+                  <View style={styles.half}>
+                    <Text style={styles.label}>เมตรถัง</Text>
+                    <TextInput
+                      style={inputStyle}
+                      value={tankM}
+                      onChangeText={setTankM}
+                      placeholder="ม."
+                      placeholderTextColor={colors.textMuted}
+                    />
+                  </View>
                 </View>
-                <View style={styles.half}>
-                  <Text style={styles.label}>เมตรถัง</Text>
-                  <TextInput style={inputStyle} value={tankM} onChangeText={setTankM} placeholder="ม." placeholderTextColor={colors.textMuted} />
-                </View>
-              </View>
-            ) : null}
+              </>
+            ) : (
+              <>
+                <Text style={styles.label}>อู่</Text>
+                <Text style={styles.sectionHint}>พิมพ์ชื่อแล้วเลือกจากรายการ</Text>
+                {workshopPicked ? (
+                  <View style={styles.vehicleCard}>
+                    <View style={styles.vehicleHead}>
+                      <Text style={styles.vehicleName}>{location}</Text>
+                      <Pressable
+                        onPress={() => {
+                          setWorkshopPicked(false);
+                          setLocation('');
+                        }}
+                        hitSlop={8}
+                      >
+                        <Text style={styles.link}>เปลี่ยน</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : (
+                  <>
+                    <TextInput
+                      style={inputStyle}
+                      value={location}
+                      onChangeText={(v) => {
+                        setLocation(v);
+                        setWorkshopPicked(false);
+                      }}
+                      placeholder="เช่น อู่เชียงราย"
+                      placeholderTextColor={colors.textMuted}
+                      autoCorrect={false}
+                    />
+                    {workshopHits.length > 0 ? (
+                      <View style={styles.suggestBox}>
+                        {workshopHits.map((name) => (
+                          <Pressable
+                            key={name}
+                            style={styles.hit}
+                            onPress={() => {
+                              setLocation(name);
+                              setWorkshopPicked(true);
+                            }}
+                          >
+                            <Text style={styles.hitTitle}>{name}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
+                  </>
+                )}
+              </>
+            )}
           </View>
 
           <View style={styles.section}>

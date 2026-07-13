@@ -14,6 +14,18 @@ export const REPAIR_TYPES = [
   { key: 'offsite', label: 'งานนอกพื้นที่' },
 ];
 
+/** Fallback when technician API has no อู่* names yet */
+export const FALLBACK_WORKSHOPS = ['อู่เชียงราย', 'อู่นางแล'];
+
+/** Names that look like workshops (อู่…) from technician rows */
+export function workshopNamesFromTechs(techs) {
+  const fromApi = (techs || [])
+    .map((t) => String(t?.name || t?.t_name || t?.technician || '').trim())
+    .filter((n) => /อู่/.test(n));
+  const merged = [...new Set([...fromApi, ...FALLBACK_WORKSHOPS])];
+  return merged.sort((a, b) => a.localeCompare(b, 'th'));
+}
+
 export function composeRepairList({ type, symptom, location, parts, action }) {
   const lines = [];
   const typeLabel = REPAIR_TYPES.find((t) => t.key === type)?.label;

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,7 @@ import {
   searchVehicles,
   uploadRepairImage,
 } from '../data/api';
-import { composeRepairList, REPAIR_TYPES } from '../data/repairNotes';
+import { composeRepairList, REPAIR_TYPES, workshopNamesFromTechs } from '../data/repairNotes';
 import { showAlert } from '../utils/dialog';
 
 export default function RepairFormScreen({ navigation, route }) {
@@ -37,6 +37,7 @@ export default function RepairFormScreen({ navigation, route }) {
   const [vehicle, setVehicle] = useState(null);
   const [symptom, setSymptom] = useState(presetType === 'breakdown' ? '' : '');
   const [location, setLocation] = useState('');
+  const [workshopPicked, setWorkshopPicked] = useState(false);
   const [parts, setParts] = useState('');
   const [action, setAction] = useState('');
   const [mile, setMile] = useState('');
@@ -47,6 +48,15 @@ export default function RepairFormScreen({ navigation, route }) {
   const [images, setImages] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+
+  const isBreakdown = jobType === 'breakdown';
+  const workshops = useMemo(() => workshopNamesFromTechs(techs), [techs]);
+  const workshopHits = useMemo(() => {
+    if (isBreakdown || workshopPicked || jobType === 'offsite') return [];
+    const term = location.trim().toLowerCase();
+    if (!term) return workshops.slice(0, 8);
+    return workshops.filter((n) => n.toLowerCase().includes(term)).slice(0, 8);
+  }, [isBreakdown, workshopPicked, jobType, location, workshops]);
 
   useEffect(() => {
     if (!canWrite) {
@@ -75,6 +85,12 @@ export default function RepairFormScreen({ navigation, route }) {
     }, 300);
     return () => clearTimeout(t);
   }, [vehicleQ, vehicle]);
+
+  const setType = (key) => {
+    setJobType(key);
+    setLocation('');
+    setWorkshopPicked(false);
+  };
 
   const pickImage = useCallback(async () => {
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -180,7 +196,7 @@ export default function RepairFormScreen({ navigation, route }) {
                   <Pressable
                     key={t.key}
                     style={[styles.typeChip, active && styles.typeChipActive]}
-                    onPress={() => setJobType(t.key)}
+                    onPress={() => setType(t.key)}
                   >
                     <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>
                       {t.label}
@@ -286,14 +302,72 @@ export default function RepairFormScreen({ navigation, route }) {
               placeholderTextColor={colors.textMuted}
             />
 
-            <Text style={styles.label}>สถานที่ (รถพัง / ทำที่ไหน)</Text>
-            <TextInput
-              style={styles.input}
-              value={location}
-              onChangeText={setLocation}
-              placeholder="เช่น พระราม 5, กม.xx, อู่เชียงใหม่"
-              placeholderTextColor={colors.textMuted}
-            />
+            {isBreakdown ? (
+              <>
+                <Text style={styles.label}>จุดที่รถเสีย</Text>
+                <TextInput
+                  style={styles.input}
+                  value={location}
+                  onChangeText={setLocation}
+                  placeholder="เช่น กม.45 ถ.พหลโยธิน · หน้าปั๊ม"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </>
+            ) : jobType === 'offsite' ? (
+              <>
+                <Text style={styles.label}>สถานที่ทำงาน</Text>
+                <TextInput
+                  style={styles.input}
+                  value={location}
+                  onChangeText={setLocation}
+                  placeholder="เช่น นอกพื้นที่ / ลูกค้า"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </>
+            ) : (
+              <>
+                <Text style={styles.label}>อู่</Text>
+                {workshopPicked ? (
+                  <View style={styles.pickedRow}>
+                    <Text style={styles.pickedText}>{location}</Text>
+                    <Pressable
+                      onPress={() => {
+                        setWorkshopPicked(false);
+                        setLocation('');
+                      }}
+                    >
+                      <Text style={styles.link}>เปลี่ยน</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <>
+                    <TextInput
+                      style={styles.input}
+                      value={location}
+                      onChangeText={(v) => {
+                        setLocation(v);
+                        setWorkshopPicked(false);
+                      }}
+                      placeholder="เช่น อู่เชียงราย"
+                      placeholderTextColor={colors.textMuted}
+                      autoCorrect={false}
+                    />
+                    {workshopHits.map((name) => (
+                      <Pressable
+                        key={name}
+                        style={styles.hit}
+                        onPress={() => {
+                          setLocation(name);
+                          setWorkshopPicked(true);
+                        }}
+                      >
+                        <Text style={styles.hitTitle}>{name}</Text>
+                      </Pressable>
+                    ))}
+                  </>
+                )}
+              </>
+            )}
 
             <Text style={styles.label}>อะไหล่ (ใช้ / ต้องการ)</Text>
             <TextInput
@@ -461,6 +535,18 @@ const styles = StyleSheet.create({
   vehicleMeta: { color: colors.textSecondary, marginTop: 4, fontSize: 13 },
   vehicleId: { color: colors.textMuted, marginTop: 2, fontSize: 11 },
   link: { color: colors.barFillAlt, fontWeight: '800' },
+  pickedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  pickedText: { color: colors.textPrimary, fontWeight: '700', fontSize: 15, flex: 1 },
   hit: {
     backgroundColor: colors.background,
     padding: spacing.md,
