@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,24 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
+import {
+  TopBackLink,
+  MobileBackBar,
+  useScreenLayout,
+  mobileScrollInset,
+} from '../components/BackNavigation';
+import {
+  FilterChipRow,
+  FilterSegment,
+  FilterLabel,
+  FilterToggleBar,
+} from '../components/FilterControls';
 import LoadingView from '../components/LoadingView';
-import { globalSearch, fmtDateTime, isOpenRepair } from '../data/api';
+import { globalSearch, fmtDateTime, isOpenRepair, isBreakdownRepair } from '../data/api';
 import { parseRepairList } from '../data/repairNotes';
 
 const TYPE_FILTERS = [
@@ -25,7 +35,7 @@ const TYPE_FILTERS = [
 const STATUS_FILTERS = [
   { key: '', label: 'ทุกสถานะ' },
   { key: 'open', label: 'กำลังซ่อม' },
-  { key: 'closed', label: 'ปิดงานแล้ว' },
+  { key: 'closed', label: 'ปิดงาน' },
 ];
 
 const KIND_FILTERS = [
@@ -35,61 +45,33 @@ const KIND_FILTERS = [
 ];
 
 const SORT_REPAIR = [
-  { key: 'date_desc', label: 'ใหม่ → เก่า' },
-  { key: 'date_asc', label: 'เก่า → ใหม่' },
+  { key: 'date_desc', label: 'ใหม่→เก่า' },
+  { key: 'date_asc', label: 'เก่า→ใหม่' },
   { key: 'job_num', label: 'เลขงาน' },
   { key: 'plate', label: 'ทะเบียน' },
-  { key: 'tech', label: 'ชื่อช่าง' },
+  { key: 'tech', label: 'ช่าง' },
 ];
 
 const SORT_VEHICLE = [
-  { key: 'date_desc', label: 'ใหม่ → เก่า' },
-  { key: 'date_asc', label: 'เก่า → ใหม่' },
+  { key: 'date_desc', label: 'ใหม่→เก่า' },
+  { key: 'date_asc', label: 'เก่า→ใหม่' },
   { key: 'plate', label: 'ทะเบียน' },
   { key: 'name', label: 'ชื่อรถ' },
 ];
 
-function Segmented({ options, value, onChange, large }) {
-  return (
-    <View style={[styles.segment, large && styles.segmentLarge]}>
-      {options.map((opt) => {
-        const active = value === opt.key;
-        return (
-          <Pressable
-            key={opt.key || opt.label}
-            onPress={() => onChange(opt.key)}
-            style={[styles.segmentItem, large && styles.segmentItemLarge, active && styles.segmentItemActive]}
-          >
-            <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]} numberOfLines={1}>
-              {opt.label}
-            </Text>
-            {large && opt.hint ? (
-              <Text style={[styles.segmentHint, active && styles.segmentHintActive]}>{opt.hint}</Text>
-            ) : null}
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-function ChipRow({ options, value, onChange }) {
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-      {options.map((opt) => {
-        const active = value === opt.key;
-        return (
-          <Pressable
-            key={opt.key || opt.label}
-            onPress={() => onChange(opt.key)}
-            style={[styles.chip, active && styles.chipActive]}
-          >
-            <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
-  );
+function filterSummary({ type, status, jobKind, sort }) {
+  const parts = [];
+  const typeLabel = TYPE_FILTERS.find((f) => f.key === type)?.label;
+  if (typeLabel) parts.push(typeLabel);
+  if (type !== 'vehicle' && status) {
+    parts.push(STATUS_FILTERS.find((f) => f.key === status)?.label || status);
+  }
+  if (type !== 'vehicle' && jobKind) {
+    parts.push(KIND_FILTERS.find((f) => f.key === jobKind)?.label || jobKind);
+  }
+  const sortOpts = type === 'vehicle' ? SORT_VEHICLE : SORT_REPAIR;
+  parts.push(sortOpts.find((f) => f.key === sort)?.label || sort);
+  return parts.join(' · ');
 }
 
 export default function SearchScreen({ navigation, route }) {
@@ -104,12 +86,12 @@ export default function SearchScreen({ navigation, route }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searched, setSearched] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const timer = useRef(null);
   const reqSeq = useRef(0);
-  const isMobile = useIsMobile();
-  const { width } = useWindowDimensions();
-  const isWide = width >= 900;
+  const { isMobile, isWide, pad, titleSize } = useScreenLayout();
   const goBack = () => navigation.goBack();
+  const showFilters = !isMobile || filtersOpen;
 
   useEffect(() => {
     if (type === 'vehicle' && !['date_desc', 'date_asc', 'plate', 'name'].includes(sort)) {
@@ -121,7 +103,6 @@ export default function SearchScreen({ navigation, route }) {
     if (timer.current) clearTimeout(timer.current);
 
     const trimmed = (q || '').trim();
-    // Allow browsing vehicles / open jobs without typing when filters alone are enough
     const canRunWithoutQ = type === 'vehicle' || (type === 'repair' && (status || jobKind));
 
     if (!trimmed && !canRunWithoutQ) {
@@ -147,7 +128,7 @@ export default function SearchScreen({ navigation, route }) {
           sort,
           limit: 60,
         });
-        if (seq !== reqSeq.current) return; // stale response
+        if (seq !== reqSeq.current) return;
         setRepairs(data.repairs || []);
         setVehicles(data.vehicles || []);
       } catch (e) {
@@ -170,6 +151,11 @@ export default function SearchScreen({ navigation, route }) {
   const total = repairCount + vehicleCount;
   const empty = searched && !loading && !error && total === 0;
 
+  const summary = useMemo(
+    () => filterSummary({ type, status, jobKind, sort }),
+    [type, status, jobKind, sort]
+  );
+
   const clearFilters = () => {
     setType('all');
     setStatus('');
@@ -180,20 +166,22 @@ export default function SearchScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingHorizontal: pad }]}>
           {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
-          <Text style={styles.headerTitle}>ค้นหา</Text>
-          <Text style={styles.headerSub}>งานซ่อม · รถ · ทะเบียน · ช่าง · อะไหล่ในรายการ</Text>
+          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>ค้นหา</Text>
+          {!isMobile ? (
+            <Text style={styles.headerSub}>งานซ่อม · รถ · ทะเบียน · ช่าง · อะไหล่ในรายการ</Text>
+          ) : null}
         </View>
 
-        <View style={styles.controls}>
-          <View style={styles.searchShell}>
+        <View style={[styles.controls, { paddingHorizontal: isMobile ? spacing.md : spacing.lg }]}>
+          <View style={[styles.searchShell, isMobile && styles.searchShellCompact]}>
             <Text style={styles.searchIcon}>⌕</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, isMobile && styles.inputCompact]}
               value={q}
               onChangeText={setQ}
-              placeholder="พิมพ์คำค้น เช่น เบอร์รถ, ทะเบียน, ช่าง, อาการ..."
+              placeholder={isMobile ? 'ค้นหา...' : 'พิมพ์คำค้น เช่น เบอร์รถ, ทะเบียน, ช่าง, อาการ...'}
               placeholderTextColor="rgba(255,255,255,0.45)"
               returnKeyType="search"
               autoFocus={!initialQ}
@@ -207,34 +195,68 @@ export default function SearchScreen({ navigation, route }) {
             ) : null}
           </View>
 
-          <Text style={styles.filterLabel}>หมวด</Text>
-          <Segmented options={TYPE_FILTERS} value={type} onChange={setType} large />
-
-          {type !== 'vehicle' ? (
-            <>
-              <Text style={styles.filterLabel}>สถานะงาน</Text>
-              <Segmented options={STATUS_FILTERS} value={status} onChange={setStatus} />
-
-              <Text style={styles.filterLabel}>ประเภทงาน</Text>
-              <ChipRow options={KIND_FILTERS} value={jobKind} onChange={setJobKind} />
-            </>
-          ) : null}
-
-          <Text style={styles.filterLabel}>เรียงผลลัพธ์</Text>
-          <ChipRow
-            options={type === 'vehicle' ? SORT_VEHICLE : SORT_REPAIR}
-            value={sort}
-            onChange={setSort}
+          <FilterToggleBar
+            compact={isMobile}
+            open={filtersOpen}
+            onToggle={() => setFiltersOpen((v) => !v)}
+            summary={summary}
+            onReset={clearFilters}
           />
 
-          <View style={styles.filterMeta}>
-            <Text style={styles.filterMetaText}>
-              {loading ? 'กำลังค้นหา...' : searched ? `พบ ${total} รายการ` : 'ตั้งฟิลเตอร์ หรือพิมพ์คำค้น'}
+          {showFilters ? (
+            <View style={[styles.filterBlock, isMobile && styles.filterBlockCompact]}>
+              <FilterLabel compact={isMobile}>หมวด</FilterLabel>
+              <FilterSegment
+                options={TYPE_FILTERS}
+                value={type}
+                onChange={setType}
+                compact={isMobile}
+              />
+
+              {type !== 'vehicle' ? (
+                <>
+                  <FilterLabel compact={isMobile}>สถานะ</FilterLabel>
+                  <FilterChipRow
+                    options={STATUS_FILTERS}
+                    value={status}
+                    onChange={setStatus}
+                    compact={isMobile}
+                  />
+
+                  <FilterLabel compact={isMobile}>ประเภท</FilterLabel>
+                  <FilterChipRow
+                    options={KIND_FILTERS}
+                    value={jobKind}
+                    onChange={setJobKind}
+                    compact={isMobile}
+                  />
+                </>
+              ) : null}
+
+              <FilterLabel compact={isMobile}>เรียง</FilterLabel>
+              <FilterChipRow
+                options={type === 'vehicle' ? SORT_VEHICLE : SORT_REPAIR}
+                value={sort}
+                onChange={setSort}
+                compact={isMobile}
+              />
+            </View>
+          ) : null}
+
+          {!isMobile ? (
+            <View style={styles.filterMeta}>
+              <Text style={styles.filterMetaText}>
+                {loading ? 'กำลังค้นหา...' : searched ? `พบ ${total} รายการ` : 'ตั้งฟิลเตอร์ หรือพิมพ์คำค้น'}
+              </Text>
+              <Pressable onPress={clearFilters} hitSlop={8}>
+                <Text style={styles.resetText}>รีเซ็ต</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Text style={styles.mobileMeta}>
+              {loading ? 'กำลังค้นหา...' : searched ? `พบ ${total} รายการ` : 'พิมพ์คำค้นหรือเปิดตัวกรอง'}
             </Text>
-            <Pressable onPress={clearFilters} hitSlop={8}>
-              <Text style={styles.resetText}>รีเซ็ต</Text>
-            </Pressable>
-          </View>
+          )}
         </View>
 
         <ScrollView
@@ -253,7 +275,7 @@ export default function SearchScreen({ navigation, route }) {
             <View style={styles.stateBox}>
               <Text style={styles.stateTitle}>เริ่มค้นจากทุกตาราง</Text>
               <Text style={styles.stateMsg}>
-                ลองพิมพ์เบอร์รถ / ทะเบียน / ชื่อช่าง / อาการซ่อม หรือเลือกหมวด “รถ” เพื่อดูรายการ
+                พิมพ์เบอร์รถ / ทะเบียน / ช่าง / อาการ หรือเปิดตัวกรองเลือกหมวด “รถ”
               </Text>
             </View>
           ) : empty ? (
@@ -268,10 +290,7 @@ export default function SearchScreen({ navigation, route }) {
                   const open = isOpenRepair(r);
                   const parsed = parseRepairList(r.r_repair_list);
                   const title = parsed.symptom || r.r_repair_list || 'งานแจ้งซ่อม';
-                  const isBreakdown =
-                    r.r_type === 'breakdown' ||
-                    r.r_type === 'roadside' ||
-                    parsed.type === 'breakdown';
+                  const isBreakdown = isBreakdownRepair(r) || parsed.type === 'breakdown';
                   return (
                     <Pressable
                       key={`r-${r.r_id}`}
@@ -352,17 +371,15 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   scrollView: { flex: 1 },
   header: {
-    paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.xs,
   },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
-  headerTitle: { color: colors.onNavy, fontSize: 26, fontWeight: '800', letterSpacing: 0.2 },
-  headerSub: { color: 'rgba(255,255,255,0.62)', fontSize: 13, marginTop: 4 },
+  headerTitle: { color: colors.onNavy, fontWeight: '800', letterSpacing: 0.2 },
+  headerSub: { color: 'rgba(255,255,255,0.62)', fontSize: 12, marginTop: 2 },
   controls: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    gap: 6,
+    paddingBottom: spacing.sm,
+    gap: 4,
   },
   searchShell: {
     flexDirection: 'row',
@@ -373,11 +390,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.16)',
     paddingHorizontal: spacing.md,
     minHeight: 52,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  searchShellCompact: {
+    minHeight: 44,
+    marginBottom: 0,
   },
   searchIcon: {
     color: colors.barFillAlt,
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
     marginRight: 8,
     marginTop: -2,
@@ -389,79 +410,27 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     paddingVertical: 12,
   },
-  clearBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  inputCompact: {
+    fontSize: 15,
+    paddingVertical: 8,
   },
+  clearBtn: { paddingHorizontal: 8, paddingVertical: 4 },
   clearBtnText: { color: colors.barFillAlt, fontWeight: '800', fontSize: 12 },
-  filterLabel: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  segment: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.22)',
-    borderRadius: radius.sm,
-    padding: 3,
-    gap: 3,
-  },
-  segmentLarge: { padding: 4 },
-  segmentItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 6,
-  },
-  segmentItemLarge: { paddingVertical: 12 },
-  segmentItemActive: {
-    backgroundColor: colors.barFillAlt,
-  },
-  segmentLabel: {
-    color: 'rgba(255,255,255,0.78)',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  segmentLabelActive: { color: colors.navyDeep },
-  segmentHint: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 10,
-    marginTop: 2,
-    fontWeight: '600',
-  },
-  segmentHintActive: { color: 'rgba(15,26,56,0.65)' },
-  chipRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingVertical: 2,
-    paddingRight: spacing.lg,
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-  },
-  chipActive: {
-    backgroundColor: colors.onNavy,
-    borderColor: colors.onNavy,
-  },
-  chipText: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '700' },
-  chipTextActive: { color: colors.navy },
+  filterBlock: { gap: 6 },
+  filterBlockCompact: { gap: 4, maxHeight: 148 },
   filterMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: 4,
   },
   filterMetaText: { color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: '600' },
+  mobileMeta: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
   resetText: { color: colors.barFillAlt, fontWeight: '800', fontSize: 12 },
   scroll: {
     backgroundColor: colors.background,

@@ -5,7 +5,6 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
-  useWindowDimensions,
   RefreshControl,
   TextInput,
   AppState,
@@ -16,7 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, radius, shadow } from '../theme';
 import DateRangePicker from '../components/DateRangePicker';
 import LoadingView from '../components/LoadingView';
-import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
+import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
 import {
   fetchRepairs,
   fmtThaiDate,
@@ -71,9 +70,7 @@ export default function JobDetailScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const { width } = useWindowDimensions();
-  const isWide = width >= 900;
-  const isMobile = useIsMobile();
+  const { isMobile, isWide, pad, titleSize } = useScreenLayout();
   const goBack = () => navigation.goBack();
   const lastDeviceDay = useRef(fmtDate(new Date()));
 
@@ -168,12 +165,12 @@ export default function JobDetailScreen({ route, navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingHorizontal: pad }]}>
           {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
-          <Text style={styles.headerTitle}>
+          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>
             {isPending ? 'งานค้างซ่อม' : 'รายการแจ้งซ่อม'}
           </Text>
-          <Text style={styles.headerSub}>
+          <Text style={styles.headerSub} numberOfLines={isMobile ? 2 : undefined}>
             {techLabel}
             {` · ${dateLabel}`}
             {!loading && !error ? ` · ${jobs.length === 0 ? '0 งาน' : countLabel}` : ''}
@@ -317,9 +314,8 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   scrollView: { flex: 1 },
   header: {
-    paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.sm,
   },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
   headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },

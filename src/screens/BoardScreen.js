@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
+import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
 import LoadingView from '../components/LoadingView';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -36,7 +36,7 @@ const COLORS = ['#FFF59D', '#C8E6C9', '#BBDEFB', '#F8BBD0', '#FFE0B2', '#E1BEE7'
 
 export default function BoardScreen({ navigation }) {
   const { canWrite, user } = useAuth();
-  const isMobile = useIsMobile();
+  const { isMobile, pad, titleSize } = useScreenLayout();
   const goBack = () => navigation.goBack();
 
   const [rows, setRows] = useState([]);
@@ -184,12 +184,14 @@ export default function BoardScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingHorizontal: pad }]}>
           {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
           <View style={styles.headerRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.headerTitle}>บอร์ดงาน (ไวท์บอร์ด)</Text>
-              <Text style={styles.headerSub}>จดงานตามโซน · ผูกช่างด้วย ID</Text>
+              <Text style={[styles.headerTitle, { fontSize: titleSize }]}>บอร์ดงาน (ไวท์บอร์ด)</Text>
+              {!isMobile ? (
+                <Text style={styles.headerSub}>จดงานตามโซน · ผูกช่างด้วย ID</Text>
+              ) : null}
             </View>
             {canWrite ? (
               <Pressable
@@ -225,7 +227,7 @@ export default function BoardScreen({ navigation }) {
               />
 
               <Text style={styles.label}>โซน / แผนก</Text>
-              <View style={styles.chipRow}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRowScroll}>
                 {BOARD_ZONES.map((z) => {
                   const active = draftZone === z;
                   return (
@@ -238,7 +240,7 @@ export default function BoardScreen({ navigation }) {
                     </Pressable>
                   );
                 })}
-              </View>
+              </ScrollView>
               {draftZone === 'อื่นๆ' ? (
                 <TextInput
                   style={styles.input}
@@ -250,7 +252,7 @@ export default function BoardScreen({ navigation }) {
               ) : null}
 
               <Text style={styles.label}>สถานะ</Text>
-              <View style={styles.chipRow}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRowScroll}>
                 {BOARD_STATUSES.map((s) => {
                   const active = draftStatus === s.key;
                   return (
@@ -266,7 +268,7 @@ export default function BoardScreen({ navigation }) {
                     </Pressable>
                   );
                 })}
-              </View>
+              </ScrollView>
 
               <Text style={styles.label}>ช่างผู้รับ (ID)</Text>
               <View style={styles.techGrid}>
@@ -440,7 +442,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.navy },
   body: { flex: 1 },
   scrollView: { flex: 1 },
-  header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.lg },
+  header: { paddingTop: spacing.sm, paddingBottom: spacing.md },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },
@@ -488,6 +490,7 @@ const styles = StyleSheet.create({
   textarea: { minHeight: 72, textAlignVertical: 'top' },
   textareaSm: { minHeight: 56, textAlignVertical: 'top' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.sm },
+  chipRowScroll: { flexDirection: 'row', gap: 8, paddingBottom: spacing.sm, paddingRight: spacing.md },
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 7,

@@ -13,7 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
+import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
 import LoadingView from '../components/LoadingView';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -30,7 +30,7 @@ export default function RepairDetailScreen({ route, navigation }) {
   const { repair: initial, rId: paramId } = route.params ?? {};
   const rId = paramId || initial?.r_id;
   const { canWrite, user } = useAuth();
-  const isMobile = useIsMobile();
+  const { isMobile, pad, titleSize } = useScreenLayout();
   const goBack = () => navigation.goBack();
 
   const [repair, setRepair] = useState(initial || null);
@@ -122,10 +122,10 @@ export default function RepairDetailScreen({ route, navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingHorizontal: pad }]}>
           {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
-          <Text style={styles.headerTitle}>รายละเอียดงานซ่อม</Text>
-          <Text style={styles.headerSub}>
+          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>รายละเอียดงานซ่อม</Text>
+          <Text style={styles.headerSub} numberOfLines={2}>
             #{repair?.r_job_num || rId}
             {repair?.r_dt_rec ? ` · ${fmtDateTime(repair.r_dt_rec)}` : ''}
           </Text>
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.navy },
   body: { flex: 1 },
   scrollView: { flex: 1 },
-  header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.lg },
+  header: { paddingTop: spacing.sm, paddingBottom: spacing.sm },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
   headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },
   headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },

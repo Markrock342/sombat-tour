@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
+import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
 import { useAuth } from '../auth/AuthContext';
 import {
   createRepair,
@@ -25,7 +25,7 @@ import { composeRepairList, REPAIR_TYPES } from '../data/repairNotes';
 
 export default function RepairFormScreen({ navigation, route }) {
   const { canWrite, user } = useAuth();
-  const isMobile = useIsMobile();
+  const { isMobile, pad, titleSize } = useScreenLayout();
   const goBack = () => navigation.goBack();
   const presetType = route?.params?.type || 'normal';
 
@@ -155,12 +155,14 @@ export default function RepairFormScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingHorizontal: pad }]}>
           {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
-          <Text style={styles.headerTitle}>
+          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>
             {jobType === 'breakdown' ? 'แจ้งเสียกลางทาง' : 'แจ้งซ่อมออนไลน์'}
           </Text>
-          <Text style={styles.headerSub}>{user?.username ? `ผู้ใช้: ${user.username}` : ''}</Text>
+          {!isMobile && user?.username ? (
+            <Text style={styles.headerSub}>{`ผู้ใช้: ${user.username}`}</Text>
+          ) : null}
         </View>
 
         <ScrollView
@@ -324,7 +326,7 @@ export default function RepairFormScreen({ navigation, route }) {
                 return (
                   <Pressable
                     key={t.id}
-                    style={[styles.techCard, active && styles.techCardActive]}
+                    style={[styles.techCard, isMobile && styles.techCardMobile, active && styles.techCardActive]}
                     onPress={() => {
                       setTechId(t.id);
                       setTechName(t.name);
@@ -389,9 +391,8 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   scrollView: { flex: 1 },
   header: {
-    paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.md,
   },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
   headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },
@@ -485,6 +486,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   techCardActive: { backgroundColor: colors.navy, borderColor: colors.navy },
+  techCardMobile: { width: '100%', minWidth: 0 },
   techName: { color: colors.textPrimary, fontWeight: '700', fontSize: 13 },
   techNameActive: { color: colors.onNavy },
   techId: { color: colors.textMuted, fontSize: 11, marginTop: 2, fontWeight: '600' },

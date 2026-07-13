@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
+import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
 import LoadingView from '../components/LoadingView';
 import {
   fetchVehicleHistory,
@@ -33,7 +33,7 @@ export default function VehicleDetailScreen({ route, navigation }) {
   const { vehicle } = route.params ?? {};
   const v = vehicle || {};
   const rows = FIELDS.filter(([key]) => v[key] !== undefined && v[key] !== null && v[key] !== '');
-  const isMobile = useIsMobile();
+  const { isMobile, pad, titleSize } = useScreenLayout();
   const goBack = () => navigation.goBack();
   const [history, setHistory] = useState([]);
   const [loadingHist, setLoadingHist] = useState(true);
@@ -72,10 +72,10 @@ export default function VehicleDetailScreen({ route, navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingHorizontal: pad }]}>
           {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
-          <Text style={styles.headerTitle}>ข้อมูลรถ</Text>
-          <Text style={styles.headerSub}>
+          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>ข้อมูลรถ</Text>
+          <Text style={styles.headerSub} numberOfLines={2}>
             {v.v_name || `ID ${v.v_id}`} · {[v.v_brand, v.v_model].filter(Boolean).join(' ')}
           </Text>
         </View>
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.navy },
   body: { flex: 1 },
   scrollView: { flex: 1 },
-  header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.lg },
+  header: { paddingTop: spacing.sm, paddingBottom: spacing.sm },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
   headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },
   headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },

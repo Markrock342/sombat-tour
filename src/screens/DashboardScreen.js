@@ -6,7 +6,6 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
-  useWindowDimensions,
   RefreshControl,
   AppState,
 } from 'react-native';
@@ -29,9 +28,11 @@ import {
   isOpenRepair,
 } from '../data/api';
 import { useAuth } from '../auth/AuthContext';
+import { useScreenLayout } from '../components/BackNavigation';
 
 export default function DashboardScreen({ navigation }) {
   const { user, logout, canWrite, canSeePartsPrice } = useAuth();
+  const { isMobile, isWide, pad, heroTitleSize } = useScreenLayout();
   const [dateRange, setDateRange] = useState(() => presetRange('today'));
   const [datePreset, setDatePreset] = useState('today');
   const [techs, setTechs] = useState([]);
@@ -44,8 +45,6 @@ export default function DashboardScreen({ navigation }) {
   const [error, setError] = useState(null);
   const lastDeviceDay = useRef(fmtDate(new Date()));
 
-  const { width } = useWindowDimensions();
-  const isWide = width >= 900;
   const dateStart = fmtDate(dateRange.start);
   const dateEnd = fmtDate(dateRange.end);
 
@@ -285,34 +284,36 @@ export default function DashboardScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
+      <View style={[styles.header, isMobile && styles.headerMobile, { paddingHorizontal: pad }]}>
         <Pressable style={styles.headerLeft} onPress={refreshHome}>
           <View style={styles.brandRow}>
-            <Image source={require('../../assets/sombatlogobg.png')} style={styles.logo} />
+            <Image source={require('../../assets/sombatlogobg.png')} style={[styles.logo, isMobile && styles.logoMobile]} />
             <View style={styles.brandText}>
-              <Text style={styles.headerTitle}>สมบัติทัวร์</Text>
-              <Text style={styles.headerSub}>โปรแกรมงานซ่อมบำรุง</Text>
+              <Text style={[styles.headerTitle, { fontSize: heroTitleSize }]}>สมบัติทัวร์</Text>
+              {!isMobile ? (
+                <Text style={styles.headerSub}>โปรแกรมงานซ่อมบำรุง</Text>
+              ) : null}
             </View>
           </View>
         </Pressable>
-        <View style={styles.headerActions}>
+        <View style={[styles.headerActions, isMobile && styles.headerActionsMobile]}>
           {user ? (
-            <Pressable style={styles.searchBtn} onPress={logout}>
-              <Text style={styles.searchBtnText}>{user.username}</Text>
+            <Pressable style={[styles.searchBtn, isMobile && styles.searchBtnMobile]} onPress={logout}>
+              <Text style={styles.searchBtnText} numberOfLines={1}>{user.username}</Text>
             </Pressable>
           ) : (
-            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Login')}>
+            <Pressable style={[styles.searchBtn, isMobile && styles.searchBtnMobile]} onPress={() => navigation.navigate('Login')}>
               <Text style={styles.searchBtnText}>เข้าสู่ระบบ</Text>
             </Pressable>
           )}
-          <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Search')}>
-            <Text style={styles.searchBtnText}>🔍 ค้นหา</Text>
+          <Pressable style={[styles.searchBtn, isMobile && styles.searchBtnMobile]} onPress={() => navigation.navigate('Search')}>
+            <Text style={styles.searchBtnText}>{isMobile ? '🔍' : '🔍 ค้นหา'}</Text>
           </Pressable>
         </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, isMobile && styles.scrollMobile]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => load({ soft: true })} tintColor={colors.navy} />
@@ -599,7 +600,6 @@ function PreviewCard({ title, isWide, onPress, disabled, headerRight, children }
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.navy },
   header: {
-    paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
     paddingBottom: spacing.lg,
     flexDirection: 'row',
@@ -607,10 +607,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
+  headerMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    paddingBottom: spacing.md,
+    gap: spacing.sm,
+  },
   headerLeft: { flexShrink: 1 },
   headerActions: { flexDirection: 'row', gap: 8, flexShrink: 0 },
+  headerActionsMobile: { justifyContent: 'flex-end' },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   logo: { width: 44, height: 44, borderRadius: 10, backgroundColor: colors.card },
+  logoMobile: { width: 36, height: 36 },
   brandText: { flexShrink: 1 },
   searchBtn: {
     backgroundColor: 'rgba(255,255,255,0.12)',
@@ -619,6 +627,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
+  },
+  searchBtnMobile: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
   },
   searchBtnText: { color: colors.onNavy, fontSize: 13, fontWeight: '700' },
   headerTitle: { color: colors.onNavy, fontSize: 24, fontWeight: '800', letterSpacing: 0.3 },
@@ -630,6 +642,10 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.xl * 2,
     minHeight: '100%',
+  },
+  scrollMobile: {
+    padding: spacing.md,
+    paddingBottom: spacing.xl,
   },
   grid: { gap: spacing.lg },
   gridWide: { flexDirection: 'row', flexWrap: 'wrap' },
@@ -658,7 +674,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryText: { color: colors.onNavy, fontWeight: '700' },
-  previewBody: { paddingVertical: spacing.xs, minHeight: 120 },
+  previewBody: { paddingVertical: spacing.xs, minHeight: 100 },
   previewSummary: { fontSize: 12, color: colors.textSecondary, marginBottom: spacing.sm },
   previewRow: {
     paddingVertical: spacing.sm,

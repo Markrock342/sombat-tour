@@ -11,13 +11,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
+import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
 import CircularLoader from '../components/CircularLoader';
 import { fetchBreakdowns, fetchRepairs, fmtDateTime, isOpenRepair, isBreakdownRepair } from '../data/api';
 import { presetRange } from '../components/DateRangePicker';
 
 export default function BreakdownScreen({ navigation }) {
-  const isMobile = useIsMobile();
+  const { isMobile, pad, titleSize } = useScreenLayout();
   const goBack = () => navigation.goBack();
   const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
@@ -85,31 +85,34 @@ export default function BreakdownScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingHorizontal: pad }]}>
           {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
-          <Text style={styles.headerTitle}>เสียกลางทาง</Text>
-          <Text style={styles.headerSub}>งานแจ้งซ่อมระหว่างทาง · กดเพื่อดูรายละเอียด</Text>
+          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>เสียกลางทาง</Text>
+          {!isMobile ? (
+            <Text style={styles.headerSub}>งานแจ้งซ่อมระหว่างทาง · กดเพื่อดูรายละเอียด</Text>
+          ) : null}
         </View>
 
-        <View style={styles.searchBar}>
-          <TextInput
-            style={styles.input}
-            value={q}
-            onChangeText={setQ}
-            placeholder="กรองทุกฟิลด์..."
-            placeholderTextColor={colors.textMuted}
-          />
-          <Pressable style={styles.searchBtn} onPress={() => load(q)}>
-            <Text style={styles.searchBtnText}>ค้น</Text>
+        <View style={[styles.toolbar, { paddingHorizontal: pad }]}>
+          <View style={styles.searchBar}>
+            <TextInput
+              style={styles.input}
+              value={q}
+              onChangeText={setQ}
+              placeholder="กรอง..."
+              placeholderTextColor={colors.textMuted}
+            />
+            <Pressable style={styles.searchBtn} onPress={() => load(q)}>
+              <Text style={styles.searchBtnText}>ค้น</Text>
+            </Pressable>
+          </View>
+          <Pressable
+            style={styles.newBtn}
+            onPress={() => navigation.navigate('RepairForm', { type: 'breakdown' })}
+          >
+            <Text style={styles.newBtnText}>{isMobile ? '+ แจ้ง' : '+ แจ้งเสียกลางทาง'}</Text>
           </Pressable>
         </View>
-
-        <Pressable
-          style={styles.newBtn}
-          onPress={() => navigation.navigate('RepairForm', { type: 'breakdown' })}
-        >
-          <Text style={styles.newBtnText}>+ แจ้งเสียกลางทาง</Text>
-        </Pressable>
 
         <ScrollView
           style={styles.scrollView}
@@ -167,15 +170,20 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.navy },
   body: { flex: 1 },
   scrollView: { flex: 1 },
-  header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.sm },
+  header: { paddingTop: spacing.sm, paddingBottom: spacing.xs },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
-  headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },
-  headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
+  headerTitle: { color: colors.onNavy, fontWeight: '800' },
+  headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 2 },
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     gap: spacing.sm,
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.sm,
   },
   input: {
     flex: 1,
@@ -193,21 +201,21 @@ const styles = StyleSheet.create({
   },
   searchBtnText: { color: colors.onNavy, fontWeight: '800' },
   newBtn: {
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.md,
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: radius.sm,
     paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
+    flexShrink: 0,
   },
   newBtnText: { color: colors.onNavy, fontWeight: '800' },
   scroll: {
     backgroundColor: colors.background,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    padding: spacing.lg,
+    padding: spacing.md,
     paddingBottom: spacing.xl * 2,
     minHeight: '100%',
     gap: spacing.md,
