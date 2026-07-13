@@ -13,7 +13,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, radius, shadow } from '../theme';
 import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
 import CircularLoader from '../components/CircularLoader';
-import { fetchBreakdowns, fmtDateTime, isOpenRepair } from '../data/api';
+import { fetchBreakdowns, fetchRepairs, fmtDateTime, isOpenRepair, isBreakdownRepair } from '../data/api';
+import { presetRange } from '../components/DateRangePicker';
 
 export default function BreakdownScreen({ navigation }) {
   const isMobile = useIsMobile();
@@ -27,8 +28,28 @@ export default function BreakdownScreen({ navigation }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchBreakdowns({ q: term.trim(), limit: 150 });
-      setRows(data.rows || []);
+      let list = [];
+      try {
+        const data = await fetchBreakdowns({ q: term.trim(), limit: 150 });
+        list = data.rows || [];
+      } catch (_) {
+        const range = presetRange('365d');
+        const rep = await fetchRepairs(range.start, range.end);
+        list = (rep.rows || []).filter(isBreakdownRepair);
+        if (term.trim()) {
+          const t = term.trim().toLowerCase();
+          list = list.filter((r) => {
+            const hay = [
+              r.r_id, r.r_job_num, r.r_dt_rec, r.r_technician, r.r_v_name, r.r_v_plate,
+              r.r_v_brand, r.r_v_model, r.r_tank_m, r.r_repair_list, r.r_mile,
+            ]
+              .map((x) => String(x || '').toLowerCase())
+              .join(' ');
+            return hay.includes(t);
+          });
+        }
+      }
+      setRows(list);
     } catch (e) {
       setError(e.message || 'โหลดไม่สำเร็จ');
     } finally {

@@ -385,3 +385,14 @@ export function repairMatchesTech(repair, tech) {
 export function isOpenRepair(r) {
   return !r.r_close || r.r_close === '0' || r.r_close === 0;
 }
+
+/** งานเสียกลางทาง — r_job_subtype_id = 2 (ตามระบบเดิม) */
+export const BREAKDOWN_SUBTYPE_ID = '2';
+
+export function isBreakdownRepair(r) {
+  if (!r) return false;
+  if (String(r.r_job_subtype_id) === BREAKDOWN_SUBTYPE_ID) return true;
+  const t = String(r.r_type || '').toLowerCase();
+  if (t === 'breakdown' || t === 'roadside') return true;
+  return String(r.r_repair_list || '').includes('เสียกลางทาง');
+}

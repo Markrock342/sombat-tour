@@ -23,6 +23,7 @@ import {
   fetchTechnicians,
   fetchRepairs,
   fetchBoard,
+  fetchLocations,
   fmtDate,
   fmtThaiDate,
   isOpenRepair,
@@ -36,6 +37,7 @@ export default function DashboardScreen({ navigation }) {
   const [techs, setTechs] = useState([]);
   const [repairs, setRepairs] = useState([]);
   const [boardPreview, setBoardPreview] = useState([]);
+  const [locationPreview, setLocationPreview] = useState([]);
   const [meta, setMeta] = useState({ date: null, total: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -75,6 +77,13 @@ export default function DashboardScreen({ navigation }) {
         setBoardPreview((notes || []).slice(0, 3));
       } catch (_) {
         setBoardPreview([]);
+      }
+
+      try {
+        const spots = await fetchLocations();
+        setLocationPreview((spots || []).slice(0, 3));
+      } catch (_) {
+        setLocationPreview([]);
       }
     } catch (e) {
       setError(e.message || 'โหลดข้อมูลไม่สำเร็จ');
@@ -225,6 +234,27 @@ export default function DashboardScreen({ navigation }) {
   }
   const pendingMax = Math.max(...pendingList.map((t) => t.pending), 1);
   const pendingSum = pendingList.reduce((s, t) => s + t.pending, 0);
+
+  const recentRepairs = [...repairs]
+    .sort((a, b) => String(b.r_dt_rec || '').localeCompare(String(a.r_dt_rec || '')))
+    .slice(0, 3);
+
+  const recentVehicles = [];
+  const seenPlates = new Set();
+  for (const r of [...repairs].sort((a, b) => String(b.r_dt_rec || '').localeCompare(String(a.r_dt_rec || '')))) {
+    const plate = String(r.r_v_plate || r.r_v_name || '').trim();
+    if (!plate || seenPlates.has(plate)) continue;
+    seenPlates.add(plate);
+    recentVehicles.push({
+      plate,
+      name: r.r_v_name,
+      brand: r.r_v_brand,
+      lastJob: r.r_repair_list,
+    });
+    if (recentVehicles.length >= 3) break;
+  }
+
+  const openToday = repairs.filter(isOpenRepair).length;
 
   const openJobs = (tech) =>
     navigation.navigate('JobDetail', {
@@ -400,42 +430,142 @@ export default function DashboardScreen({ navigation }) {
               navigation={navigation}
               style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
             />
-            <NavCard
+            <PreviewCard
               title="แจ้งซ่อมออนไลน์"
-              icon="🛠️"
-              subtitle={canWrite ? 'ช่างแจ้งผ่านระบบได้เลย' : 'ต้องเข้าสู่ระบบก่อน'}
               isWide={isWide}
               onPress={() => (canWrite ? navigation.navigate('RepairForm') : navigation.navigate('Login'))}
-            />
-            <NavCard
+              headerRight={
+                canWrite ? (
+                  <Pressable onPress={() => navigation.navigate('RepairForm')}>
+                    <Text style={styles.viewAll}>+ แจ้ง</Text>
+                  </Pressable>
+                ) : null
+              }
+            >
+              <Text style={styles.previewSummary}>
+                วันนี้เปิดอยู่ <Text style={styles.summaryNum}>{openToday}</Text> งาน
+                {!canWrite ? ' · ต้องเข้าสู่ระบบก่อนแจ้ง' : ''}
+              </Text>
+              {recentRepairs.length ? (
+                recentRepairs.map((r) => (
+                  <Pressable
+                    key={r.r_id}
+                    style={styles.previewRow}
+                    onPress={() => navigation.navigate('RepairDetail', { id: r.r_id })}
+                  >
+                    <Text style={styles.previewMain} numberOfLines={1}>
+                      {r.r_v_plate || r.r_v_name || '—'}
+                    </Text>
+                    <Text style={styles.previewSub} numberOfLines={1}>
+                      {clipText(r.r_repair_list)} · {r.r_technician || 'ไม่ระบุช่าง'}
+                    </Text>
+                  </Pressable>
+                ))
+              ) : (
+                <Text style={styles.previewEmpty}>ยังไม่มีงานในช่วงวันที่เลือก</Text>
+              )}
+            </PreviewCard>
+            <PreviewCard
               title="ประวัติแจ้งซ่อมรายคัน"
-              icon="🚗"
-              subtitle="ค้นหารถแล้วดูประวัติ"
               isWide={isWide}
               onPress={() => navigation.navigate('Search', { q: '' })}
-            />
-            <NavCard
+              headerRight={
+                <Pressable onPress={() => navigation.navigate('Search', { q: '' })}>
+                  <Text style={styles.viewAll}>ค้นหา ›</Text>
+                </Pressable>
+              }
+            >
+              <Text style={styles.previewSummary}>รถที่มีงานล่าสุดในช่วงวันที่เลือก</Text>
+              {recentVehicles.length ? (
+                recentVehicles.map((v) => (
+                  <Pressable
+                    key={v.plate}
+                    style={styles.previewRow}
+                    onPress={() => navigation.navigate('Search', { q: v.plate })}
+                  >
+                    <Text style={styles.previewMain} numberOfLines={1}>
+                      {v.plate}
+                    </Text>
+                    <Text style={styles.previewSub} numberOfLines={1}>
+                      {[v.brand, clipText(v.lastJob, 40)].filter(Boolean).join(' · ')}
+                    </Text>
+                  </Pressable>
+                ))
+              ) : (
+                <Text style={styles.previewEmpty}>กดค้นหาเพื่อดูประวัติรายคัน</Text>
+              )}
+            </PreviewCard>
+            <PreviewCard
               title="บอร์ดข่าว"
-              icon="📋"
-              subtitle={boardPreview[0]?.title || 'ไวท์บอร์ดงานตามโซน'}
               isWide={isWide}
               onPress={() => navigation.navigate('Board')}
-            />
-            <NavCard
+              headerRight={
+                <Pressable onPress={() => navigation.navigate('Board')}>
+                  <Text style={styles.viewAll}>ดูทั้งหมด ›</Text>
+                </Pressable>
+              }
+            >
+              <Text style={styles.previewSummary}>ไวท์บอร์ดงานตามโซน</Text>
+              {boardPreview.length ? (
+                boardPreview.map((n) => (
+                  <Pressable
+                    key={n.id}
+                    style={styles.previewRow}
+                    onPress={() => navigation.navigate('Board')}
+                  >
+                    <Text style={styles.previewMain} numberOfLines={1}>
+                      {n.pin ? '📌 ' : ''}{n.title}
+                    </Text>
+                    <Text style={styles.previewSub} numberOfLines={1}>
+                      {n.department || 'ทั่วไป'}
+                    </Text>
+                  </Pressable>
+                ))
+              ) : (
+                <Text style={styles.previewEmpty}>ยังไม่มีโน้ต — กดเพื่อเพิ่มบนบอร์ด</Text>
+              )}
+            </PreviewCard>
+            <PreviewCard
               title="ตำแหน่งรถจอด"
-              icon="🅿️"
-              subtitle="มาร์กจุดจอดด้วยมือ"
               isWide={isWide}
               onPress={() => navigation.navigate('Locations')}
-            />
-            <NavCard
+              headerRight={
+                <Pressable onPress={() => navigation.navigate('Locations')}>
+                  <Text style={styles.viewAll}>ดูทั้งหมด ›</Text>
+                </Pressable>
+              }
+            >
+              <Text style={styles.previewSummary}>จุดจอดที่บันทึกล่าสุด</Text>
+              {locationPreview.length ? (
+                locationPreview.map((loc) => (
+                  <Pressable
+                    key={loc.id}
+                    style={styles.previewRow}
+                    onPress={() => navigation.navigate('Locations')}
+                  >
+                    <Text style={styles.previewMain} numberOfLines={1}>
+                      {loc.title || loc.spot || 'จุดจอด'}
+                    </Text>
+                    <Text style={styles.previewSub} numberOfLines={1}>
+                      {[loc.v_name, loc.spot].filter(Boolean).join(' · ') || '—'}
+                    </Text>
+                  </Pressable>
+                ))
+              ) : (
+                <Text style={styles.previewEmpty}>ยังไม่มีจุดจอด — กดเพื่อมาร์กด้วยมือ</Text>
+              )}
+            </PreviewCard>
+            <PreviewCard
               title="สต็อกอะไหล่"
-              icon="📦"
-              subtitle={canSeePartsPrice ? 'ราคาอะไหล่ (สิทธิ์ staff+)' : 'ซ่อนราคา — สิทธิ์ไม่พอ'}
               isWide={isWide}
               onPress={() => {}}
               disabled
-            />
+            >
+              <Text style={styles.previewSummary}>
+                {canSeePartsPrice ? 'ราคาอะไหล่ (สิทธิ์ staff+)' : 'ซ่อนราคา — สิทธิ์ไม่พอ'}
+              </Text>
+              <Text style={styles.previewEmpty}>กำลังพัฒนา</Text>
+            </PreviewCard>
           </View>
         )}
       </ScrollView>
@@ -443,7 +573,13 @@ export default function DashboardScreen({ navigation }) {
   );
 }
 
-function NavCard({ title, icon, subtitle, isWide, onPress, disabled }) {
+function clipText(str, max = 36) {
+  const s = String(str || '').trim();
+  if (s.length <= max) return s;
+  return `${s.slice(0, max - 1)}…`;
+}
+
+function PreviewCard({ title, isWide, onPress, disabled, headerRight, children }) {
   return (
     <Pressable
       onPress={disabled ? undefined : onPress}
@@ -453,11 +589,8 @@ function NavCard({ title, icon, subtitle, isWide, onPress, disabled }) {
         pressed && !disabled && { opacity: 0.9 },
       ]}
     >
-      <Card title={title} style={styles.navInner}>
-        <View style={styles.placeholderBody}>
-          <Text style={styles.placeholderIcon}>{icon}</Text>
-          <Text style={styles.placeholderText}>{subtitle}</Text>
-        </View>
+      <Card title={title} style={styles.navInner} headerRight={headerRight}>
+        <View style={styles.previewBody}>{children}</View>
       </Card>
     </Pressable>
   );
@@ -525,7 +658,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryText: { color: colors.onNavy, fontWeight: '700' },
-  placeholderBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.lg },
-  placeholderIcon: { fontSize: 30, marginBottom: spacing.sm, opacity: 0.7 },
-  placeholderText: { fontSize: 13, color: colors.textMuted, fontWeight: '600', textAlign: 'center' },
+  previewBody: { paddingVertical: spacing.xs, minHeight: 120 },
+  previewSummary: { fontSize: 12, color: colors.textSecondary, marginBottom: spacing.sm },
+  previewRow: {
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.barTrack,
+  },
+  previewMain: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  previewSub: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  previewEmpty: {
+    fontSize: 13,
+    color: colors.textMuted,
+    fontWeight: '600',
+    paddingVertical: spacing.md,
+    textAlign: 'center',
+  },
 });

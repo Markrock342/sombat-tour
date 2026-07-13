@@ -405,7 +405,11 @@ function repair_select_cols($pdo = null) {
     'r_v_name', 'r_v_plate', 'r_v_chassis', 'r_v_brand', 'r_v_model', 'r_mile',
     'r_repair_list', 'r_v_company', 'r_inv_com',
   );
-  $optional = array('r_technician_id', 'r_type', 'r_tank_m');
+  $optional = array(
+    'r_technician_id', 'r_type', 'r_tank_m',
+    'r_job_subtype_id', 'r_job_type', 'r_dt_close', 'r_close_dt',
+    'r_recorder', 'r_work_report', 'r_v_metr',
+  );
   if ($pdo) {
     $set = repair_column_set($pdo);
     foreach ($optional as $c) {

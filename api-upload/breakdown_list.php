@@ -1,29 +1,38 @@
 <?php
-// GET /api/breakdown_list.php — roadside / mid-route breakdowns
+// GET /api/breakdown_list.php — roadside / mid-route breakdowns (r_job_subtype_id = 2)
 require_once __DIR__ . '/bootstrap.php';
-cors_headers(['GET', 'OPTIONS']);
+cors_headers(array('GET', 'OPTIONS'));
 
 try {
   require_once __DIR__ . '/db.php';
-  ensure_schema($pdo);
+  try {
+    ensure_schema($pdo);
+  } catch (Exception $e) {
+    /* CREATE may be denied */
+  }
 
   $q = isset($_GET['q']) ? trim($_GET['q']) : '';
   $limit = isset($_GET['limit']) ? max(1, min(300, (int)$_GET['limit'])) : 100;
   $status = isset($_GET['status']) ? strtolower(trim($_GET['status'])) : '';
 
+  $hasSubtype = repair_has_column($pdo, 'r_job_subtype_id');
   $hasType = repair_has_column($pdo, 'r_type');
   $hasTank = repair_has_column($pdo, 'r_tank_m');
 
-  if ($hasType) {
-    $where = ["(COALESCE(r_type,'') IN ('breakdown','roadside') OR r_repair_list LIKE '%เสียกลางทาง%')"];
-  } else {
-    $where = ["(r_repair_list LIKE '%เสียกลางทาง%')"];
+  $conds = array();
+  if ($hasSubtype) {
+    $conds[] = 'r_job_subtype_id = 2';
   }
-  $params = [];
+  if ($hasType) {
+    $conds[] = "COALESCE(r_type,'') IN ('breakdown','roadside')";
+  }
+  $conds[] = "r_repair_list LIKE '%เสียกลางทาง%'";
+  $where = array('(' . implode(' OR ', $conds) . ')');
+  $params = array();
 
   if ($q !== '') {
     $like = '%' . $q . '%';
-    $parts = [
+    $parts = array(
       'CAST(r_id AS CHAR) LIKE ?',
       'CAST(r_job_num AS CHAR) LIKE ?',
       'r_v_name LIKE ?',
@@ -32,7 +41,7 @@ try {
       'r_v_model LIKE ?',
       'r_technician LIKE ?',
       'r_repair_list LIKE ?',
-    ];
+    );
     $params = array_merge($params, array_fill(0, count($parts), $like));
     if ($hasTank) {
       $parts[] = "COALESCE(r_tank_m,'') LIKE ?";
@@ -49,7 +58,7 @@ try {
   $st->execute($params);
   $rows = $st->fetchAll();
 
-  out(['ok' => true, 'total' => count($rows), 'rows' => $rows]);
+  out(array('ok' => true, 'total' => count($rows), 'rows' => $rows));
 } catch (Exception $e) {
-  out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
+  out(array('ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()), 500);
 }

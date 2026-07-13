@@ -11,6 +11,7 @@ import {
   fmtDate,
   fmtThaiDate,
   isOpenRepair,
+  isBreakdownRepair,
 } from '../data/api';
 
 function eachDay(start, end) {
@@ -25,9 +26,7 @@ function eachDay(start, end) {
 }
 
 function isBreakdownRow(r) {
-  const t = String(r.r_type || '').toLowerCase();
-  if (t === 'breakdown' || t === 'roadside') return true;
-  return String(r.r_repair_list || '').includes('เสียกลางทาง');
+  return isBreakdownRepair(r);
 }
 
 /**
