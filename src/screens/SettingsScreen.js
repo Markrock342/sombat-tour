@@ -36,6 +36,7 @@ import {
   isIosSafari,
   promptPwaInstall,
 } from '../data/pwaInstall';
+import { APP_VERSION, APP_UPDATE_NOTES, APP_UPDATE_DATE } from '../data/appVersion';
 
 function roleLabel(role) {
   if (role === 'admin') return 'ผู้ดูแลระบบ';
@@ -352,6 +353,21 @@ export default function SettingsScreen({ navigation }) {
             />
           </View>
 
+          <Text style={styles.sectionLabel}>เกี่ยวกับระบบ</Text>
+          <View style={styles.aboutCard}>
+            <View style={styles.aboutHead}>
+              <Text style={styles.aboutVersion}>เวอร์ชัน {APP_VERSION}</Text>
+              <Text style={styles.aboutDate}>{APP_UPDATE_DATE}</Text>
+            </View>
+            <Text style={styles.aboutLabel}>อัปเดตล่าสุด</Text>
+            {APP_UPDATE_NOTES.map((line) => (
+              <View key={line} style={styles.noteRow}>
+                <Text style={styles.noteDot}>·</Text>
+                <Text style={styles.noteText}>{line}</Text>
+              </View>
+            ))}
+          </View>
+
           <Text style={styles.footnote}>
             เคล็ดลับ: บน iPhone ต้องติดตั้งลงโฮมก่อน แล้วเปิดจากไอคอนนั้น จึงเปิดแจ้งเตือนได้
           </Text>
@@ -477,6 +493,33 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   switchThumbOn: { alignSelf: 'flex-end' },
+  aboutCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    ...shadow,
+  },
+  aboutHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  aboutVersion: { color: colors.navy, fontWeight: '800', fontSize: 15 },
+  aboutDate: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
+  aboutLabel: {
+    color: colors.textMuted,
+    fontWeight: '700',
+    fontSize: 11,
+    marginBottom: 6,
+    letterSpacing: 0.3,
+  },
+  noteRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
+  noteDot: { color: colors.barFillAlt, fontWeight: '800', fontSize: 14, lineHeight: 18 },
+  noteText: { flex: 1, color: colors.textSecondary, fontSize: 13, lineHeight: 18 },
   footnote: {
     color: colors.textMuted,
     fontSize: 12,
