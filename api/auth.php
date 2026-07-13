@@ -14,6 +14,20 @@ try {
 
   if ($action === 'me') {
     $user = auth_user($pdo, true);
+    // Refresh display fields (m_job / name) from member row when possible
+    if (!empty($user['username'])) {
+      try {
+        $found = find_user_by_login($pdo, $user['username']);
+        if ($found) {
+          $full = normalize_user_row($found['row'], $found['map']);
+          $user['job'] = isset($full['job']) ? $full['job'] : (isset($user['job']) ? $user['job'] : '');
+          $user['fname'] = isset($full['fname']) ? $full['fname'] : '';
+          $user['lname'] = isset($full['lname']) ? $full['lname'] : '';
+          if (!empty($full['role'])) $user['role'] = $full['role'];
+          if (isset($full['department'])) $user['department'] = $full['department'];
+        }
+      } catch (Exception $e) { /* keep token payload */ }
+    }
     out(array('ok' => true, 'user' => $user));
   }
 

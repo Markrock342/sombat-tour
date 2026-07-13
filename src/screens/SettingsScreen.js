@@ -274,6 +274,11 @@ export default function SettingsScreen({ navigation }) {
             </View>
             <View style={styles.profileBody}>
               <Text style={styles.profileName}>{user.username}</Text>
+              {user.job ? (
+                <Text style={styles.profileJob} numberOfLines={2}>
+                  {user.job}
+                </Text>
+              ) : null}
               <Text style={styles.profileRole}>{roleLabel(user.role)}</Text>
             </View>
             <StatusPill ok={asPwa} label={asPwa ? 'โหมดแอป' : 'ในเบราว์เซอร์'} />
@@ -419,7 +424,8 @@ const styles = StyleSheet.create({
   avatarText: { color: colors.onNavy, fontWeight: '800', fontSize: 22 },
   profileBody: { flex: 1, minWidth: 0 },
   profileName: { color: colors.navy, fontWeight: '800', fontSize: 18 },
-  profileRole: { color: colors.textSecondary, fontWeight: '600', fontSize: 13, marginTop: 2 },
+  profileJob: { color: colors.textPrimary, fontWeight: '700', fontSize: 14, marginTop: 3 },
+  profileRole: { color: colors.textSecondary, fontWeight: '600', fontSize: 12, marginTop: 2 },
   sectionLabel: {
     color: colors.textMuted,
     fontWeight: '800',

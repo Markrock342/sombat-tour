@@ -461,6 +461,9 @@ function session_create($pdo, $user, $ttlSeconds = 2592000) {
     'username' => isset($user['username']) ? $user['username'] : '',
     'role' => isset($user['role']) ? $user['role'] : 'viewer',
     'department' => isset($user['department']) ? $user['department'] : '',
+    'job' => isset($user['job']) ? $user['job'] : '',
+    'fname' => isset($user['fname']) ? $user['fname'] : '',
+    'lname' => isset($user['lname']) ? $user['lname'] : '',
     'exp' => time() + $ttlSeconds,
   );
   $payloadB64 = base64url_encode(json_encode($payload));
@@ -492,6 +495,9 @@ function auth_user($pdo, $required = true) {
     'username' => isset($payload['username']) ? $payload['username'] : '',
     'role' => map_member_role(isset($payload['role']) ? $payload['role'] : ''),
     'department' => isset($payload['department']) ? $payload['department'] : '',
+    'job' => isset($payload['job']) ? (string)$payload['job'] : '',
+    'fname' => isset($payload['fname']) ? (string)$payload['fname'] : '',
+    'lname' => isset($payload['lname']) ? (string)$payload['lname'] : '',
   );
 }
 
