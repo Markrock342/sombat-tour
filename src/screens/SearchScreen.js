@@ -112,6 +112,12 @@ export default function SearchScreen({ navigation, route }) {
   const goBack = () => navigation.goBack();
 
   useEffect(() => {
+    if (type === 'vehicle' && !['date_desc', 'date_asc', 'plate', 'name'].includes(sort)) {
+      setSort('date_desc');
+    }
+  }, [type, sort]);
+
+  useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
 
     const trimmed = (q || '').trim();
