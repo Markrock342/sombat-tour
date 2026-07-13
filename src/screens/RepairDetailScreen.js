@@ -21,6 +21,7 @@ import { useAuth } from '../auth/AuthContext';
 import {
   getRepair,
   updateRepair,
+  deleteRepair,
   fetchRepairImages,
   uploadRepairImage,
   deleteRepairImage,
@@ -60,7 +61,7 @@ function Fact({ label, value }) {
 export default function RepairDetailScreen({ route, navigation }) {
   const { repair: initial, rId: paramId } = route.params ?? {};
   const rId = paramId || initial?.r_id;
-  const { canWrite } = useAuth();
+  const { canWrite, canSeePartsPrice } = useAuth();
   const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
   const goBack = () => navigation.goBack();
   const sheetStyle = contentSheetStyle(centerContent, contentMaxWidth);
@@ -203,6 +204,36 @@ export default function RepairDetailScreen({ route, navigation }) {
       showAlert('ปิดงานแล้ว');
     } catch (e) {
       showAlert('ไม่สำเร็จ', e.message || '');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteJob = async () => {
+    if (!canSeePartsPrice) {
+      showAlert('ลบงานไม่ได้', 'เฉพาะ admin / staff ที่รับเรื่องเท่านั้น');
+      return;
+    }
+    const jobLabel = repair?.r_job_num || rId;
+    const ok = await confirmDialog(
+      'ลบงานนี้?',
+      `ลบ #${jobLabel} ถาวร รวมรูปและประวัติ — กู้คืนไม่ได้`,
+      {
+        confirmText: 'ลบงาน',
+        cancelText: 'ยกเลิก',
+        icon: 'warning',
+        destructive: true,
+      }
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await deleteRepair(rId);
+      showAlert('ลบแล้ว', `งาน #${jobLabel} ถูกลบออกจากระบบ`);
+      navigation.goBack();
+    } catch (e) {
+      if (e.code === 'UNAUTHORIZED' || e.code === 'FORBIDDEN') navigation.navigate('Login');
+      else showAlert('ลบไม่สำเร็จ', e.message || '');
     } finally {
       setBusy(false);
     }
@@ -503,6 +534,15 @@ export default function RepairDetailScreen({ route, navigation }) {
         >
           <Text style={styles.btnAltText}>+ เพิ่มรูป</Text>
         </Pressable>
+        {canSeePartsPrice ? (
+          <Pressable
+            style={[styles.btnAlt, styles.btnDelete, busy && styles.btnDisabled]}
+            onPress={deleteJob}
+            disabled={busy}
+          >
+            <Text style={styles.btnDeleteText}>ลบงาน</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   ) : null;

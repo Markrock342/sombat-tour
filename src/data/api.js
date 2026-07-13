@@ -291,6 +291,15 @@ export async function updateRepair(payload) {
   return parseJson(res);
 }
 
+export async function deleteRepair(rId) {
+  const res = await fetch(`${API_BASE}/repair_delete.php`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ r_id: rId }),
+  });
+  return parseJson(res);
+}
+
 export async function fetchRepairImages(rId) {
   const res = await fetch(`${API_BASE}/repair_images.php?r_id=${encodeURIComponent(rId)}`);
   const data = await parseJson(res);
