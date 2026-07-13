@@ -8,6 +8,7 @@ import {
   StyleSheet,
   AppState,
   Alert,
+  Platform,
 } from 'react-native';
 import { RefreshControl } from '../components/AppRefreshControl';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -284,14 +285,18 @@ export default function DashboardScreen({ navigation }) {
   };
 
   const confirmLogout = () => {
-    Alert.alert(
-      'ออกจากระบบ',
-      `ออกจากบัญชี ${user?.username || ''} ใช่ไหม?`,
-      [
-        { text: 'ยกเลิก', style: 'cancel' },
-        { text: 'ออกจากระบบ', style: 'destructive', onPress: logout },
-      ]
-    );
+    const name = user?.username || '';
+    const msg = name ? `ออกจากบัญชี ${name} ใช่ไหม?` : 'ออกจากระบบใช่ไหม?';
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(msg)) {
+        logout();
+      }
+      return;
+    }
+    Alert.alert('ออกจากระบบ', msg, [
+      { text: 'ยกเลิก', style: 'cancel' },
+      { text: 'ออกจากระบบ', style: 'destructive', onPress: logout },
+    ]);
   };
 
   return (
@@ -310,9 +315,14 @@ export default function DashboardScreen({ navigation }) {
         </Pressable>
         <View style={styles.headerActions}>
           {user ? (
-            <Pressable style={[styles.searchBtn, isMobile && styles.searchBtnMobile]} onPress={confirmLogout}>
+            <Pressable
+              style={[styles.searchBtn, isMobile && styles.searchBtnMobile]}
+              onPress={confirmLogout}
+              accessibilityRole="button"
+              accessibilityLabel="ออกจากระบบ"
+            >
               <Text style={[styles.searchBtnText, isMobile && styles.searchBtnTextMobile]} numberOfLines={1}>
-                {user.username}
+                {isMobile ? `${user.username} · ออก` : `${user.username} · ออกจากระบบ`}
               </Text>
             </Pressable>
           ) : (
