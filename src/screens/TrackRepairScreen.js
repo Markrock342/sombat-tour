@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
 
 import { colors, spacing, radius, shadow } from '../theme';
 import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset, contentSheetStyle } from '../components/BackNavigation';
@@ -21,6 +22,8 @@ import ContactActionRow from '../components/ContactActionRow';
 import { fetchTrackByToken, fmtDateTime } from '../data/api';
 import { parseTrackToken } from '../data/repairTracking';
 import { parseRepairList } from '../data/repairNotes';
+import { decodeQrFromImageUri } from '../utils/decodeQrFromImage';
+import { showAlert } from '../utils/dialog';
 
 export default function TrackRepairScreen({ navigation, route }) {
   const initialToken = route?.params?.token || '';
@@ -37,6 +40,7 @@ export default function TrackRepairScreen({ navigation, route }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(!!initialToken);
   const [refreshing, setRefreshing] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [error, setError] = useState(null);
 
   const load = useCallback(async (token) => {
@@ -81,6 +85,38 @@ export default function TrackRepairScreen({ navigation, route }) {
 
   const onSearch = () => load(tokenInput);
 
+  const onPickQrFromGallery = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (perm.granted === false) {
+        showAlert('ไม่ได้รับอนุญาต', 'เปิดสิทธิ์รูปภาพในการตั้งค่าเครื่องก่อน');
+        return;
+      }
+
+      const picked = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 1,
+        allowsEditing: false,
+      });
+      if (picked.canceled || !picked.assets?.[0]?.uri) return;
+
+      setScanning(true);
+      setError(null);
+      const raw = await decodeQrFromImageUri(picked.assets[0].uri);
+      const token = parseTrackToken(raw);
+      if (!token) {
+        showAlert('อ่าน QR ไม่ได้', 'ในรูปไม่มีลิงก์ติดตามที่รู้จัก');
+        return;
+      }
+      setTokenInput(token);
+      await load(token);
+    } catch (e) {
+      showAlert('สแกนไม่สำเร็จ', e.message || 'ลองเลือกรูปอื่น หรือวางลิงก์แทน');
+    } finally {
+      setScanning(false);
+    }
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
     load(activeToken || tokenInput);
@@ -109,7 +145,7 @@ export default function TrackRepairScreen({ navigation, route }) {
           <View style={sheetStyle}>
           {showSearch ? (
             <View style={[styles.searchCard, isMobile && styles.searchCardMobile]}>
-              <Text style={styles.searchLabel}>วางลิงก์หรือรหัสจาก QR</Text>
+              <Text style={styles.searchLabel}>วางลิงก์หรือเลือกรูป QR จากแกลเลอรี</Text>
               <TextInput
                 style={[styles.input, isMobile && styles.inputMobile]}
                 value={tokenInput}
@@ -119,14 +155,38 @@ export default function TrackRepairScreen({ navigation, route }) {
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              <Pressable style={styles.searchBtn} onPress={onSearch}>
+              <Pressable
+                style={[styles.galleryBtn, scanning && styles.btnDisabled]}
+                onPress={onPickQrFromGallery}
+                disabled={scanning || loading}
+              >
+                <Text style={styles.galleryBtnText}>
+                  {scanning ? 'กำลังอ่าน QR...' : 'เปิดแกลเลอรี · สแกนจากรูป'}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.searchBtn, (scanning || loading) && styles.btnDisabled]}
+                onPress={onSearch}
+                disabled={scanning || loading}
+              >
                 <Text style={styles.searchBtnText}>ดูสถานะ</Text>
               </Pressable>
             </View>
           ) : (
-            <Pressable style={styles.changeLink} onPress={() => setShowSearch(true)}>
-              <Text style={styles.changeLinkText}>เปลี่ยน QR / ลิงก์อื่น</Text>
-            </Pressable>
+            <View style={styles.changeRow}>
+              <Pressable style={styles.changeLink} onPress={() => setShowSearch(true)}>
+                <Text style={styles.changeLinkText}>เปลี่ยน QR / ลิงก์อื่น</Text>
+              </Pressable>
+              <Pressable
+                style={styles.changeLink}
+                onPress={onPickQrFromGallery}
+                disabled={scanning}
+              >
+                <Text style={styles.changeLinkText}>
+                  {scanning ? 'กำลังอ่าน...' : 'เปิดแกลเลอรี'}
+                </Text>
+              </Pressable>
+            </View>
           )}
 
           {loading ? (
@@ -202,7 +262,16 @@ export default function TrackRepairScreen({ navigation, route }) {
           ) : (
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>ยังไม่มีข้อมูล</Text>
-              <Text style={styles.emptySub}>สแกน QR จากใบแจ้ง หรือวางลิงก์ด้านบน</Text>
+              <Text style={styles.emptySub}>เปิดแกลเลอรีเลือกภาพ QR หรือวางลิงก์ด้านบน</Text>
+              <Pressable
+                style={[styles.emptyBtn, styles.emptyBtnAlt]}
+                onPress={onPickQrFromGallery}
+                disabled={scanning}
+              >
+                <Text style={styles.emptyBtnAltText}>
+                  {scanning ? 'กำลังอ่าน QR...' : 'เปิดแกลเลอรี'}
+                </Text>
+              </Pressable>
               <Pressable style={styles.emptyBtn} onPress={() => navigation.navigate('PublicReport')}>
                 <Text style={styles.emptyBtnText}>แจ้งซ่อมใหม่</Text>
               </Pressable>
@@ -262,7 +331,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   searchBtnText: { color: colors.onNavy, fontWeight: '800', fontSize: 16 },
-  changeLink: { alignSelf: 'flex-end', marginBottom: spacing.sm, paddingVertical: 4 },
+  galleryBtn: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.navy,
+    borderRadius: radius.sm,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  galleryBtnText: { color: colors.navy, fontWeight: '800', fontSize: 15 },
+  btnDisabled: { opacity: 0.55 },
+  changeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  changeLink: { paddingVertical: 4 },
   changeLinkText: { color: colors.navy, fontWeight: '700', fontSize: 13 },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.lg, ...shadow },
   cardTitle: { fontWeight: '800', color: colors.navy, fontSize: 15, marginBottom: spacing.sm },
@@ -288,6 +376,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyBtnText: { color: colors.onNavy, fontWeight: '800' },
+  emptyBtnAlt: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.navy,
+  },
+  emptyBtnAltText: { color: colors.navy, fontWeight: '800' },
   errorBox: { backgroundColor: '#FEE2E2', borderRadius: radius.md, padding: spacing.lg, alignItems: 'center' },
   error: { color: '#B91C1C', fontWeight: '700', textAlign: 'center' },
   retryBtn: { marginTop: spacing.md, backgroundColor: colors.navy, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.sm },
