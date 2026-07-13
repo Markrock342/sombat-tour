@@ -26,7 +26,6 @@ import {
   fetchRepairs,
   fetchPendingJobs,
   fmtThaiDate,
-  fmtDateTime,
   fmtDate,
   isOpenRepair,
   repairMatchesTech,
@@ -41,10 +40,62 @@ const STATUS_FILTERS = [
 
 const PAGE_SIZE = 40;
 
+const SORT_COLS = [
+  { key: 'when', label: 'เวลา', style: 'colWhen', defaultDir: 'desc' },
+  { key: 'code', label: 'งาน', style: 'colCode', defaultDir: 'desc' },
+  { key: 'vehicle', label: 'รถ', style: 'colVehicle', defaultDir: 'asc' },
+  { key: 'title', label: 'อาการ', style: 'colTitle', defaultDir: 'asc' },
+  { key: 'tech', label: 'ช่าง', style: 'colTech', defaultDir: 'asc' },
+  { key: 'status', label: 'สถานะ', style: 'colStatus', defaultDir: 'asc' },
+];
+
+function sortValue(job, key) {
+  switch (key) {
+    case 'when':
+      return String(job.datetime || '');
+    case 'code':
+      return String(job.raw?.r_job_num || job.rId || '');
+    case 'vehicle':
+      return `${job.vehicleNo || ''} ${job.plate || ''}`.trim().toLowerCase();
+    case 'title':
+      return String(job.title || '').toLowerCase();
+    case 'tech':
+      return String(job.technician || '').toLowerCase();
+    case 'status':
+      return job.closed ? 1 : 0;
+    default:
+      return '';
+  }
+}
+
+function compareJobs(a, b, key, dir) {
+  const av = sortValue(a, key);
+  const bv = sortValue(b, key);
+  let cmp = 0;
+  if (key === 'code' || key === 'status') {
+    cmp = Number(av) - Number(bv);
+  } else {
+    cmp = String(av).localeCompare(String(bv), 'th', { numeric: true, sensitivity: 'base' });
+  }
+  if (cmp === 0) {
+    cmp = String(b.datetime || '').localeCompare(String(a.datetime || ''));
+  }
+  return dir === 'asc' ? cmp : -cmp;
+}
+
 function parseDateStr(str) {
   if (!str) return new Date();
   const [y, m, d] = String(str).split('-').map(Number);
   return new Date(y, m - 1, d);
+}
+
+function fmtListWhen(str) {
+  const m = String(str || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}):(\d{2})(?::\d{2})?)?/);
+  if (!m) return { date: str || '-', time: '' };
+  return {
+    date: `${+m[3]}/${m[2]}/${+m[1] + 543}`,
+    time: m[4] ? `${m[4]}:${m[5]}` : '',
+  };
 }
 
 function shortSymptom(raw) {
@@ -127,6 +178,8 @@ export default function JobDetailScreen({ route, navigation }) {
   const [jobs, setJobs] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [textFilter, setTextFilter] = useState('');
+  const [sortKey, setSortKey] = useState('when');
+  const [sortDir, setSortDir] = useState('desc');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -210,11 +263,23 @@ export default function JobDetailScreen({ route, navigation }) {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, textFilter]);
+  }, [statusFilter, textFilter, sortKey, sortDir]);
+
+  const toggleSort = useCallback(
+    (col) => {
+      if (sortKey === col.key) {
+        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+      } else {
+        setSortKey(col.key);
+        setSortDir(col.defaultDir);
+      }
+    },
+    [sortKey]
+  );
 
   const visibleJobs = useMemo(() => {
     const term = textFilter.trim().toLowerCase();
-    return jobs.filter((job) => {
+    const filtered = jobs.filter((job) => {
       if (statusFilter === 'open' && job.closed) return false;
       if (statusFilter === 'closed' && !job.closed) return false;
       if (!term) return true;
@@ -223,7 +288,8 @@ export default function JobDetailScreen({ route, navigation }) {
         .join(' ');
       return hay.includes(term);
     });
-  }, [jobs, statusFilter, textFilter]);
+    return [...filtered].sort((a, b) => compareJobs(a, b, sortKey, sortDir));
+  }, [jobs, statusFilter, textFilter, sortKey, sortDir]);
 
   const pageCount = Math.max(1, Math.ceil(visibleJobs.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
@@ -341,18 +407,39 @@ export default function JobDetailScreen({ route, navigation }) {
                     {!isMobile ? (
                       <View style={styles.colHead}>
                         <Text style={[styles.col, styles.colNo]}>#</Text>
-                        <Text style={[styles.col, styles.colWhen]}>เวลา</Text>
-                        <Text style={[styles.col, styles.colCode]}>งาน</Text>
-                        <Text style={[styles.col, styles.colVehicle]}>รถ</Text>
-                        <Text style={[styles.col, styles.colTitle]}>อาการ</Text>
-                        <Text style={[styles.col, styles.colTech]}>ช่าง</Text>
-                        <Text style={[styles.col, styles.colStatus]}>สถานะ</Text>
+                        {SORT_COLS.map((col) => {
+                          const active = sortKey === col.key;
+                          const mark = active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ' ⇅';
+                          return (
+                            <Pressable
+                              key={col.key}
+                              onPress={() => toggleSort(col)}
+                              style={[styles.colSortHit, styles[col.style]]}
+                              accessibilityRole="button"
+                              accessibilityLabel={`เรียงตาม${col.label}`}
+                            >
+                              <Text
+                                style={[
+                                  styles.colHeadText,
+                                  active && styles.colSortActive,
+                                  !active && styles.colSortIdle,
+                                  col.key === 'status' && { textAlign: 'right' },
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {col.label}
+                                {mark}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
                       </View>
                     ) : null}
 
                     {pageJobs.map((job, i) => {
                       const idx = (safePage - 1) * PAGE_SIZE + i + 1;
                       const vehicle = [job.vehicleNo, job.plate].filter(Boolean).join(' · ') || '-';
+                      const when = fmtListWhen(job.datetime);
                       return (
                         <Pressable
                           key={`${job.rId}-${job.code}`}
@@ -386,18 +473,27 @@ export default function JobDetailScreen({ route, navigation }) {
                               <Text style={styles.mobileTitle} numberOfLines={2}>
                                 {job.title}
                               </Text>
-                              <Text style={styles.mobileMeta} numberOfLines={1}>
+                              <Text style={styles.mobileMeta} numberOfLines={2}>
                                 {vehicle}
                                 {job.technician ? ` · ${job.technician}` : ''}
-                                {job.datetime ? ` · ${fmtDateTime(job.datetime)}` : ''}
+                                {when.date
+                                  ? ` · ${when.date}${when.time ? ` ${when.time}` : ''}`
+                                  : ''}
                               </Text>
                             </>
                           ) : (
                             <>
                               <Text style={[styles.col, styles.colNo]}>{idx}</Text>
-                              <Text style={[styles.col, styles.colWhen]} numberOfLines={1}>
-                                {job.datetime ? fmtDateTime(job.datetime) : '-'}
-                              </Text>
+                              <View style={styles.colWhen}>
+                                <Text style={styles.whenDate} numberOfLines={1}>
+                                  {when.date}
+                                </Text>
+                                {when.time ? (
+                                  <Text style={styles.whenTime} numberOfLines={1}>
+                                    {when.time}
+                                  </Text>
+                                ) : null}
+                              </View>
                               <Text style={[styles.col, styles.colCode]} numberOfLines={1}>
                                 {job.code}
                               </Text>
@@ -527,13 +623,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  colNo: { width: 36 },
-  colWhen: { width: 118 },
-  colCode: { width: 72 },
-  colVehicle: { width: 150, paddingRight: 8 },
-  colTitle: { flex: 1, paddingRight: 8 },
-  colTech: { width: 88 },
-  colStatus: { width: 78, textAlign: 'right' },
+  colHeadText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  colSortHit: {
+    justifyContent: 'center',
+    cursor: 'pointer',
+    paddingVertical: 2,
+  },
+  colSortActive: { color: colors.navy, fontWeight: '800' },
+  colSortIdle: { opacity: 0.85 },
+  colNo: { width: 36, flexShrink: 0 },
+  colWhen: { width: 92, flexShrink: 0, paddingRight: 6 },
+  colCode: { width: 78, flexShrink: 0 },
+  colVehicle: { width: 140, flexShrink: 1, paddingRight: 8 },
+  colTitle: { flex: 1, minWidth: 120, paddingRight: 8 },
+  colTech: { width: 96, flexShrink: 0 },
+  colStatus: { width: 78, flexShrink: 0, textAlign: 'right' },
+  whenDate: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '700',
+    flexShrink: 0,
+  },
+  whenTime: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 1,
+    flexShrink: 0,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
