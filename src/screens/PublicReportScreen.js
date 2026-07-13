@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 
 import { colors, spacing, radius, shadow } from '../theme';
-import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
+import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset, contentSheetStyle } from '../components/BackNavigation';
 import { PublicStepBanner, StickyActionBar } from '../components/PublicFlowUX';
 import {
   createPublicRepair,
@@ -23,7 +23,8 @@ import {
 import { composeRepairList, REPAIR_TYPES } from '../data/repairNotes';
 
 export default function PublicReportScreen({ navigation, route }) {
-  const { isMobile, pad, titleSize } = useScreenLayout();
+  const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
+  const sheetStyle = contentSheetStyle(centerContent, contentMaxWidth);
   const goBack = () => navigation.goBack();
   const presetType = route?.params?.type || 'normal';
 
@@ -157,17 +158,26 @@ export default function PublicReportScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={[styles.header, { paddingHorizontal: pad }]}>
-          {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
-          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>แจ้งซ่อม</Text>
-          <Text style={styles.headerSub}>ไม่ต้อง login · ส่งแล้วได้ QR ติดตาม</Text>
+        <View
+          style={[styles.header, { paddingHorizontal: pad }, centerContent && styles.headerCentered]}
+        >
+          <View style={[styles.headerInner, sheetStyle]}>
+            {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
+            <Text style={[styles.headerTitle, { fontSize: titleSize }]}>แจ้งซ่อม</Text>
+            <Text style={styles.headerSub}>ไม่ต้อง login · ส่งแล้วได้ QR ติดตาม</Text>
+          </View>
         </View>
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scroll, scrollBottom]}
+          contentContainerStyle={[
+            styles.scroll,
+            scrollBottom,
+            centerContent && styles.scrollCentered,
+          ]}
           keyboardShouldPersistTaps="handled"
         >
+          <View style={[sheetStyle, styles.sheet]}>
           <PublicStepBanner activeStep={activeStep} />
 
           <View style={styles.section}>
@@ -333,6 +343,7 @@ export default function PublicReportScreen({ navigation, route }) {
               </Pressable>
             </>
           ) : null}
+          </View>
         </ScrollView>
 
         {isMobile ? (
@@ -358,6 +369,8 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   scrollView: { flex: 1 },
   header: { paddingTop: spacing.sm, paddingBottom: spacing.md },
+  headerCentered: { alignItems: 'center' },
+  headerInner: { width: '100%' },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
   headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },
   headerSub: { color: 'rgba(255,255,255,0.75)', fontSize: 13, marginTop: 4 },
@@ -369,6 +382,8 @@ const styles = StyleSheet.create({
     minHeight: '100%',
     gap: spacing.md,
   },
+  scrollCentered: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
+  sheet: { gap: spacing.md },
   section: { backgroundColor: colors.card, borderRadius: radius.md, padding: spacing.lg, ...shadow },
   sectionTitle: { color: colors.navy, fontWeight: '800', fontSize: 16 },
   sectionHint: { color: colors.textMuted, fontSize: 12, marginTop: 2, marginBottom: spacing.sm },
