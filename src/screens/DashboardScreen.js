@@ -290,9 +290,9 @@ export default function DashboardScreen({ navigation }) {
             <Image source={require('../../assets/sombatlogobg.png')} style={[styles.logo, isMobile && styles.logoMobile]} />
             <View style={styles.brandText}>
               <Text style={[styles.headerTitle, { fontSize: heroTitleSize }]}>สมบัติทัวร์</Text>
-              {!isMobile ? (
-                <Text style={styles.headerSub}>โปรแกรมงานซ่อมบำรุง</Text>
-              ) : null}
+              <Text style={[styles.headerSub, isMobile && styles.headerSubMobile]}>
+                โปรแกรมงานซ่อมบำรุง
+              </Text>
             </View>
           </View>
         </Pressable>
@@ -635,6 +635,7 @@ const styles = StyleSheet.create({
   searchBtnText: { color: colors.onNavy, fontSize: 13, fontWeight: '700' },
   headerTitle: { color: colors.onNavy, fontSize: 24, fontWeight: '800', letterSpacing: 0.3 },
   headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
+  headerSubMobile: { fontSize: 11 },
   scroll: {
     backgroundColor: colors.background,
     borderTopLeftRadius: 28,
