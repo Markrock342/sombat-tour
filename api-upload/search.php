@@ -1,35 +1,56 @@
 <?php
-// GET /api/search.php?q=...&type=all|repair|vehicle&date_start=&date_end=&technician_id=&status=&limit=&offset=
+// GET /api/search.php?q=&type=all|repair|vehicle&status=open|closed&sort=&limit=&offset=
+// PHP 5.6 compatible — never reference columns that do not exist
 require_once __DIR__ . '/bootstrap.php';
-cors_headers(['GET', 'OPTIONS']);
+cors_headers(array('GET', 'OPTIONS'));
 
 try {
   require_once __DIR__ . '/db.php';
-  ensure_schema($pdo);
+  try {
+    ensure_schema($pdo);
+  } catch (Exception $e) {
+    /* ignore privilege / create failures */
+  }
 
   $q = isset($_GET['q']) ? trim($_GET['q']) : '';
   $type = isset($_GET['type']) ? strtolower(trim($_GET['type'])) : 'all';
-  if (!in_array($type, ['all', 'repair', 'vehicle'], true)) $type = 'all';
+  if (!in_array($type, array('all', 'repair', 'vehicle'), true)) $type = 'all';
+
   $dateStart = isset($_GET['date_start']) ? trim($_GET['date_start']) : '';
   $dateEnd = isset($_GET['date_end']) ? trim($_GET['date_end']) : '';
   $techId = isset($_GET['technician_id']) ? trim($_GET['technician_id']) : '';
   $techName = isset($_GET['technician']) ? trim($_GET['technician']) : '';
-  $status = isset($_GET['status']) ? strtolower(trim($_GET['status'])) : ''; // open|closed|''
+  $status = isset($_GET['status']) ? strtolower(trim($_GET['status'])) : '';
+  $jobKind = isset($_GET['job_kind']) ? strtolower(trim($_GET['job_kind'])) : ''; // breakdown|normal|''
+  $sort = isset($_GET['sort']) ? strtolower(trim($_GET['sort'])) : 'date_desc';
   $limit = isset($_GET['limit']) ? max(1, min(100, (int)$_GET['limit'])) : 50;
   $offset = isset($_GET['offset']) ? max(0, (int)$_GET['offset']) : 0;
 
-  $repairs = [];
-  $vehicles = [];
-  $hasType = repair_has_column($pdo, 'r_type');
-  $hasTechId = repair_has_column($pdo, 'r_technician_id');
+  $repairs = array();
+  $vehicles = array();
+  $colSet = repair_column_set($pdo);
+  $hasType = isset($colSet['r_type']);
+  $hasTechId = isset($colSet['r_technician_id']);
+
+  $repairOrder = 'r_dt_rec DESC';
+  if ($sort === 'date_asc') $repairOrder = 'r_dt_rec ASC';
+  elseif ($sort === 'job_num') $repairOrder = 'r_job_num DESC, r_id DESC';
+  elseif ($sort === 'plate') $repairOrder = 'r_v_plate ASC, r_dt_rec DESC';
+  elseif ($sort === 'tech') $repairOrder = 'r_technician ASC, r_dt_rec DESC';
+  else $repairOrder = 'r_dt_rec DESC';
+
+  $vehicleOrder = 'v_id DESC';
+  if ($sort === 'plate') $vehicleOrder = 'v_plate ASC, v_id DESC';
+  elseif ($sort === 'name') $vehicleOrder = 'v_name ASC, v_id DESC';
+  elseif ($sort === 'date_asc') $vehicleOrder = 'v_id ASC';
 
   if ($type === 'all' || $type === 'repair') {
-    $where = ['1=1'];
-    $params = [];
+    $where = array('1=1');
+    $params = array();
 
     if ($q !== '') {
       $like = '%' . $q . '%';
-      $parts = [
+      $parts = array(
         'CAST(r_id AS CHAR) LIKE ?',
         'CAST(r_job_num AS CHAR) LIKE ?',
         'r_v_name LIKE ?',
@@ -40,14 +61,11 @@ try {
         'r_repair_list LIKE ?',
         'r_technician LIKE ?',
         'r_v_company LIKE ?',
-      ];
+      );
       $params = array_merge($params, array_fill(0, count($parts), $like));
-      if ($hasType) {
-        $parts[] = "COALESCE(r_type,'') LIKE ?";
-        $params[] = $like;
-      }
       $where[] = '(' . implode(' OR ', $parts) . ')';
     }
+
     if ($dateStart !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateStart)) {
       $where[] = 'DATE(r_dt_rec) >= ?';
       $params[] = $dateStart;
@@ -56,6 +74,7 @@ try {
       $where[] = 'DATE(r_dt_rec) <= ?';
       $params[] = $dateEnd;
     }
+
     if ($techId !== '' && ctype_digit($techId) && $hasTechId) {
       $where[] = 'r_technician_id = ?';
       $params[] = (int)$techId;
@@ -63,14 +82,28 @@ try {
       $where[] = 'r_technician = ?';
       $params[] = $techName;
     }
+
     if ($status === 'open') {
       $where[] = 'COALESCE(r_close, 0) = 0';
     } elseif ($status === 'closed') {
       $where[] = 'COALESCE(r_close, 0) <> 0';
     }
 
+    // Prefer r_type when present; otherwise match structured text / legacy phrases
+    if ($jobKind === 'breakdown') {
+      if ($hasType) {
+        $where[] = "(r_type = 'breakdown' OR r_type = 'roadside')";
+      } else {
+        $where[] = "(r_repair_list LIKE ? OR r_repair_list LIKE ?)";
+        $params[] = '%เสียกลางทาง%';
+        $params[] = '%ประเภท: เสียกลางทาง%';
+      }
+    } elseif ($jobKind === 'normal' && $hasType) {
+      $where[] = "(r_type IS NULL OR r_type = '' OR r_type = 'normal')";
+    }
+
     $sql = 'SELECT ' . repair_select_cols($pdo) . ' FROM repair WHERE ' . implode(' AND ', $where)
-      . ' ORDER BY r_dt_rec DESC LIMIT ' . (int)$limit . ' OFFSET ' . (int)$offset;
+      . ' ORDER BY ' . $repairOrder . ' LIMIT ' . (int)$limit . ' OFFSET ' . (int)$offset;
     $st = $pdo->prepare($sql);
     $st->execute($params);
     $repairs = $st->fetchAll();
@@ -86,29 +119,30 @@ try {
         WHERE CAST(v_id AS CHAR) LIKE ?
            OR v_name LIKE ? OR v_plate LIKE ? OR v_brand LIKE ?
            OR v_model LIKE ? OR v_chassis LIKE ? OR COALESCE(v_note,'') LIKE ?
-        ORDER BY v_id DESC
+        ORDER BY " . $vehicleOrder . "
         LIMIT " . (int)$limit . " OFFSET " . (int)$offset
       );
-      $st->execute([$like, $like, $like, $like, $like, $like, $like]);
+      $st->execute(array($like, $like, $like, $like, $like, $like, $like));
       $vehicles = $st->fetchAll();
     } elseif ($type === 'vehicle') {
       $st = $pdo->query("
         SELECT v_id, v_name, v_plate, v_brand, v_model, v_chassis, v_metr, v_route,
                v_class, v_engine, v_company, inv_company, v_register, v_note
-        FROM vihicle ORDER BY v_id DESC LIMIT " . (int)$limit . " OFFSET " . (int)$offset
+        FROM vihicle ORDER BY " . $vehicleOrder . " LIMIT " . (int)$limit . " OFFSET " . (int)$offset
       );
       $vehicles = $st->fetchAll();
     }
   }
 
-  out([
+  out(array(
     'ok' => true,
     'q' => $q,
     'type' => $type,
+    'sort' => $sort,
     'repairs' => $repairs,
     'vehicles' => $vehicles,
     'total' => count($repairs) + count($vehicles),
-  ]);
+  ));
 } catch (Exception $e) {
-  out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
+  out(array('ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()), 500);
 }

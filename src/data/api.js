@@ -192,6 +192,8 @@ export async function globalSearch({
   technicianId,
   technician,
   status,
+  jobKind,
+  sort = 'date_desc',
   limit = 50,
   offset = 0,
 } = {}) {
@@ -203,6 +205,8 @@ export async function globalSearch({
   if (technicianId) params.set('technician_id', String(technicianId));
   if (technician) params.set('technician', technician);
   if (status) params.set('status', status);
+  if (jobKind) params.set('job_kind', jobKind);
+  if (sort) params.set('sort', sort);
   params.set('limit', String(limit));
   params.set('offset', String(offset));
   const res = await fetch(`${API_BASE}/search.php?${params}`);
