@@ -259,6 +259,52 @@ export async function uploadRepairImage(rId, uri, fileName = 'photo.jpg', mime =
   return parseJson(res);
 }
 
+export async function createPublicRepair(payload) {
+  const res = await fetch(`${API_BASE}/report_public.php`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function fetchTrackByToken(token) {
+  const res = await fetch(`${API_BASE}/track.php?token=${encodeURIComponent(token)}`);
+  return parseJson(res);
+}
+
+export async function fetchRepairTracking(rId) {
+  const res = await fetch(`${API_BASE}/repair_tracking.php?r_id=${encodeURIComponent(rId)}`, {
+    headers: authHeaders(),
+  });
+  return parseJson(res);
+}
+
+export async function updateRepairStatus({ r_id, status, note = '' }) {
+  const res = await fetch(`${API_BASE}/repair_status.php`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ r_id, status, note }),
+  });
+  return parseJson(res);
+}
+
+export async function uploadPublicRepairImage(rId, trackToken, uri, fileName = 'photo.jpg', mime = 'image/jpeg') {
+  const form = new FormData();
+  form.append('r_id', String(rId));
+  form.append('track_token', trackToken);
+  form.append('image', {
+    uri,
+    name: fileName,
+    type: mime,
+  });
+  const res = await fetch(`${API_BASE}/upload_image_public.php`, {
+    method: 'POST',
+    body: form,
+  });
+  return parseJson(res);
+}
+
 export async function fetchVehicleHistory({ vehicle, vId, vName, vPlate, limit = 100 } = {}) {
   const params = new URLSearchParams();
   if (vehicle) params.set('vehicle', vehicle);

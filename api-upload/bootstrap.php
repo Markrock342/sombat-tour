@@ -319,6 +319,26 @@ function ensure_schema(PDO $pdo) {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX (v_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+    "CREATE TABLE IF NOT EXISTS repair_public_meta (
+      r_id INT NOT NULL PRIMARY KEY,
+      track_token VARCHAR(64) NOT NULL,
+      reporter_name VARCHAR(128) NOT NULL DEFAULT '',
+      reporter_phone VARCHAR(32) DEFAULT '',
+      public_status VARCHAR(32) NOT NULL DEFAULT 'submitted',
+      client_ip VARCHAR(45) DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY (track_token),
+      INDEX (public_status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+    "CREATE TABLE IF NOT EXISTS repair_status_log (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      r_id INT NOT NULL,
+      status VARCHAR(32) NOT NULL,
+      note TEXT,
+      by_user VARCHAR(128) DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX (r_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
   );
 
   foreach ($stmts as $sql) {
@@ -419,4 +439,68 @@ function repair_select_cols($pdo = null) {
     $base = array_merge($base, $optional);
   }
   return implode(', ', $base);
+}
+
+function client_ip() {
+  if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+    $parts = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+    return trim($parts[0]);
+  }
+  return isset($_SERVER['REMOTE_ADDR']) ? (string)$_SERVER['REMOTE_ADDR'] : '';
+}
+
+function public_repair_statuses() {
+  return array('submitted', 'received', 'assigned', 'in_progress', 'waiting_parts', 'done', 'closed');
+}
+
+function public_repair_status_label($status) {
+  $map = array(
+    'submitted' => 'แจ้งแล้ว',
+    'received' => 'รับเรื่องแล้ว',
+    'assigned' => 'มอบหมายช่างแล้ว',
+    'in_progress' => 'กำลังซ่อม',
+    'waiting_parts' => 'รออะไหล่',
+    'done' => 'ซ่อมเสร็จ',
+    'closed' => 'ปิดงาน',
+  );
+  $status = (string)$status;
+  return isset($map[$status]) ? $map[$status] : $status;
+}
+
+function log_repair_status(PDO $pdo, $rId, $status, $note, $byUser) {
+  try {
+    $st = $pdo->prepare('INSERT INTO repair_status_log (r_id, status, note, by_user) VALUES (?,?,?,?)');
+    $st->execute(array((int)$rId, (string)$status, (string)$note, (string)$byUser));
+  } catch (Exception $e) { /* ignore */ }
+}
+
+function get_repair_public_meta(PDO $pdo, $rId) {
+  try {
+    $st = $pdo->prepare('SELECT * FROM repair_public_meta WHERE r_id = ? LIMIT 1');
+    $st->execute(array((int)$rId));
+    return $st->fetch();
+  } catch (Exception $e) {
+    return null;
+  }
+}
+
+function get_repair_status_log(PDO $pdo, $rId) {
+  try {
+    $st = $pdo->prepare('SELECT id, r_id, status, note, by_user, created_at FROM repair_status_log WHERE r_id = ? ORDER BY id ASC');
+    $st->execute(array((int)$rId));
+    return $st->fetchAll();
+  } catch (Exception $e) {
+    return array();
+  }
+}
+
+function public_rate_limit_ok(PDO $pdo, $ip, $maxPerHour = 8) {
+  if ($ip === '') return true;
+  try {
+    $st = $pdo->prepare("SELECT COUNT(*) FROM repair_public_meta WHERE client_ip = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)");
+    $st->execute(array($ip));
+    return (int)$st->fetchColumn() < (int)$maxPerHour;
+  } catch (Exception $e) {
+    return true;
+  }
 }

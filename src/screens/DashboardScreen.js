@@ -446,27 +446,43 @@ export default function DashboardScreen({ navigation }) {
               style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
             />
             <PreviewCard
-              title="แจ้งซ่อมออนไลน์"
+              title="แจ้งซ่อมด่วน"
               isWide={isWide}
-              onPress={() => (canWrite ? navigation.navigate('RepairForm') : navigation.navigate('Login'))}
+              onPress={() => navigation.navigate('PublicReport')}
               headerRight={
-                canWrite ? (
-                  <Pressable onPress={() => navigation.navigate('RepairForm')}>
+                <View style={styles.previewHeaderActions}>
+                  <Pressable onPress={() => navigation.navigate('PublicReport')}>
                     <Text style={styles.viewAll}>+ แจ้ง</Text>
                   </Pressable>
-                ) : null
+                  <Pressable onPress={() => navigation.navigate('TrackRepair')}>
+                    <Text style={styles.viewAllMuted}>QR</Text>
+                  </Pressable>
+                </View>
               }
             >
               <Text style={styles.previewSummary}>
-                วันนี้เปิดอยู่ <Text style={styles.summaryNum}>{openToday}</Text> งาน
-                {!canWrite ? ' · ต้องเข้าสู่ระบบก่อนแจ้ง' : ''}
+                ไม่ต้อง login · ส่งแล้วได้ QR ติดตาม
+                {canWrite ? ' · staff ใช้ฟอร์มเต็มได้หลัง login' : ''}
               </Text>
-              {recentRepairs.length ? (
+              <View style={styles.quickActions}>
+                <Pressable
+                  style={styles.quickBtn}
+                  onPress={() => navigation.navigate('PublicReport', { type: 'breakdown' })}
+                >
+                  <Text style={styles.quickBtnText}>🚨 เสียกลางทาง</Text>
+                </Pressable>
+                <Pressable style={styles.quickBtnAlt} onPress={() => navigation.navigate('TrackRepair')}>
+                  <Text style={styles.quickBtnAltText}>ดูสถานะ</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.previewSummary}>
+                วันนี้เปิดอยู่ <Text style={styles.summaryNum}>{openToday}</Text> งาน
+              </Text>
                 recentRepairs.map((r) => (
                   <Pressable
                     key={r.r_id}
                     style={styles.previewRow}
-                    onPress={() => navigation.navigate('RepairDetail', { id: r.r_id })}
+                    onPress={() => navigation.navigate('RepairDetail', { rId: r.r_id })}
                   >
                     <Text style={styles.previewMain} numberOfLines={1}>
                       {r.r_v_plate || r.r_v_name || '—'}
@@ -672,6 +688,8 @@ const styles = StyleSheet.create({
   summary: { fontSize: 13, color: colors.textSecondary, flex: 1 },
   summaryNum: { color: colors.navy, fontWeight: '800', fontSize: 15 },
   viewAll: { color: colors.barFillAlt, fontWeight: '800', fontSize: 12 },
+  viewAllMuted: { color: 'rgba(255,255,255,0.65)', fontWeight: '700', fontSize: 12 },
+  previewHeaderActions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   list: { maxHeight: 320 },
   errorBox: { paddingVertical: spacing.xl, alignItems: 'center' },
   errorText: { color: colors.textPrimary, fontWeight: '700', marginBottom: 4 },
@@ -685,6 +703,30 @@ const styles = StyleSheet.create({
   retryText: { color: colors.onNavy, fontWeight: '700' },
   previewBody: { paddingVertical: spacing.xs, minHeight: 100 },
   previewSummary: { fontSize: 12, color: colors.textSecondary, marginBottom: spacing.sm },
+  quickActions: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
+  quickBtn: {
+    flex: 1,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  quickBtnText: { fontSize: 13, fontWeight: '800', color: '#92400E' },
+  quickBtnAlt: {
+    flex: 1,
+    backgroundColor: colors.navyTint,
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  quickBtnAltText: { fontSize: 13, fontWeight: '800', color: colors.navy },
   previewRow: {
     paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,

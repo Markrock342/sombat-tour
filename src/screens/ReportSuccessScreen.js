@@ -1,0 +1,149 @@
+import React, { useMemo } from 'react';
+import { View, Text, Pressable, ScrollView, StyleSheet, Image, Platform, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { colors, spacing, radius, shadow } from '../theme';
+import { MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
+import { PublicStepBanner } from '../components/PublicFlowUX';
+import { qrImageUrl, trackUrl } from '../data/repairTracking';
+
+async function copyText(text) {
+  if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  return false;
+}
+
+export default function ReportSuccessScreen({ navigation, route }) {
+  const { rJobNum, trackToken } = route.params ?? {};
+  const { isMobile, pad, titleSize } = useScreenLayout();
+  const link = useMemo(() => (trackToken ? trackUrl(trackToken) : ''), [trackToken]);
+  const qrSize = isMobile ? 260 : 220;
+  const qrSrc = useMemo(() => (link ? qrImageUrl(link, qrSize) : ''), [link, qrSize]);
+
+  const onCopy = async () => {
+    if (!link) return;
+    const ok = await copyText(link);
+    if (ok) Alert.alert('คัดลอกแล้ว', 'วางในแชทหรือจดเก็บไว้ได้เลย');
+    else Alert.alert('ลิงก์ติดตาม', link);
+  };
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={styles.body}>
+        <View style={[styles.header, { paddingHorizontal: pad }]}>
+          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>ส่งเรื่องแล้ว</Text>
+          <Text style={styles.headerSub}>ขั้นที่ 3 — เก็บ QR นี้ไว้ดูสถานะ</Text>
+        </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
+        >
+          <PublicStepBanner activeStep={3} />
+
+          <View style={styles.tipBox}>
+            <Text style={styles.tipTitle}>📌 สำคัญ</Text>
+            <Text style={styles.tipText}>
+              ไม่ต้อง login — แค่เก็บ QR หรือลิงก์นี้ แล้วเปิดดูได้ตลอดว่างานถึงไหนแล้ว
+            </Text>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.jobLabel}>เลขที่ใบงาน</Text>
+            <Text style={styles.jobNum}>#{rJobNum || '—'}</Text>
+
+            {qrSrc ? (
+              <Image
+                source={{ uri: qrSrc }}
+                style={[styles.qr, { width: qrSize, height: qrSize }]}
+                accessibilityLabel="QR ติดตามสถานะ"
+              />
+            ) : null}
+            <Text style={styles.qrHint}>สแกนด้วยกล้องมือถือ</Text>
+
+            <Pressable
+              style={styles.btnPrimary}
+              onPress={() => navigation.replace('TrackRepair', { token: trackToken })}
+            >
+              <Text style={styles.btnPrimaryText}>ดูสถานะตอนนี้</Text>
+            </Pressable>
+
+            <Pressable style={styles.btnSecondary} onPress={onCopy}>
+              <Text style={styles.btnSecondaryText}>คัดลอกลิงก์</Text>
+            </Pressable>
+          </View>
+
+          <Pressable style={styles.homeBtn} onPress={() => navigation.navigate('Dashboard')}>
+            <Text style={styles.homeBtnText}>กลับหน้าหลัก</Text>
+          </Pressable>
+        </ScrollView>
+        {isMobile ? <MobileBackBar onPress={() => navigation.navigate('Dashboard')} /> : null}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.navy },
+  body: { flex: 1 },
+  scrollView: { flex: 1 },
+  header: { paddingTop: spacing.sm, paddingBottom: spacing.md },
+  headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },
+  headerSub: { color: 'rgba(255,255,255,0.75)', fontSize: 13, marginTop: 4 },
+  scroll: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl * 2,
+    minHeight: '100%',
+  },
+  tipBox: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  tipTitle: { fontWeight: '800', color: '#92400E', fontSize: 14 },
+  tipText: { color: '#78350F', fontSize: 13, marginTop: 4, lineHeight: 20 },
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    alignItems: 'center',
+    ...shadow,
+  },
+  jobLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
+  jobNum: { color: colors.navy, fontWeight: '800', fontSize: 32, marginTop: 4 },
+  qr: { marginTop: spacing.lg, borderRadius: radius.sm, backgroundColor: '#fff' },
+  qrHint: { color: colors.textMuted, fontSize: 12, marginTop: spacing.sm },
+  btnPrimary: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.navy,
+    paddingVertical: spacing.md,
+    borderRadius: radius.sm,
+    width: '100%',
+    alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  btnPrimaryText: { color: colors.onNavy, fontWeight: '800', fontSize: 16 },
+  btnSecondary: {
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.md,
+    borderRadius: radius.sm,
+    width: '100%',
+    alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  btnSecondaryText: { color: colors.navy, fontWeight: '800', fontSize: 15 },
+  homeBtn: { alignItems: 'center', marginTop: spacing.xl, paddingVertical: spacing.md },
+  homeBtnText: { color: colors.textSecondary, fontWeight: '600' },
+});
