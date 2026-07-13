@@ -35,12 +35,12 @@ import { shareTrackLink, shareViaLine, callPhone, saveQrToGallery } from '../dat
 import { qrImageUrl, trackUrl } from '../data/repairTracking';
 import { showAlert, chooseAction } from '../utils/dialog';
 
-function Fact({ label, value, wide }) {
+function Fact({ label, value }) {
   if (!value) return null;
   return (
-    <View style={[styles.fact, wide && styles.factWide]}>
+    <View style={styles.fact}>
       <Text style={styles.factLabel}>{label}</Text>
-      <Text style={styles.factValue} numberOfLines={wide ? 2 : 3}>
+      <Text style={styles.factValue} numberOfLines={2}>
         {value}
       </Text>
     </View>
@@ -226,7 +226,7 @@ export default function RepairDetailScreen({ route, navigation }) {
     'ไม่มีรายละเอียดอาการ';
 
   const jobPanel = repair ? (
-    <View style={[styles.panel, isWide && styles.panelGrow]}>
+    <View style={styles.panel}>
       <View style={styles.badgeRow}>
         <Text style={[styles.pill, { backgroundColor: open ? '#1FA97A' : '#E5544B' }]}>
           {open ? 'กำลังซ่อม' : 'ปิดงานแล้ว'}
@@ -237,7 +237,7 @@ export default function RepairDetailScreen({ route, navigation }) {
       </View>
 
       <Text style={styles.kicker}>อาการ</Text>
-      <Text style={[styles.hero, isWide && styles.heroWide]}>{heroText}</Text>
+      <Text style={styles.hero}>{heroText}</Text>
 
       {otherNotes.map((sec) => (
         <View key={sec.label} style={styles.noteBlock}>
@@ -246,7 +246,7 @@ export default function RepairDetailScreen({ route, navigation }) {
         </View>
       ))}
 
-      <View style={[styles.factGrid, isWide && styles.factGridWide]}>
+      <View style={styles.factGrid}>
         <Fact
           label="ช่าง"
           value={
@@ -254,14 +254,12 @@ export default function RepairDetailScreen({ route, navigation }) {
               ? `${repair.r_technician}${repair.r_technician_id ? ` · ID ${repair.r_technician_id}` : ''}`
               : 'ไม่ระบุ'
           }
-          wide={isWide}
         />
-        <Fact label="รถ" value={vehicleLine} wide={isWide} />
-        <Fact label="รุ่น / ไมล์" value={modelLine || '-'} wide={isWide} />
+        <Fact label="รถ" value={vehicleLine} />
+        <Fact label="รุ่น / ไมล์" value={modelLine || '-'} />
         <Fact
           label="รับงาน"
           value={repair.r_dt_rec ? fmtDateTime(repair.r_dt_rec) : '-'}
-          wide={isWide}
         />
       </View>
 
@@ -288,7 +286,7 @@ export default function RepairDetailScreen({ route, navigation }) {
 
   const trackPanel =
     repair && tracking?.is_public ? (
-      <View style={[styles.panel, styles.trackPanel, isWide && styles.panelSide]}>
+      <View style={[styles.panel, styles.trackPanel]}>
         <Text style={styles.trackSectionTitle}>แจ้งจากภายนอก</Text>
         <Text style={styles.reporterLine}>
           {tracking.meta.reporter_name}
@@ -308,8 +306,8 @@ export default function RepairDetailScreen({ route, navigation }) {
           <View style={styles.qrBox}>
             <Text style={styles.qrTitle}>QR ติดตามสถานะ</Text>
             <Image
-              source={{ uri: qrImageUrl(trackUrl(tracking.meta.track_token), isWide ? 200 : 180) }}
-              style={[styles.qrImage, { width: isWide ? 200 : 180, height: isWide ? 200 : 180 }]}
+              source={{ uri: qrImageUrl(trackUrl(tracking.meta.track_token), 200) }}
+              style={styles.qrImage}
               accessibilityLabel="QR ติดตามสถานะ"
             />
             <Text style={styles.qrHint}>สแกนด้วยกล้อง · หรือบันทึกลงแกลเลอรีแล้วเปิดสแกนทีหลัง</Text>
@@ -372,23 +370,25 @@ export default function RepairDetailScreen({ route, navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={[styles.header, { paddingHorizontal: pad }]}>
-          {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
-          <View style={styles.headerRow}>
-            <View style={styles.headerText}>
-              <Text style={[styles.headerTitle, { fontSize: isWide ? 22 : titleSize }]}>
-                #{repair?.r_job_num || rId}
-              </Text>
-              <Text style={styles.headerSub} numberOfLines={1}>
-                รายละเอียดงานซ่อม
-                {repair?.r_dt_rec ? ` · ${fmtDateTime(repair.r_dt_rec)}` : ''}
-              </Text>
+        <View style={[styles.header, { paddingHorizontal: pad }, isWide && styles.headerCentered]}>
+          <View style={[styles.headerInner, isWide && styles.headerInnerWide]}>
+            {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
+            <View style={styles.headerRow}>
+              <View style={styles.headerText}>
+                <Text style={[styles.headerTitle, { fontSize: isWide ? 22 : titleSize }]}>
+                  #{repair?.r_job_num || rId}
+                </Text>
+                <Text style={styles.headerSub} numberOfLines={1}>
+                  รายละเอียดงานซ่อม
+                  {repair?.r_dt_rec ? ` · ${fmtDateTime(repair.r_dt_rec)}` : ''}
+                </Text>
+              </View>
+              {repair ? (
+                <Text style={[styles.pill, { backgroundColor: open ? '#1FA97A' : '#E5544B' }]}>
+                  {open ? 'กำลังซ่อม' : 'ปิดงานแล้ว'}
+                </Text>
+              ) : null}
             </View>
-            {repair ? (
-              <Text style={[styles.pill, { backgroundColor: open ? '#1FA97A' : '#E5544B' }]}>
-                {open ? 'กำลังซ่อม' : 'ปิดงานแล้ว'}
-              </Text>
-            ) : null}
           </View>
         </View>
 
@@ -410,13 +410,10 @@ export default function RepairDetailScreen({ route, navigation }) {
               </Pressable>
             </View>
           ) : repair ? (
-            <>
-              <View style={[styles.columns, isWide && styles.columnsWide]}>
-                {jobPanel}
-                {trackPanel}
-              </View>
-
-              <View style={[styles.galleryBlock, isWide && styles.galleryBlockWide]}>
+            <View style={[styles.sheet, isWide && styles.sheetWide]}>
+              {jobPanel}
+              {trackPanel}
+              <View style={styles.galleryBlock}>
                 <Text style={styles.section}>รูปภาพ ({images.length})</Text>
                 {images.length === 0 ? (
                   <View style={styles.emptyGallery}>
@@ -424,18 +421,14 @@ export default function RepairDetailScreen({ route, navigation }) {
                     <Text style={styles.emptyGalleryMsg}>กด “เพิ่มรูป” เพื่อแนบหลักฐานงานซ่อม</Text>
                   </View>
                 ) : (
-                  <View style={[styles.gallery, isWide && styles.galleryWide]}>
+                  <View style={styles.gallery}>
                     {images.map((img) => (
-                      <Image
-                        key={img.id}
-                        source={{ uri: img.url }}
-                        style={[styles.thumb, isWide && styles.thumbWide]}
-                      />
+                      <Image key={img.id} source={{ uri: img.url }} style={styles.thumb} />
                     ))}
                   </View>
                 )}
               </View>
-            </>
+            </View>
           ) : null}
         </ScrollView>
         {isMobile ? <MobileBackBar onPress={goBack} /> : null}
@@ -449,6 +442,9 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   scrollView: { flex: 1 },
   header: { paddingTop: spacing.xs, paddingBottom: spacing.sm },
+  headerCentered: { alignItems: 'center' },
+  headerInner: { width: '100%' },
+  headerInnerWide: { maxWidth: 560, width: '100%' },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 14, marginBottom: spacing.xs },
   headerRow: {
     flexDirection: 'row',
@@ -466,17 +462,19 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.xl * 2,
     minHeight: '100%',
-    gap: spacing.md,
   },
   scrollWide: {
+    alignItems: 'center',
+    paddingTop: spacing.xl,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
   },
-  columns: { gap: spacing.md },
-  columnsWide: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.lg,
+  sheet: {
+    width: '100%',
+    gap: spacing.md,
+  },
+  sheetWide: {
+    maxWidth: 560,
+    width: '100%',
   },
   panel: {
     backgroundColor: colors.card,
@@ -486,8 +484,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     ...shadow,
   },
-  panelGrow: { flex: 1.35, minWidth: 0 },
-  panelSide: { flex: 1, minWidth: 280, maxWidth: 420 },
   trackPanel: {
     backgroundColor: '#F7F8FC',
   },
@@ -532,32 +528,23 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     marginBottom: spacing.md,
   },
-  heroWide: {
-    fontSize: 26,
-    lineHeight: 34,
-    maxWidth: 720,
-  },
   noteBlock: { marginBottom: spacing.sm },
   noteLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '700', marginBottom: 2 },
   noteValue: { color: colors.textPrimary, fontSize: 15, fontWeight: '600', lineHeight: 22 },
   factGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     marginTop: spacing.xs,
     paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  factGridWide: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
   fact: {
     backgroundColor: colors.navyTint,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-  },
-  factWide: {
     width: '48%',
     flexGrow: 1,
   },
@@ -588,7 +575,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   btnPrimary: { minWidth: 120 },
-  btnFull: { alignSelf: 'stretch', alignItems: 'center' },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: colors.onNavy, fontWeight: '800' },
   btnAlt: {
@@ -608,8 +594,7 @@ const styles = StyleSheet.create({
     color: colors.navy,
     fontSize: 15,
   },
-  galleryBlock: { marginTop: spacing.xs },
-  galleryBlockWide: {
+  galleryBlock: {
     backgroundColor: colors.card,
     borderRadius: radius.lg,
     padding: spacing.lg,
@@ -617,9 +602,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   gallery: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  galleryWide: { gap: spacing.md },
   thumb: { width: 100, height: 100, borderRadius: 10, backgroundColor: colors.navyTint },
-  thumbWide: { width: 140, height: 140, borderRadius: 12 },
   emptyGallery: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -646,7 +629,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   qrTitle: { color: colors.navy, fontWeight: '800', fontSize: 13, marginBottom: spacing.sm },
-  qrImage: { borderRadius: 8, backgroundColor: '#fff' },
+  qrImage: { width: 200, height: 200, borderRadius: 8, backgroundColor: '#fff' },
   qrHint: {
     color: colors.textMuted,
     fontSize: 11,
