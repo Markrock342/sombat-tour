@@ -1,5 +1,5 @@
 import { Linking, Platform, Share } from 'react-native';
-import { statusLabel, trackUrl } from './repairTracking';
+import { statusLabel, trackUrl, qrImageUrl } from './repairTracking';
 import { showAlert } from '../utils/dialog';
 
 export function normalizePhone(phone) {
@@ -90,5 +90,50 @@ export async function shareViaLine({ jobNum, status, trackToken, note }) {
     return true;
   } catch (_) {
     return shareTrackLink({ jobNum, status, trackToken, note });
+  }
+}
+
+/** Download / share QR PNG so it can be opened from the device gallery */
+export async function saveQrToGallery(trackToken, jobNum) {
+  const link = trackToken ? trackUrl(trackToken) : '';
+  if (!link) {
+    showAlert('ไม่มี QR', 'งานนี้ยังไม่มีลิงก์ติดตาม');
+    return false;
+  }
+  const qrUrl = qrImageUrl(link, 512);
+  const filename = `sombat-track-${jobNum || trackToken}.png`;
+
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    try {
+      const res = await fetch(qrUrl);
+      const blob = await res.blob();
+      const obj = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = obj;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(obj);
+      showAlert('บันทึกแล้ว', 'เปิดไฟล์จาก Downloads / แกลเลอรี แล้วใช้กล้องสแกนได้');
+      return true;
+    } catch (_) {
+      if (typeof window !== 'undefined') window.open(qrUrl, '_blank');
+      showAlert('เปิดรูป QR แล้ว', 'กดค้างที่รูป → บันทึกลงรูปภาพ');
+      return false;
+    }
+  }
+
+  try {
+    await Share.share({ message: link, url: qrUrl, title: filename });
+    return true;
+  } catch (_) {
+    try {
+      await Linking.openURL(qrUrl);
+      return true;
+    } catch (e) {
+      showAlert('บันทึกไม่ได้', link);
+      return false;
+    }
   }
 }

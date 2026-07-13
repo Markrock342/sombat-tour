@@ -110,24 +110,46 @@ try {
   }
 
   if ($type === 'all' || $type === 'vehicle') {
+    $vCols = array();
+    try {
+      $vCols = $pdo->query('SHOW COLUMNS FROM vihicle')->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Exception $e) {
+      $vCols = array();
+    }
+    $vSet = array_flip($vCols);
+    $selectV = array('v_id', 'v_name', 'v_plate', 'v_brand', 'v_model', 'v_chassis');
+    foreach (array('v_metr', 'v_route', 'v_class', 'v_engine', 'v_company', 'inv_company', 'v_register', 'v_note') as $c) {
+      if (isset($vSet[$c])) $selectV[] = $c;
+    }
+    $selectSql = implode(', ', $selectV);
+
     if ($q !== '') {
       $like = '%' . $q . '%';
+      $whereV = array(
+        'CAST(v_id AS CHAR) LIKE ?',
+        'v_name LIKE ?',
+        'v_plate LIKE ?',
+        'v_brand LIKE ?',
+        'v_model LIKE ?',
+        'v_chassis LIKE ?',
+      );
+      $paramsV = array($like, $like, $like, $like, $like, $like);
+      if (isset($vSet['v_note'])) {
+        $whereV[] = "COALESCE(v_note,'') LIKE ?";
+        $paramsV[] = $like;
+      }
       $st = $pdo->prepare("
-        SELECT v_id, v_name, v_plate, v_brand, v_model, v_chassis, v_metr, v_route,
-               v_class, v_engine, v_company, inv_company, v_register, v_note
+        SELECT " . $selectSql . "
         FROM vihicle
-        WHERE CAST(v_id AS CHAR) LIKE ?
-           OR v_name LIKE ? OR v_plate LIKE ? OR v_brand LIKE ?
-           OR v_model LIKE ? OR v_chassis LIKE ? OR COALESCE(v_note,'') LIKE ?
+        WHERE " . implode(' OR ', $whereV) . "
         ORDER BY " . $vehicleOrder . "
         LIMIT " . (int)$limit . " OFFSET " . (int)$offset
       );
-      $st->execute(array($like, $like, $like, $like, $like, $like, $like));
+      $st->execute($paramsV);
       $vehicles = $st->fetchAll();
     } elseif ($type === 'vehicle') {
       $st = $pdo->query("
-        SELECT v_id, v_name, v_plate, v_brand, v_model, v_chassis, v_metr, v_route,
-               v_class, v_engine, v_company, inv_company, v_register, v_note
+        SELECT " . $selectSql . "
         FROM vihicle ORDER BY " . $vehicleOrder . " LIMIT " . (int)$limit . " OFFSET " . (int)$offset
       );
       $vehicles = $st->fetchAll();

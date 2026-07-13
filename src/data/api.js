@@ -89,24 +89,6 @@ export function fmtDateTime(str) {
   return m[4] ? `${datePart} ${m[4]}` : datePart;
 }
 
-const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-const addDays = (d, n) => {
-  const r = startOfDay(d);
-  r.setDate(r.getDate() + n);
-  return r;
-};
-
-function eachDayInRange(start, end) {
-  const days = [];
-  let d = startOfDay(start);
-  const last = startOfDay(end);
-  while (d <= last) {
-    days.push(fmtDate(d));
-    d = addDays(d, 1);
-  }
-  return days;
-}
-
 async function fetchRepairsForDay(dateStr) {
   const q = dateStr ? `?date=${encodeURIComponent(dateStr)}` : '?date=latest';
   const res = await fetch(`${API_BASE}/list_repair.php${q}`);
@@ -119,6 +101,7 @@ export async function fetchTechnicians() {
   return data.rows || [];
 }
 
+/** One request for a date range (avoids N day round-trips). */
 export async function fetchRepairs(start, end) {
   if (!start) return fetchRepairsForDay(null);
 
@@ -133,18 +116,19 @@ export async function fetchRepairs(start, end) {
 
   if (startStr === endStr) return fetchRepairsForDay(startStr);
 
-  const parts = await Promise.all(eachDayInRange(startDate, endDate).map(fetchRepairsForDay));
-  const seen = new Set();
-  const rows = [];
-  for (const part of parts) {
-    for (const row of part.rows || []) {
-      const id = String(row.r_id || row.r_job_num || '');
-      if (id && seen.has(id)) continue;
-      if (id) seen.add(id);
-      rows.push(row);
-    }
-  }
-  return { ok: true, date: `${startStr}..${endStr}`, total: rows.length, rows };
+  const qs = new URLSearchParams({
+    start: startStr,
+    end: endStr,
+    limit: '10000',
+  });
+  const res = await fetch(`${API_BASE}/list_repair.php?${qs.toString()}`);
+  const data = await parseJson(res);
+  return {
+    ok: data.ok !== false,
+    date: data.date || `${startStr}..${endStr}`,
+    total: data.total ?? (data.rows || []).length,
+    rows: data.rows || [],
+  };
 }
 
 export async function fetchPending() {
@@ -152,9 +136,41 @@ export async function fetchPending() {
   return parseJson(res);
 }
 
+/** Open jobs: all, one technician, or unnamed. */
 export async function fetchPendingJobs(tech) {
-  const res = await fetch(`${API_BASE}/backlog.php?tech=${encodeURIComponent(tech)}`);
-  return parseJson(res);
+  const name = tech == null ? null : String(tech).trim();
+
+  // Named tech — works on current production backlog.php
+  if (name && name !== 'ไม่ระบุช่าง') {
+    const qs = new URLSearchParams({ tech: name, limit: '2000' });
+    const res = await fetch(`${API_BASE}/backlog.php?${qs.toString()}`);
+    return parseJson(res);
+  }
+
+  const qs = new URLSearchParams({ jobs: '1', limit: '2000' });
+  if (name === '' || name === 'ไม่ระบุช่าง') qs.set('none', '1');
+
+  const res = await fetch(`${API_BASE}/backlog.php?${qs.toString()}`);
+  const data = await parseJson(res);
+  const rows = data.rows || [];
+
+  // Older server without jobs=1 returns count rows {name,pending} — fan-out by tech
+  if (rows.length && rows[0].r_id == null && rows[0].pending != null) {
+    if (qs.get('none')) return { ok: true, rows: [] };
+    const parts = await Promise.all(
+      rows
+        .filter((r) => r.name)
+        .map(async (r) => {
+          const partRes = await fetch(
+            `${API_BASE}/backlog.php?tech=${encodeURIComponent(r.name)}&limit=2000`
+          );
+          return parseJson(partRes);
+        })
+    );
+    return { ok: true, rows: parts.flatMap((p) => p.rows || []) };
+  }
+
+  return data;
 }
 
 export async function getVehicle(id) {

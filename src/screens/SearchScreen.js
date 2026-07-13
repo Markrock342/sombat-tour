@@ -19,7 +19,6 @@ import {
 import {
   FilterChipRow,
   FilterSegment,
-  FilterLabel,
   FilterToggleBar,
 } from '../components/FilterControls';
 import LoadingView from '../components/LoadingView';
@@ -91,7 +90,6 @@ export default function SearchScreen({ navigation, route }) {
   const reqSeq = useRef(0);
   const { isMobile, isWide, pad, titleSize } = useScreenLayout();
   const goBack = () => navigation.goBack();
-  const showFilters = !isMobile || filtersOpen;
 
   useEffect(() => {
     if (type === 'vehicle' && !['date_desc', 'date_asc', 'plate', 'name'].includes(sort)) {
@@ -169,19 +167,16 @@ export default function SearchScreen({ navigation, route }) {
         <View style={[styles.header, { paddingHorizontal: pad }]}>
           {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
           <Text style={[styles.headerTitle, { fontSize: titleSize }]}>ค้นหา</Text>
-          {!isMobile ? (
-            <Text style={styles.headerSub}>งานซ่อม · รถ · ทะเบียน · ช่าง · อะไหล่ในรายการ</Text>
-          ) : null}
         </View>
 
         <View style={[styles.controls, { paddingHorizontal: isMobile ? spacing.md : spacing.lg }]}>
-          <View style={[styles.searchShell, isMobile && styles.searchShellCompact]}>
+          <View style={[styles.searchShell, styles.searchShellCompact]}>
             <Text style={styles.searchIcon}>⌕</Text>
             <TextInput
-              style={[styles.input, isMobile && styles.inputCompact]}
+              style={[styles.input, styles.inputCompact]}
               value={q}
               onChangeText={setQ}
-              placeholder={isMobile ? 'ค้นหา...' : 'พิมพ์คำค้น เช่น เบอร์รถ, ทะเบียน, ช่าง, อาการ...'}
+              placeholder={isMobile ? 'ค้นหา...' : 'เบอร์รถ · ทะเบียน · ช่าง · อาการ'}
               placeholderTextColor="rgba(255,255,255,0.45)"
               returnKeyType="search"
               autoFocus={!initialQ}
@@ -195,68 +190,51 @@ export default function SearchScreen({ navigation, route }) {
             ) : null}
           </View>
 
+          <FilterSegment
+            options={TYPE_FILTERS}
+            value={type}
+            onChange={setType}
+            compact
+          />
+
           <FilterToggleBar
-            compact={isMobile}
+            compact
             open={filtersOpen}
             onToggle={() => setFiltersOpen((v) => !v)}
             summary={summary}
             onReset={clearFilters}
           />
 
-          {showFilters ? (
-            <View style={[styles.filterBlock, isMobile && styles.filterBlockCompact]}>
-              <FilterLabel compact={isMobile}>หมวด</FilterLabel>
-              <FilterSegment
-                options={TYPE_FILTERS}
-                value={type}
-                onChange={setType}
-                compact={isMobile}
-              />
-
+          {filtersOpen ? (
+            <View style={[styles.filterBlock, styles.filterBlockCompact]}>
               {type !== 'vehicle' ? (
                 <>
-                  <FilterLabel compact={isMobile}>สถานะ</FilterLabel>
                   <FilterChipRow
                     options={STATUS_FILTERS}
                     value={status}
                     onChange={setStatus}
-                    compact={isMobile}
+                    compact
                   />
-
-                  <FilterLabel compact={isMobile}>ประเภท</FilterLabel>
                   <FilterChipRow
                     options={KIND_FILTERS}
                     value={jobKind}
                     onChange={setJobKind}
-                    compact={isMobile}
+                    compact
                   />
                 </>
               ) : null}
-
-              <FilterLabel compact={isMobile}>เรียง</FilterLabel>
               <FilterChipRow
                 options={type === 'vehicle' ? SORT_VEHICLE : SORT_REPAIR}
                 value={sort}
                 onChange={setSort}
-                compact={isMobile}
+                compact
               />
             </View>
           ) : null}
 
-          {!isMobile ? (
-            <View style={styles.filterMeta}>
-              <Text style={styles.filterMetaText}>
-                {loading ? 'กำลังค้นหา...' : searched ? `พบ ${total} รายการ` : 'ตั้งฟิลเตอร์ หรือพิมพ์คำค้น'}
-              </Text>
-              <Pressable onPress={clearFilters} hitSlop={8}>
-                <Text style={styles.resetText}>รีเซ็ต</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <Text style={styles.mobileMeta}>
-              {loading ? 'กำลังค้นหา...' : searched ? `พบ ${total} รายการ` : 'พิมพ์คำค้นหรือเปิดตัวกรอง'}
-            </Text>
-          )}
+          <Text style={styles.mobileMeta}>
+            {loading ? 'กำลังค้นหา...' : searched ? `พบ ${total} รายการ` : 'พิมพ์คำค้นเพื่อเริ่ม'}
+          </Text>
         </View>
 
         <ScrollView
@@ -376,9 +354,8 @@ const styles = StyleSheet.create({
   },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
   headerTitle: { color: colors.onNavy, fontWeight: '800', letterSpacing: 0.2 },
-  headerSub: { color: 'rgba(255,255,255,0.62)', fontSize: 12, marginTop: 2 },
   controls: {
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.xs,
     gap: 4,
   },
   searchShell: {
@@ -417,14 +394,7 @@ const styles = StyleSheet.create({
   clearBtn: { paddingHorizontal: 8, paddingVertical: 4 },
   clearBtnText: { color: colors.barFillAlt, fontWeight: '800', fontSize: 12 },
   filterBlock: { gap: 6 },
-  filterBlockCompact: { gap: 4, maxHeight: 148 },
-  filterMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  filterMetaText: { color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: '600' },
+  filterBlockCompact: { gap: 4 },
   mobileMeta: {
     color: 'rgba(255,255,255,0.55)',
     fontSize: 11,

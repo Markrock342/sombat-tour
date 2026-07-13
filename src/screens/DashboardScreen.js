@@ -21,6 +21,7 @@ import { colors, spacing } from '../theme';
 import {
   fetchTechnicians,
   fetchRepairs,
+  fetchPending,
   fetchBoard,
   fetchLocations,
   fmtDate,
@@ -38,6 +39,8 @@ export default function DashboardScreen({ navigation }) {
   const [datePreset, setDatePreset] = useState('today');
   const [techs, setTechs] = useState([]);
   const [repairs, setRepairs] = useState([]);
+  const [pendingByTech, setPendingByTech] = useState([]);
+  const [pendingTotal, setPendingTotal] = useState(0);
   const [boardPreview, setBoardPreview] = useState([]);
   const [locationPreview, setLocationPreview] = useState([]);
   const [meta, setMeta] = useState({ date: null, total: 0 });
@@ -54,16 +57,24 @@ export default function DashboardScreen({ navigation }) {
     else setLoading(true);
     setError(null);
     try {
-      const rep = await fetchRepairs(dateRange.start, dateRange.end);
+      const [repSettled, techSettled, pendingSettled, boardSettled, locSettled] =
+        await Promise.allSettled([
+          fetchRepairs(dateRange.start, dateRange.end),
+          fetchTechnicians(),
+          fetchPending(),
+          fetchBoard(),
+          fetchLocations(),
+        ]);
+
+      if (repSettled.status !== 'fulfilled') {
+        throw repSettled.reason || new Error('โหลดรายการซ่อมไม่สำเร็จ');
+      }
+      const rep = repSettled.value;
       const rows = rep.rows || [];
 
-      let techRows = [];
-      try {
-        techRows = await fetchTechnicians();
-      } catch (_) {
-        techRows = null;
-      }
-      if (!techRows || !techRows.length) {
+      let techRows =
+        techSettled.status === 'fulfilled' ? techSettled.value || [] : [];
+      if (!techRows.length) {
         const names = [...new Set(rows.map((r) => r.r_technician).filter(Boolean))];
         techRows = names.map((n, i) => ({ id: String(i + 1), name: n }));
       }
@@ -72,19 +83,35 @@ export default function DashboardScreen({ navigation }) {
       setTechs(techRows);
       setMeta({ date: rep.date, total: rep.total ?? rows.length });
 
-      try {
-        const notes = await fetchBoard();
-        setBoardPreview((notes || []).slice(0, 3));
-      } catch (_) {
-        setBoardPreview([]);
+      if (pendingSettled.status === 'fulfilled') {
+        const pend = pendingSettled.value || {};
+        setPendingByTech(pend.rows || []);
+        setPendingTotal(pend.total || 0);
+      } else {
+        // fallback: open jobs in selected date range only
+        const open = rows.filter(isOpenRepair);
+        const map = {};
+        open.forEach((r) => {
+          const n = (r.r_technician || '').trim() || '';
+          map[n] = (map[n] || 0) + 1;
+        });
+        const fallback = Object.entries(map)
+          .map(([name, pending]) => ({ name, pending }))
+          .sort((a, b) => b.pending - a.pending);
+        setPendingByTech(fallback);
+        setPendingTotal(open.length);
       }
 
-      try {
-        const spots = await fetchLocations();
-        setLocationPreview((spots || []).slice(0, 3));
-      } catch (_) {
-        setLocationPreview([]);
-      }
+      setBoardPreview(
+        boardSettled.status === 'fulfilled'
+          ? (boardSettled.value || []).slice(0, 3)
+          : []
+      );
+      setLocationPreview(
+        locSettled.status === 'fulfilled'
+          ? (locSettled.value || []).slice(0, 3)
+          : []
+      );
     } catch (e) {
       setError(e.message || 'โหลดข้อมูลไม่สำเร็จ');
     } finally {
@@ -185,41 +212,20 @@ export default function DashboardScreen({ navigation }) {
   const total = meta.total || repairs.length;
   const active = routineDedup.filter((t) => t.today > 0).length;
 
-  const openRepairs = repairs.filter(isOpenRepair);
-  const pendingByKey = {};
-  openRepairs.forEach((r) => {
-    const key = r.r_technician_id
-      ? `id:${r.r_technician_id}`
-      : r.r_technician?.trim()
-        ? `name:${r.r_technician.trim()}`
-        : 'none';
-    pendingByKey[key] = (pendingByKey[key] || 0) + 1;
+  const pendingListRaw = pendingByTech.map((row, i) => {
+    const name = (row.name || '').trim();
+    const pending = Number(row.pending) || 0;
+    const matched = techs.find((t) => t.name === name);
+    if (!name) {
+      return { id: `pending-none-${i}`, name: 'ไม่ระบุช่าง', pending, queryName: '' };
+    }
+    return {
+      id: matched?.id ?? `pending-${i}`,
+      name,
+      pending,
+      queryName: name,
+    };
   });
-
-  const pendingListRaw = [
-    ...techs.map((t) => {
-      const byId = pendingByKey[`id:${t.id}`] || 0;
-      const byName = pendingByKey[`name:${t.name}`] || 0;
-      return { id: t.id, name: t.name, pending: byId + byName, queryName: t.name };
-    }),
-    ...Object.entries(pendingByKey)
-      .filter(([key]) => {
-        if (key === 'none') return true;
-        if (key.startsWith('id:')) {
-          const id = key.slice(3);
-          return !techs.some((t) => String(t.id) === String(id));
-        }
-        const name = key.slice(5);
-        return !techs.some((t) => t.name === name);
-      })
-      .map(([key, count], i) => {
-        if (key === 'none') {
-          return { id: `pending-none-${i}`, name: 'ไม่ระบุช่าง', pending: count, queryName: '' };
-        }
-        const name = key.startsWith('name:') ? key.slice(5) : key;
-        return { id: `pending-${i}`, name, pending: count, queryName: name };
-      }),
-  ].sort((a, b) => b.pending - a.pending);
 
   const pendingSeen = new Set();
   const pendingList = [];
@@ -232,8 +238,9 @@ export default function DashboardScreen({ navigation }) {
     pendingSeen.add(t.name);
     pendingList.push(t);
   }
+  pendingList.sort((a, b) => b.pending - a.pending);
   const pendingMax = Math.max(...pendingList.map((t) => t.pending), 1);
-  const pendingSum = pendingList.reduce((s, t) => s + t.pending, 0);
+  const pendingSum = pendingTotal || pendingList.reduce((s, t) => s + t.pending, 0);
 
   const recentRepairs = [...repairs]
     .sort((a, b) => String(b.r_dt_rec || '').localeCompare(String(a.r_dt_rec || '')))
@@ -415,10 +422,7 @@ export default function DashboardScreen({ navigation }) {
                 <>
                   <View style={styles.cardHeadRow}>
                     <Text style={styles.summary}>
-                      {dateStart === dateEnd
-                        ? fmtThaiDate(dateStart)
-                        : `${fmtThaiDate(dateStart)} – ${fmtThaiDate(dateEnd)}`}
-                      {' · '}รวม <Text style={styles.summaryNum}>{pendingSum}</Text> งานที่ยังไม่ปิด
+                      สะสมทั้งหมด · รวม <Text style={styles.summaryNum}>{pendingSum}</Text> งานที่ยังไม่ปิด
                     </Text>
                     <Pressable onPress={() => navigation.navigate('JobDetail', {
                       technician: '',

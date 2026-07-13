@@ -7,7 +7,7 @@ import { MobileBackBar, useScreenLayout, mobileScrollInset } from '../components
 import { PublicStepBanner } from '../components/PublicFlowUX';
 import ContactActionRow from '../components/ContactActionRow';
 import { qrImageUrl, trackUrl } from '../data/repairTracking';
-import { copyText } from '../data/contactActions';
+import { copyText, saveQrToGallery } from '../data/contactActions';
 import { showAlert } from '../utils/dialog';
 
 export default function ReportSuccessScreen({ navigation, route }) {
@@ -74,6 +74,13 @@ export default function ReportSuccessScreen({ navigation, route }) {
 
             <Pressable style={styles.btnSecondary} onPress={onCopy}>
               <Text style={styles.btnSecondaryText}>คัดลอกลิงก์</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.btnSecondary}
+              onPress={() => saveQrToGallery(trackToken, rJobNum)}
+            >
+              <Text style={styles.btnSecondaryText}>บันทึก QR ลงเครื่อง</Text>
             </Pressable>
           </View>
 

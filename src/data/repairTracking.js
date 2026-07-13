@@ -25,7 +25,7 @@ export function trackUrl(token) {
 }
 
 export function qrImageUrl(url, size = 240) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(url)}`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=12&data=${encodeURIComponent(url)}`;
 }
 
 /** Extract token from pasted URL or raw token string */

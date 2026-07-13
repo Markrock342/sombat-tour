@@ -18,6 +18,7 @@ import LoadingView from '../components/LoadingView';
 import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset } from '../components/BackNavigation';
 import {
   fetchRepairs,
+  fetchPendingJobs,
   fmtThaiDate,
   fmtDateTime,
   fmtDate,
@@ -83,11 +84,19 @@ export default function JobDetailScreen({ route, navigation }) {
         ? null
         : { id: technicianId, name: technician, queryName: technician };
 
-      const rows = ((await fetchRepairs(dateRange.start, dateRange.end)).rows || []).filter((r) => {
-        if (isPending && !isOpenRepair(r)) return false;
-        if (viewAll) return true;
-        return repairMatchesTech(r, techObj);
-      });
+      let rows;
+      if (isPending) {
+        const data = await fetchPendingJobs(viewAll ? null : technician);
+        rows = data.rows || [];
+        if (!viewAll && techObj) {
+          rows = rows.filter((r) => repairMatchesTech(r, techObj));
+        }
+      } else {
+        rows = ((await fetchRepairs(dateRange.start, dateRange.end)).rows || []).filter((r) => {
+          if (viewAll) return true;
+          return repairMatchesTech(r, techObj);
+        });
+      }
 
       const sorted = [...rows].sort((a, b) => (b.r_dt_rec || '').localeCompare(a.r_dt_rec || ''));
 
@@ -172,7 +181,7 @@ export default function JobDetailScreen({ route, navigation }) {
           </Text>
           <Text style={styles.headerSub} numberOfLines={isMobile ? 2 : undefined}>
             {techLabel}
-            {` · ${dateLabel}`}
+            {isPending ? ' · สะสมทั้งหมด' : ` · ${dateLabel}`}
             {!loading && !error ? ` · ${jobs.length === 0 ? '0 งาน' : countLabel}` : ''}
           </Text>
         </View>
@@ -186,14 +195,16 @@ export default function JobDetailScreen({ route, navigation }) {
           }
           keyboardShouldPersistTaps="handled"
         >
-          <DateRangePicker
-            value={dateRange}
-            presetKey={datePreset}
-            onChange={(range, key) => {
-              setDateRange(range);
-              setDatePreset(key);
-            }}
-          />
+          {!isPending ? (
+            <DateRangePicker
+              value={dateRange}
+              presetKey={datePreset}
+              onChange={(range, key) => {
+                setDateRange(range);
+                setDatePreset(key);
+              }}
+            />
+          ) : null}
 
           <TextInput
             style={styles.filterInput}
@@ -237,7 +248,7 @@ export default function JobDetailScreen({ route, navigation }) {
                 <View style={styles.center}>
                   <Text style={styles.centerText}>
                     {isPending
-                      ? 'ไม่มีงานค้างในช่วงวันที่เลือก'
+                      ? 'ไม่มีงานค้างซ่อม'
                       : 'ไม่มีงานในช่วงวันที่เลือก'}
                   </Text>
                 </View>

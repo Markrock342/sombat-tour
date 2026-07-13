@@ -31,14 +31,27 @@ import { statusColor } from '../data/repairTracking';
 import StatusPicker from '../components/StatusPicker';
 import RepairStatusTimeline from '../components/RepairStatusTimeline';
 import ContactActionRow from '../components/ContactActionRow';
-import { shareTrackLink, shareViaLine, callPhone } from '../data/contactActions';
+import { shareTrackLink, shareViaLine, callPhone, saveQrToGallery } from '../data/contactActions';
+import { qrImageUrl, trackUrl } from '../data/repairTracking';
 import { showAlert, chooseAction } from '../utils/dialog';
+
+function Fact({ label, value, wide }) {
+  if (!value) return null;
+  return (
+    <View style={[styles.fact, wide && styles.factWide]}>
+      <Text style={styles.factLabel}>{label}</Text>
+      <Text style={styles.factValue} numberOfLines={wide ? 2 : 3}>
+        {value}
+      </Text>
+    </View>
+  );
+}
 
 export default function RepairDetailScreen({ route, navigation }) {
   const { repair: initial, rId: paramId } = route.params ?? {};
   const rId = paramId || initial?.r_id;
-  const { canWrite, user } = useAuth();
-  const { isMobile, pad, titleSize } = useScreenLayout();
+  const { canWrite } = useAuth();
+  const { isMobile, isWide, pad, titleSize } = useScreenLayout();
   const goBack = () => navigation.goBack();
 
   const [repair, setRepair] = useState(initial || null);
@@ -58,7 +71,6 @@ export default function RepairDetailScreen({ route, navigation }) {
         initial && String(initial.r_id) === String(rId) ? Promise.resolve(initial) : getRepair(rId),
         fetchRepairImages(rId).catch(() => []),
       ]);
-      // always refresh repair from API when possible
       try {
         const fresh = await getRepair(rId);
         setRepair(fresh);
@@ -153,9 +165,7 @@ export default function RepairDetailScreen({ route, navigation }) {
 
       await chooseAction('อัปเดตแล้ว', `${label}\nแจ้งผู้แจ้งต่อไหม?`, [
         { text: 'ทีหลัง', style: 'cancel' },
-        phone
-          ? { text: 'โทร', onPress: () => callPhone(phone) }
-          : null,
+        phone ? { text: 'โทร', onPress: () => callPhone(phone) } : null,
         token
           ? {
               text: 'ส่ง LINE',
@@ -195,21 +205,200 @@ export default function RepairDetailScreen({ route, navigation }) {
         ? 'งานนอกพื้นที่'
         : null;
 
+  const vehicleLine = repair
+    ? [repair.r_v_name, repair.r_v_plate].filter(Boolean).join(' · ') || '-'
+    : '';
+  const modelLine = repair
+    ? [
+        [repair.r_v_brand, repair.r_v_model].filter(Boolean).join(' · '),
+        repair.r_mile ? `ไมล์ ${Number(repair.r_mile).toLocaleString()}` : '',
+        repair.r_tank_m ? `ถัง ${repair.r_tank_m} ม.` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
+
+  const primaryNotes = noteSections.filter((s) => s.label === 'อาการ' || s.label === 'ปัญหา');
+  const otherNotes = noteSections.filter((s) => s.label !== 'อาการ' && s.label !== 'ปัญหา');
+  const heroText =
+    primaryNotes.map((s) => s.value).filter(Boolean).join('\n') ||
+    otherNotes[0]?.value ||
+    'ไม่มีรายละเอียดอาการ';
+
+  const jobPanel = repair ? (
+    <View style={[styles.panel, isWide && styles.panelGrow]}>
+      <View style={styles.badgeRow}>
+        <Text style={[styles.pill, { backgroundColor: open ? '#1FA97A' : '#E5544B' }]}>
+          {open ? 'กำลังซ่อม' : 'ปิดงานแล้ว'}
+        </Text>
+        {typeLabel ? (
+          <Text style={styles.typeTag}>{typeLabel}</Text>
+        ) : null}
+      </View>
+
+      <Text style={styles.kicker}>อาการ</Text>
+      <Text style={[styles.hero, isWide && styles.heroWide]}>{heroText}</Text>
+
+      {otherNotes.map((sec) => (
+        <View key={sec.label} style={styles.noteBlock}>
+          <Text style={styles.noteLabel}>{sec.label}</Text>
+          <Text style={styles.noteValue}>{sec.value}</Text>
+        </View>
+      ))}
+
+      <View style={[styles.factGrid, isWide && styles.factGridWide]}>
+        <Fact
+          label="ช่าง"
+          value={
+            repair.r_technician
+              ? `${repair.r_technician}${repair.r_technician_id ? ` · ID ${repair.r_technician_id}` : ''}`
+              : 'ไม่ระบุ'
+          }
+          wide={isWide}
+        />
+        <Fact label="รถ" value={vehicleLine} wide={isWide} />
+        <Fact label="รุ่น / ไมล์" value={modelLine || '-'} wide={isWide} />
+        <Fact
+          label="รับงาน"
+          value={repair.r_dt_rec ? fmtDateTime(repair.r_dt_rec) : '-'}
+          wide={isWide}
+        />
+      </View>
+
+      <View style={styles.actions}>
+        {open ? (
+          <Pressable
+            style={[styles.btn, styles.btnPrimary, busy && styles.btnDisabled]}
+            onPress={closeJob}
+            disabled={busy}
+          >
+            <Text style={styles.btnText}>ปิดงาน</Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          style={[styles.btnAlt, busy && styles.btnDisabled]}
+          onPress={addPhoto}
+          disabled={busy}
+        >
+          <Text style={styles.btnAltText}>+ เพิ่มรูป</Text>
+        </Pressable>
+      </View>
+    </View>
+  ) : null;
+
+  const trackPanel =
+    repair && tracking?.is_public ? (
+      <View style={[styles.panel, styles.trackPanel, isWide && styles.panelSide]}>
+        <Text style={styles.trackSectionTitle}>แจ้งจากภายนอก</Text>
+        <Text style={styles.reporterLine}>
+          {tracking.meta.reporter_name}
+          {tracking.meta.reporter_phone ? ` · ${tracking.meta.reporter_phone}` : ''}
+        </Text>
+        <Text
+          style={[
+            styles.pill,
+            styles.pillInline,
+            { backgroundColor: statusColor(tracking.meta.public_status) },
+          ]}
+        >
+          ผู้แจ้งเห็น: {tracking.meta.public_status_label}
+        </Text>
+
+        {tracking.meta.track_token ? (
+          <View style={styles.qrBox}>
+            <Text style={styles.qrTitle}>QR ติดตามสถานะ</Text>
+            <Image
+              source={{ uri: qrImageUrl(trackUrl(tracking.meta.track_token), isWide ? 200 : 180) }}
+              style={[styles.qrImage, { width: isWide ? 200 : 180, height: isWide ? 200 : 180 }]}
+              accessibilityLabel="QR ติดตามสถานะ"
+            />
+            <Text style={styles.qrHint}>สแกนด้วยกล้อง · หรือบันทึกลงแกลเลอรีแล้วเปิดสแกนทีหลัง</Text>
+            <View style={styles.qrActions}>
+              <Pressable
+                style={[styles.btnAlt, styles.qrBtn]}
+                onPress={async () => {
+                  await saveQrToGallery(tracking.meta.track_token, repair?.r_job_num || rId);
+                }}
+              >
+                <Text style={styles.btnAltText}>บันทึก QR</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.btnAlt, styles.qrBtn]}
+                onPress={() =>
+                  navigation.navigate('TrackRepair', { token: tracking.meta.track_token })
+                }
+              >
+                <Text style={styles.btnAltText}>เปิดหน้าติดตาม</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        {canWrite ? (
+          <ContactActionRow
+            phone={tracking.meta.reporter_phone}
+            jobNum={repair?.r_job_num || rId}
+            status={tracking.meta.public_status}
+            trackToken={tracking.meta.track_token}
+            note={statusNote.trim()}
+          />
+        ) : null}
+
+        {canWrite ? (
+          <>
+            <Text style={styles.trackHint}>เลือกสถานะ — ขึ้น QR ทันที</Text>
+            <StatusPicker
+              value={tracking.meta.public_status}
+              onSelect={setPublicStatus}
+              disabled={busy}
+            />
+            <TextInput
+              style={styles.statusInput}
+              value={statusNote}
+              onChangeText={setStatusNote}
+              placeholder="ข้อความถึงผู้แจ้ง (ไม่บังคับ)"
+              placeholderTextColor={colors.textMuted}
+            />
+          </>
+        ) : null}
+
+        <RepairStatusTimeline
+          timeline={tracking.timeline || []}
+          currentStatus={tracking.meta.public_status}
+        />
+      </View>
+    ) : null;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
         <View style={[styles.header, { paddingHorizontal: pad }]}>
           {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
-          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>รายละเอียดงานซ่อม</Text>
-          <Text style={styles.headerSub} numberOfLines={2}>
-            #{repair?.r_job_num || rId}
-            {repair?.r_dt_rec ? ` · ${fmtDateTime(repair.r_dt_rec)}` : ''}
-          </Text>
+          <View style={styles.headerRow}>
+            <View style={styles.headerText}>
+              <Text style={[styles.headerTitle, { fontSize: isWide ? 22 : titleSize }]}>
+                #{repair?.r_job_num || rId}
+              </Text>
+              <Text style={styles.headerSub} numberOfLines={1}>
+                รายละเอียดงานซ่อม
+                {repair?.r_dt_rec ? ` · ${fmtDateTime(repair.r_dt_rec)}` : ''}
+              </Text>
+            </View>
+            {repair ? (
+              <Text style={[styles.pill, { backgroundColor: open ? '#1FA97A' : '#E5544B' }]}>
+                {open ? 'กำลังซ่อม' : 'ปิดงานแล้ว'}
+              </Text>
+            ) : null}
+          </View>
         </View>
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
+          contentContainerStyle={[
+            styles.scroll,
+            isWide && styles.scrollWide,
+            isMobile && mobileScrollInset,
+          ]}
         >
           {loading ? (
             <LoadingView compact />
@@ -222,107 +411,28 @@ export default function RepairDetailScreen({ route, navigation }) {
             </View>
           ) : repair ? (
             <>
-              <View style={styles.card}>
-                <View style={styles.rowBetween}>
-                  <Text style={[styles.pill, { backgroundColor: open ? '#1FA97A' : '#E5544B' }]}>
-                    {open ? 'กำลังซ่อม' : 'ปิดงานแล้ว'}
-                  </Text>
-                  {typeLabel ? <Text style={styles.typeTag}>{typeLabel}</Text> : null}
-                </View>
-
-                {noteSections.map((sec) => (
-                  <View key={sec.label} style={styles.noteBlock}>
-                    <Text style={styles.noteLabel}>{sec.label}</Text>
-                    <Text style={styles.noteValue}>{sec.value}</Text>
-                  </View>
-                ))}
-
-                <Text style={styles.meta}>
-                  ช่าง: {repair.r_technician || 'ไม่ระบุ'}
-                  {repair.r_technician_id ? ` · ID ${repair.r_technician_id}` : ''}
-                </Text>
-                <Text style={styles.meta}>
-                  รถ: {[repair.r_v_name, repair.r_v_plate].filter(Boolean).join(' · ') || '-'}
-                </Text>
-                <Text style={styles.meta}>
-                  {[repair.r_v_brand, repair.r_v_model].filter(Boolean).join(' · ')}
-                  {repair.r_mile ? ` · ไมล์ ${Number(repair.r_mile).toLocaleString()}` : ''}
-                  {repair.r_tank_m ? ` · ถัง ${repair.r_tank_m} ม.` : ''}
-                </Text>
+              <View style={[styles.columns, isWide && styles.columnsWide]}>
+                {jobPanel}
+                {trackPanel}
               </View>
 
-              {tracking?.is_public ? (
-                <View style={styles.trackCard}>
-                  <Text style={styles.trackSectionTitle}>แจ้งจากภายนอก</Text>
-                  <Text style={styles.meta}>
-                    ผู้แจ้ง: {tracking.meta.reporter_name}
-                    {tracking.meta.reporter_phone ? ` · ${tracking.meta.reporter_phone}` : ''}
-                  </Text>
-                  <Text style={[styles.pill, styles.pillInline, { backgroundColor: statusColor(tracking.meta.public_status) }]}>
-                    ผู้แจ้งเห็น: {tracking.meta.public_status_label}
-                  </Text>
-
-                  {canWrite ? (
-                    <ContactActionRow
-                      phone={tracking.meta.reporter_phone}
-                      jobNum={repair?.r_job_num || rId}
-                      status={tracking.meta.public_status}
-                      trackToken={tracking.meta.track_token}
-                      note={statusNote.trim()}
-                    />
-                  ) : null}
-
-                  {canWrite ? (
-                    <>
-                      <Text style={styles.trackHint}>กดเลือกสถานะ — ผู้แจ้งจะเห็นใน QR ทันที</Text>
-                      <StatusPicker
-                        value={tracking.meta.public_status}
-                        onSelect={setPublicStatus}
-                        disabled={busy}
-                      />
-                      <TextInput
-                        style={styles.statusInput}
-                        value={statusNote}
-                        onChangeText={setStatusNote}
-                        placeholder="ข้อความถึงผู้แจ้ง (ไม่บังคับ)"
-                        placeholderTextColor={colors.textMuted}
-                      />
-                    </>
-                  ) : null}
-                  <RepairStatusTimeline
-                    timeline={tracking.timeline || []}
-                    currentStatus={tracking.meta.public_status}
-                  />
-                  {tracking.meta.track_token ? (
-                    <Pressable
-                      style={[styles.btnAlt, { marginTop: spacing.sm, alignSelf: 'flex-start' }]}
-                      onPress={() => navigation.navigate('TrackRepair', { token: tracking.meta.track_token })}
-                    >
-                      <Text style={styles.btnAltText}>เปิดหน้าที่ผู้แจ้งเห็น</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              ) : null}
-
-              <View style={styles.actions}>
-                {open ? (
-                  <Pressable style={[styles.btn, busy && { opacity: 0.6 }]} onPress={closeJob} disabled={busy}>
-                    <Text style={styles.btnText}>ปิดงาน</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable style={[styles.btnAlt, busy && { opacity: 0.6 }]} onPress={addPhoto} disabled={busy}>
-                  <Text style={styles.btnAltText}>+ เพิ่มรูป</Text>
-                </Pressable>
-              </View>
-
-              <Text style={styles.section}>รูปภาพ ({images.length})</Text>
-              <View style={styles.gallery}>
+              <View style={[styles.galleryBlock, isWide && styles.galleryBlockWide]}>
+                <Text style={styles.section}>รูปภาพ ({images.length})</Text>
                 {images.length === 0 ? (
-                  <Text style={styles.msg}>ยังไม่มีรูป</Text>
+                  <View style={styles.emptyGallery}>
+                    <Text style={styles.emptyGalleryTitle}>ยังไม่มีรูป</Text>
+                    <Text style={styles.emptyGalleryMsg}>กด “เพิ่มรูป” เพื่อแนบหลักฐานงานซ่อม</Text>
+                  </View>
                 ) : (
-                  images.map((img) => (
-                    <Image key={img.id} source={{ uri: img.url }} style={styles.thumb} />
-                  ))
+                  <View style={[styles.gallery, isWide && styles.galleryWide]}>
+                    {images.map((img) => (
+                      <Image
+                        key={img.id}
+                        source={{ uri: img.url }}
+                        style={[styles.thumb, isWide && styles.thumbWide]}
+                      />
+                    ))}
+                  </View>
                 )}
               </View>
             </>
@@ -335,67 +445,225 @@ export default function RepairDetailScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.navy },
+  safe: { flex: 1, backgroundColor: colors.navyDeep },
   body: { flex: 1 },
   scrollView: { flex: 1 },
-  header: { paddingTop: spacing.sm, paddingBottom: spacing.sm },
-  back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
-  headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },
-  headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
+  header: { paddingTop: spacing.xs, paddingBottom: spacing.sm },
+  back: { color: 'rgba(255,255,255,0.85)', fontSize: 14, marginBottom: spacing.xs },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  headerText: { flex: 1, minWidth: 0 },
+  headerTitle: { color: colors.onNavy, fontWeight: '800', letterSpacing: 0.2 },
+  headerSub: { color: 'rgba(255,255,255,0.62)', fontSize: 12, marginTop: 2, fontWeight: '600' },
   scroll: {
     backgroundColor: colors.background,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: spacing.lg,
     paddingBottom: spacing.xl * 2,
     minHeight: '100%',
+    gap: spacing.md,
   },
-  card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.lg, ...shadow },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  scrollWide: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+  },
+  columns: { gap: spacing.md },
+  columnsWide: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.lg,
+  },
+  panel: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow,
+  },
+  panelGrow: { flex: 1.35, minWidth: 0 },
+  panelSide: { flex: 1, minWidth: 280, maxWidth: 420 },
+  trackPanel: {
+    backgroundColor: '#F7F8FC',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
   pill: {
     color: colors.onNavy,
     overflow: 'hidden',
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 999,
     fontSize: 12,
     fontWeight: '800',
   },
-  typeTag: { color: '#B45309', fontWeight: '800', fontSize: 12 },
-  noteBlock: { marginTop: spacing.md },
+  pillInline: { alignSelf: 'flex-start', marginTop: spacing.sm, marginBottom: spacing.sm },
+  typeTag: {
+    color: '#8A5A00',
+    backgroundColor: '#F7E7B8',
+    overflow: 'hidden',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  kicker: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  hero: {
+    color: colors.navy,
+    fontSize: 20,
+    fontWeight: '800',
+    lineHeight: 28,
+    marginBottom: spacing.md,
+  },
+  heroWide: {
+    fontSize: 26,
+    lineHeight: 34,
+    maxWidth: 720,
+  },
+  noteBlock: { marginBottom: spacing.sm },
   noteLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '700', marginBottom: 2 },
   noteValue: { color: colors.textPrimary, fontSize: 15, fontWeight: '600', lineHeight: 22 },
-  meta: { color: colors.textSecondary, marginTop: 6, fontSize: 13 },
-  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
+  factGrid: {
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  factGridWide: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  fact: {
+    backgroundColor: colors.navyTint,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  factWide: {
+    width: '48%',
+    flexGrow: 1,
+  },
+  factLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  factValue: {
+    color: colors.navy,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
   btn: {
     backgroundColor: colors.navy,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingVertical: 12,
+    minHeight: 44,
     borderRadius: radius.sm,
+    justifyContent: 'center',
   },
+  btnPrimary: { minWidth: 120 },
+  btnFull: { alignSelf: 'stretch', alignItems: 'center' },
+  btnDisabled: { opacity: 0.6 },
   btnText: { color: colors.onNavy, fontWeight: '800' },
   btnAlt: {
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingVertical: 12,
+    minHeight: 44,
     borderRadius: radius.sm,
+    justifyContent: 'center',
   },
   btnAltText: { color: colors.navy, fontWeight: '800' },
-  section: { marginTop: spacing.xl, marginBottom: spacing.sm, fontWeight: '800', color: colors.navy },
-  trackCard: {
-    marginTop: spacing.lg,
+  section: {
+    marginBottom: spacing.sm,
+    fontWeight: '800',
+    color: colors.navy,
+    fontSize: 15,
+  },
+  galleryBlock: { marginTop: spacing.xs },
+  galleryBlockWide: {
     backgroundColor: colors.card,
     borderRadius: radius.lg,
     padding: spacing.lg,
-    ...shadow,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  trackSectionTitle: { fontWeight: '800', color: colors.navy, fontSize: 15, marginBottom: spacing.xs },
-  trackHint: { color: colors.textMuted, fontSize: 13, marginTop: spacing.md, marginBottom: spacing.sm },
-  pillInline: { alignSelf: 'flex-start', marginTop: spacing.sm },
+  gallery: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  galleryWide: { gap: spacing.md },
+  thumb: { width: 100, height: 100, borderRadius: 10, backgroundColor: colors.navyTint },
+  thumbWide: { width: 140, height: 140, borderRadius: 12 },
+  emptyGallery: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    borderRadius: radius.md,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    backgroundColor: '#F7F8FC',
+  },
+  emptyGalleryTitle: { color: colors.navy, fontWeight: '800', fontSize: 14, marginBottom: 4 },
+  emptyGalleryMsg: { color: colors.textSecondary, fontSize: 13, textAlign: 'center' },
+  trackSectionTitle: { fontWeight: '800', color: colors.navy, fontSize: 15, marginBottom: 4 },
+  reporterLine: { color: colors.textSecondary, fontSize: 13, fontWeight: '600' },
+  trackHint: { color: colors.textMuted, fontSize: 12, marginTop: spacing.md, marginBottom: spacing.sm },
+  qrBox: {
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  qrTitle: { color: colors.navy, fontWeight: '800', fontSize: 13, marginBottom: spacing.sm },
+  qrImage: { borderRadius: 8, backgroundColor: '#fff' },
+  qrHint: {
+    color: colors.textMuted,
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    lineHeight: 16,
+  },
+  qrActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    justifyContent: 'center',
+  },
+  qrBtn: { minHeight: 40, paddingVertical: 8 },
   statusInput: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.card,
     borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.border,
@@ -404,9 +672,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     fontSize: 14,
     color: colors.textPrimary,
+    minHeight: 44,
   },
-  gallery: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  thumb: { width: 100, height: 100, borderRadius: 10, backgroundColor: colors.navyTint },
   center: { alignItems: 'center', paddingVertical: spacing.xl },
   msg: { color: colors.textSecondary, textAlign: 'center' },
 });
