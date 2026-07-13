@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Platform,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,8 +34,8 @@ import {
   onInstallPromptChange,
   canPromptInstall,
   isRunningAsPwa,
-  isIosSafari,
-  promptPwaInstall,
+  detectInstallTarget,
+  installAppSmart,
 } from '../data/pwaInstall';
 import { APP_VERSION, APP_UPDATE_NOTES, APP_UPDATE_DATE } from '../data/appVersion';
 
@@ -88,6 +89,64 @@ function StatusPill({ ok, label }) {
   );
 }
 
+function InstallGuideModal({ visible, onClose, target }) {
+  const os = target?.os || 'desktop';
+  const steps =
+    os === 'ios'
+      ? [
+          { icon: 'share-outline', text: 'กดปุ่ม แชร์ (Share) ที่แถบล่าง Safari' },
+          { icon: 'add-outline', text: 'เลื่อนหาแล้วกด “เพิ่มไปยังหน้าโฮมสกรีน”' },
+          { icon: 'phone-portrait-outline', text: 'เปิดจากไอคอนบนจอโฮม — ติดตั้งเสร็จ' },
+        ]
+      : os === 'android'
+        ? [
+            { icon: 'ellipsis-vertical', text: 'กด ⋮ มุมขวาบนของ Chrome' },
+            { icon: 'download-outline', text: 'เลือก “ติดตั้งแอป” หรือ “Add to Home screen”' },
+            { icon: 'phone-portrait-outline', text: 'ยืนยันติดตั้ง แล้วเปิดจากไอคอน' },
+          ]
+        : [
+            { icon: 'download-outline', text: 'ดูไอคอนติดตั้งในแถบที่อยู่ (Chrome / Edge)' },
+            { icon: 'apps-outline', text: 'หรือเมนู ⋮ → “ติดตั้งสมบัติทัวร์…”' },
+            { icon: 'checkmark-circle-outline', text: 'ยืนยันแล้วเปิดจากไอคอนแอป' },
+          ];
+
+  const title =
+    os === 'ios' ? 'ติดตั้งบน iPhone / iPad' : os === 'android' ? 'ติดตั้งบน Android' : 'ติดตั้งบนคอมพิวเตอร์';
+  const hint =
+    os === 'ios' && target?.preferSafari
+      ? 'บน iPhone ต้องใช้ Safari — เปิดลิงก์นี้ใน Safari แล้วกดติดตั้งอีกครั้ง'
+      : os === 'android' && target?.preferChrome
+        ? 'แนะนำเปิดด้วย Chrome จะติดตั้งง่ายสุด'
+        : os === 'ios'
+          ? 'Apple ไม่อนุญาตติดตั้งอัตโนมัติ ต้องกดตามขั้นตอนสั้นๆ นี้'
+          : 'ถ้ายังไม่ขึ้นหน้าต่างติดตั้งอัตโนมัติ ให้ทำตามนี้';
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.guideBackdrop}>
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
+        <View style={styles.guideSheet}>
+          <View style={styles.guideHandle} />
+          <Text style={styles.guideTitle}>{title}</Text>
+          <Text style={styles.guideHint}>{hint}</Text>
+          {steps.map((s, i) => (
+            <View key={s.text} style={styles.guideStep}>
+              <View style={styles.guideNum}>
+                <Text style={styles.guideNumText}>{i + 1}</Text>
+              </View>
+              <Ionicons name={s.icon} size={22} color={colors.navy} style={{ marginTop: 2 }} />
+              <Text style={styles.guideStepText}>{s.text}</Text>
+            </View>
+          ))}
+          <Pressable style={styles.guideBtn} onPress={onClose}>
+            <Text style={styles.guideBtnText}>เข้าใจแล้ว</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function SettingsScreen({ navigation }) {
   const { user, logout, canWrite } = useAuth();
   const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
@@ -98,10 +157,13 @@ export default function SettingsScreen({ navigation }) {
   const [canInstall, setCanInstall] = useState(false);
   const [pushOn, setPushOn] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [installTarget, setInstallTarget] = useState(() => detectInstallTarget());
 
   const refresh = useCallback(async () => {
     setAsPwa(isRunningAsPwa());
     setCanInstall(canPromptInstall());
+    setInstallTarget(detectInstallTarget());
     if (user && canWrite && pushSupported()) {
       try {
         const sub = await getExistingSubscription();
@@ -121,34 +183,51 @@ export default function SettingsScreen({ navigation }) {
     return off;
   }, [refresh]);
 
+  const installSubtitle = useMemo(() => {
+    if (asPwa) return `ติดตั้งแล้วบน ${installTarget.label}`;
+    if (canInstall) return `ตรวจพบ ${installTarget.label} · กดแล้วระบบจะติดตั้งให้`;
+    if (installTarget.os === 'ios') {
+      return installTarget.preferSafari
+        ? 'ตรวจพบ iPhone · เปิดด้วย Safari แล้วกดอีกครั้ง'
+        : 'ตรวจพบ iPhone · กดแล้วมีขั้นตอนสั้นๆ ให้ทำ';
+    }
+    if (installTarget.os === 'android') {
+      return installTarget.preferChrome
+        ? 'ตรวจพบ Android · แนะนำใช้ Chrome แล้วกดอีกครั้ง'
+        : 'ตรวจพบ Android · กดเพื่อติดตั้ง (หรือเปิดคู่มือถ้ายังไม่ขึ้น)';
+    }
+    return `ตรวจพบ ${installTarget.label} · กดเพื่อติดตั้ง`;
+  }, [asPwa, canInstall, installTarget]);
+
   const onInstall = async () => {
     if (isRunningAsPwa()) {
       showAlert('ติดตั้งแล้ว', 'คุณกำลังใช้งานแบบแอปบนหน้าจอโฮมอยู่');
       return;
     }
-    if (canPromptInstall()) {
-      setBusy(true);
-      try {
-        const res = await promptPwaInstall();
-        if (res.ok) showAlert('ติดตั้งแล้ว', 'เปิดจากไอคอนบนจอโฮมได้เลย');
-        else showAlert('ยังไม่ติดตั้ง', 'กดยกเลิก หรือเบราว์เซอร์ยังไม่พร้อม');
-        refresh();
-      } finally {
-        setBusy(false);
+    setBusy(true);
+    try {
+      const res = await installAppSmart();
+      setInstallTarget(res.target || detectInstallTarget());
+      if (res.ok && res.reason === 'already_installed') {
+        showAlert('ติดตั้งแล้ว', 'คุณกำลังใช้งานแบบแอปบนหน้าจอโฮมอยู่');
+        return;
       }
-      return;
+      if (res.ok) {
+        showAlert('ติดตั้งแล้ว', 'เปิดจากไอคอนบนจอโฮมได้เลย');
+        refresh();
+        return;
+      }
+      if (res.auto && !res.ok) {
+        showAlert('ยังไม่ติดตั้ง', 'คุณกดยกเลิกในหน้าต่างติดตั้ง');
+        refresh();
+        return;
+      }
+      // No auto prompt available (iOS always, or Android/Desktop without event)
+      setGuideOpen(true);
+    } finally {
+      setBusy(false);
+      refresh();
     }
-    if (isIosSafari()) {
-      showAlert(
-        'ติดตั้งบน iPhone / iPad',
-        '1) กดปุ่ม Share (แชร์)\n2) เลือก “เพิ่มไปยังหน้าโฮมสกรีน”\n3) เปิดจากไอคอน แล้วค่อยเปิดแจ้งเตือน'
-      );
-      return;
-    }
-    showAlert(
-      'ติดตั้งแอป',
-      'เปิดเมนูเบราว์เซอร์ → “ติดตั้งแอป” / “Add to Home screen”\nหรือใช้ Chrome บน Android จะขึ้นปุ่มติดตั้งอัตโนมัติ'
-    );
   };
 
   const onTogglePush = async () => {
@@ -300,14 +379,8 @@ export default function SettingsScreen({ navigation }) {
             <SettingRow
               icon="download-outline"
               iconColor={colors.barFillAlt}
-              title="ติดตั้งแอป"
-              subtitle={
-                canInstall
-                  ? 'กดเพื่อติดตั้งลงอุปกรณ์นี้'
-                  : isIosSafari()
-                    ? 'iOS: Share → เพิ่มไปยังหน้าโฮมสกรีน'
-                    : 'ใช้เมนูเบราว์เซอร์ หรือรอให้ระบบพร้อมติดตั้ง'
-              }
+              title={asPwa ? 'ติดตั้งแอปแล้ว' : canInstall ? 'ติดตั้งแอปเลย' : 'ติดตั้งแอป'}
+              subtitle={installSubtitle}
               onPress={busy ? undefined : onInstall}
             />
           </View>
@@ -379,6 +452,11 @@ export default function SettingsScreen({ navigation }) {
         </View>
       </ScrollView>
       {isMobile ? <MobileBackBar onPress={goBack} /> : null}
+      <InstallGuideModal
+        visible={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        target={installTarget}
+      />
     </SafeAreaView>
   );
 }
@@ -544,4 +622,57 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryBtnText: { color: colors.navy, fontWeight: '800' },
+  guideBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,26,56,0.55)',
+    justifyContent: 'flex-end',
+  },
+  guideSheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
+    gap: spacing.sm,
+  },
+  guideHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    marginBottom: spacing.sm,
+  },
+  guideTitle: { color: colors.navy, fontWeight: '800', fontSize: 18, marginBottom: 2 },
+  guideHint: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: spacing.sm },
+  guideStep: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.navyTint,
+    borderRadius: radius.md,
+    marginBottom: 6,
+  },
+  guideNum: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.navy,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guideNumText: { color: colors.onNavy, fontWeight: '800', fontSize: 12 },
+  guideStepText: { flex: 1, color: colors.textPrimary, fontWeight: '600', fontSize: 14, lineHeight: 20 },
+  guideBtn: {
+    marginTop: spacing.md,
+    backgroundColor: colors.navy,
+    borderRadius: radius.md,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guideBtnText: { color: colors.onNavy, fontWeight: '800', fontSize: 15 },
 });
