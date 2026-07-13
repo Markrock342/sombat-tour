@@ -7,6 +7,7 @@ import {
   Pressable,
   StyleSheet,
   AppState,
+  Alert,
 } from 'react-native';
 import { RefreshControl } from '../components/AppRefreshControl';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -282,6 +283,17 @@ export default function DashboardScreen({ navigation }) {
     load();
   };
 
+  const confirmLogout = () => {
+    Alert.alert(
+      'ออกจากระบบ',
+      `ออกจากบัญชี ${user?.username || ''} ใช่ไหม?`,
+      [
+        { text: 'ยกเลิก', style: 'cancel' },
+        { text: 'ออกจากระบบ', style: 'destructive', onPress: logout },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={[styles.header, isMobile && styles.headerMobile, { paddingHorizontal: pad }]}>
@@ -298,7 +310,7 @@ export default function DashboardScreen({ navigation }) {
         </Pressable>
         <View style={[styles.headerActions, isMobile && styles.headerActionsMobile]}>
           {user ? (
-            <Pressable style={[styles.searchBtn, isMobile && styles.searchBtnMobile]} onPress={logout}>
+            <Pressable style={[styles.searchBtn, isMobile && styles.searchBtnMobile]} onPress={confirmLogout}>
               <Text style={styles.searchBtnText} numberOfLines={1}>{user.username}</Text>
             </Pressable>
           ) : (
