@@ -25,8 +25,8 @@ import { fetchBreakdowns, fetchRepairs, isBreakdownRepair } from '../data/api';
 import { presetRange } from '../components/DateRangePicker';
 
 export default function BreakdownScreen({ navigation }) {
-  const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
-  const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, 640));
+  const { isMobile, isWide, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
+  const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, isWide ? 1180 : 640));
   const goBack = () => navigation.goBack();
   const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
@@ -159,9 +159,9 @@ export default function BreakdownScreen({ navigation }) {
                 {q.trim() ? 'ไม่พบรายการที่ตรงกับคำค้น' : 'ไม่มีรายการเสียกลางทาง'}
               </Text>
             ) : (
-              <View style={styles.grid}>
+              <View style={[styles.grid, isWide && styles.gridWide]}>
                 {!loading ? (
-                  <Text style={styles.countLabel}>
+                  <Text style={[styles.countLabel, isWide && styles.countLabelWide]}>
                     {q.trim()
                       ? `${visibleJobs.length} จาก ${rows.length} งาน`
                       : `${rows.length} งาน`}
@@ -172,6 +172,7 @@ export default function BreakdownScreen({ navigation }) {
                     key={`${job.rId}-${job.code}`}
                     job={job}
                     accent="breakdown"
+                    style={isWide ? styles.cardWide : styles.cardFull}
                     onPress={() =>
                       navigation.navigate('RepairDetail', {
                         repair: job.raw,
@@ -249,11 +250,25 @@ const styles = StyleSheet.create({
   scrollCentered: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
   scrollEmpty: { flexGrow: 1 },
   grid: { gap: spacing.sm },
+  gridWide: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'stretch',
+  },
   countLabel: {
     color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 2,
+  },
+  countLabelWide: { flexBasis: '100%', width: '100%' },
+  cardFull: { width: '100%' },
+  cardWide: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '23%',
+    minWidth: 240,
+    maxWidth: '100%',
   },
   center: { alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.md },
   loadingText: { color: colors.textSecondary, fontWeight: '600' },

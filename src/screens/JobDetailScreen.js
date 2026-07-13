@@ -76,9 +76,10 @@ export default function JobDetailScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
+  const { isMobile, isWide, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
   const goBack = () => navigation.goBack();
-  const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, 640));
+  // กว้างพอให้แถวละ 4 การ์ดบนจอใหญ่
+  const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, isWide ? 1180 : 640));
   const lastDeviceDay = useRef(fmtDate(new Date()));
 
   const load = useCallback(
@@ -260,11 +261,12 @@ export default function JobDetailScreen({ route, navigation }) {
                     <Text style={styles.centerText}>ไม่มีงานที่ตรงกับตัวกรอง</Text>
                   </View>
                 ) : (
-                  <View style={styles.grid}>
+                  <View style={[styles.grid, isWide && styles.gridWide]}>
                     {visibleJobs.map((job) => (
                       <RepairJobCard
                         key={`${job.rId}-${job.code}`}
                         job={job}
+                        style={isWide ? styles.cardWide : styles.cardFull}
                         onPress={() =>
                           navigation.navigate('RepairDetail', {
                             repair: job.raw,
@@ -347,4 +349,18 @@ const styles = StyleSheet.create({
   filterText: { fontSize: 13, fontWeight: '700', color: colors.navySoft },
   filterTextActive: { color: colors.onNavy },
   grid: { gap: spacing.sm },
+  gridWide: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'stretch',
+  },
+  cardFull: { width: '100%' },
+  // ~4 ต่อแถว; แถวท้ายไม่ครบจะ flexGrow ยืดเต็มความกว้าง
+  cardWide: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '23%',
+    minWidth: 240,
+    maxWidth: '100%',
+  },
 });
