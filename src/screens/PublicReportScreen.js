@@ -42,6 +42,7 @@ export default function PublicReportScreen({ navigation, route }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [fieldError, setFieldError] = useState(null);
+  const [vehicleSearching, setVehicleSearching] = useState(false);
 
   const activeStep = useMemo(() => {
     if (!reporterName.trim()) return 1;
@@ -52,18 +53,23 @@ export default function PublicReportScreen({ navigation, route }) {
   const canSubmit = reporterName.trim() && symptom.trim() && !saving;
 
   useEffect(() => {
+    const term = vehicleQ.trim();
+    if (!term || vehicle) {
+      setVehicleHits([]);
+      setVehicleSearching(false);
+      return undefined;
+    }
+    setVehicleSearching(true);
     const t = setTimeout(async () => {
-      const term = vehicleQ.trim();
-      if (!term || vehicle) {
-        setVehicleHits([]);
-        return;
-      }
       try {
-        setVehicleHits(await searchVehicles(term));
+        const rows = await searchVehicles(term);
+        setVehicleHits(rows.slice(0, 8));
       } catch (_) {
         setVehicleHits([]);
+      } finally {
+        setVehicleSearching(false);
       }
-    }, 300);
+    }, 200);
     return () => clearTimeout(t);
   }, [vehicleQ, vehicle]);
 
@@ -208,38 +214,57 @@ export default function PublicReportScreen({ navigation, route }) {
               <View style={styles.vehicleCard}>
                 <View style={styles.vehicleHead}>
                   <Text style={styles.vehicleName}>{vehicle.v_name || vehicle.v_plate || '-'}</Text>
-                  <Pressable onPress={() => { setVehicle(null); setVehicleQ(''); }} hitSlop={8}>
+                  <Pressable onPress={() => { setVehicle(null); setVehicleQ(''); setVehicleHits([]); }} hitSlop={8}>
                     <Text style={styles.link}>เปลี่ยน</Text>
                   </Pressable>
                 </View>
                 <Text style={styles.vehicleMeta}>
                   {[vehicle.v_plate, vehicle.v_brand, vehicle.v_model].filter(Boolean).join(' · ') || '—'}
                 </Text>
+                {vehicle.v_id ? <Text style={styles.vehicleId}>ID {vehicle.v_id}</Text> : null}
               </View>
             ) : (
               <>
                 <Text style={styles.label}>ค้นหารถ (ไม่บังคับ)</Text>
+                <Text style={styles.sectionHint}>พิมพ์เบอร์รถ / ทะเบียน / ID แล้วเลือกรายการที่ขึ้น</Text>
                 <TextInput
                   style={inputStyle}
                   value={vehicleQ}
                   onChangeText={setVehicleQ}
-                  placeholder="เบอร์รถ / ทะเบียน"
+                  placeholder="เช่น 31-5760 หรือ 142"
                   placeholderTextColor={colors.textMuted}
+                  autoCorrect={false}
+                  autoCapitalize="none"
                 />
-                {vehicleHits.slice(0, 5).map((v) => (
-                  <Pressable
-                    key={v.v_id}
-                    style={styles.hit}
-                    onPress={() => {
-                      setVehicle(v);
-                      setVehicleQ(v.v_name || String(v.v_id));
-                      if (v.v_metr) setTankM(String(v.v_metr));
-                    }}
-                  >
-                    <Text style={styles.hitTitle}>{v.v_name || v.v_plate}</Text>
-                    <Text style={styles.hitMeta}>{[v.v_plate, v.v_brand].filter(Boolean).join(' · ')}</Text>
-                  </Pressable>
-                ))}
+                {vehicleSearching ? (
+                  <Text style={styles.searchStatus}>กำลังค้นหา...</Text>
+                ) : null}
+                {!vehicleSearching && vehicleQ.trim() && vehicleHits.length === 0 ? (
+                  <Text style={styles.searchStatus}>ไม่พบรถ — พิมพ์ทะเบียน/เบอร์รถต่อ หรือข้ามได้</Text>
+                ) : null}
+                {vehicleHits.length > 0 ? (
+                  <View style={styles.suggestBox}>
+                    {vehicleHits.map((v) => (
+                      <Pressable
+                        key={v.v_id}
+                        style={styles.hit}
+                        onPress={() => {
+                          setVehicle(v);
+                          setVehicleQ(v.v_name || v.v_plate || String(v.v_id));
+                          setVehicleHits([]);
+                          if (v.v_metr) setTankM(String(v.v_metr));
+                        }}
+                      >
+                        <Text style={styles.hitTitle}>{v.v_name || v.v_plate || `ID ${v.v_id}`}</Text>
+                        <Text style={styles.hitMeta}>
+                          {[v.v_plate, v.v_brand, v.v_model, v.v_id ? `ID ${v.v_id}` : '']
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
               </>
             )}
 
@@ -379,16 +404,23 @@ const styles = StyleSheet.create({
   vehicleHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   vehicleName: { color: colors.navy, fontWeight: '800', fontSize: 16, flex: 1 },
   vehicleMeta: { color: colors.textSecondary, marginTop: 4, fontSize: 13 },
-  link: { color: colors.barFillAlt, fontWeight: '800', fontSize: 14 },
-  hit: {
-    backgroundColor: colors.background,
-    padding: spacing.md,
+  vehicleId: { color: colors.textMuted, fontSize: 11, marginTop: 2, fontWeight: '600' },
+  searchStatus: { color: colors.textMuted, fontSize: 12, marginTop: 8, fontWeight: '600' },
+  suggestBox: {
+    marginTop: 8,
     borderRadius: radius.sm,
-    marginTop: 6,
     borderWidth: 1,
     borderColor: colors.border,
-    minHeight: 48,
+    overflow: 'hidden',
+    backgroundColor: colors.background,
+  },
+  link: { color: colors.barFillAlt, fontWeight: '800', fontSize: 14 },
+  hit: {
+    padding: spacing.md,
+    minHeight: 52,
     justifyContent: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   hitTitle: { color: colors.textPrimary, fontWeight: '700', fontSize: 15 },
   hitMeta: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
