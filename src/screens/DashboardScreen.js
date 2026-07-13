@@ -31,16 +31,9 @@ import {
 } from '../data/api';
 import { useAuth } from '../auth/AuthContext';
 import { useScreenLayout } from '../components/BackNavigation';
-import { confirmDialog, showAlert } from '../utils/dialog';
-import {
-  pushSupported,
-  getExistingSubscription,
-  subscribeStaffPush,
-  unsubscribeStaffPush,
-} from '../data/pushNotifications';
 
 export default function DashboardScreen({ navigation }) {
-  const { user, logout, canWrite, canSeePartsPrice } = useAuth();
+  const { user, canWrite, canSeePartsPrice } = useAuth();
   const { isMobile, isWide, pad, heroTitleSize } = useScreenLayout();
   const [dateRange, setDateRange] = useState(() => presetRange('today'));
   const [datePreset, setDatePreset] = useState('today');
@@ -49,8 +42,6 @@ export default function DashboardScreen({ navigation }) {
   const [pendingByTech, setPendingByTech] = useState([]);
   const [pendingTotal, setPendingTotal] = useState(0);
   const [boardPreview, setBoardPreview] = useState([]);
-  const [pushOn, setPushOn] = useState(false);
-  const [pushBusy, setPushBusy] = useState(false);
   const [locationPreview, setLocationPreview] = useState([]);
   const [meta, setMeta] = useState({ date: null, total: 0 });
   const [loading, setLoading] = useState(true);
@@ -299,70 +290,6 @@ export default function DashboardScreen({ navigation }) {
     load();
   };
 
-  const confirmLogout = async () => {
-    const name = user?.username || '';
-    const msg = name ? `ออกจากบัญชี ${name} ใช่ไหม?` : 'ออกจากระบบใช่ไหม?';
-    const ok = await confirmDialog('ออกจากระบบ', msg, {
-      confirmText: 'ออกจากระบบ',
-      cancelText: 'ยกเลิก',
-      icon: 'warning',
-      destructive: true,
-    });
-    if (ok) logout();
-  };
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      if (!user || !canWrite || !pushSupported()) {
-        if (alive) setPushOn(false);
-        return;
-      }
-      try {
-        const sub = await getExistingSubscription();
-        if (alive) setPushOn(!!sub);
-      } catch (_) {
-        if (alive) setPushOn(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [user, canWrite]);
-
-  const togglePush = async () => {
-    if (!canWrite) {
-      navigation.navigate('Login');
-      return;
-    }
-    if (!pushSupported()) {
-      showAlert(
-        'ยังใช้แจ้งเตือนไม่ได้',
-        'ต้องเปิดผ่าน PWA บนมือถือ (ติดตั้งลงจอโฮม) — iOS ต้องเวอร์ชัน 16.4+'
-      );
-      return;
-    }
-    setPushBusy(true);
-    try {
-      if (pushOn) {
-        await unsubscribeStaffPush();
-        setPushOn(false);
-        showAlert('ปิดแจ้งเตือนแล้ว', 'จะไม่ได้รับการแจ้งเมื่อมีงานใหม่');
-      } else {
-        await subscribeStaffPush();
-        setPushOn(true);
-        showAlert(
-          'เปิดแจ้งเตือนแล้ว',
-          'เมื่อมีคนแจ้งซ่อม/เสียกลางทาง ระบบจะเด้งแจ้งเตือนบนเครื่องนี้'
-        );
-      }
-    } catch (e) {
-      showAlert('ตั้งค่าไม่สำเร็จ', e.message || '');
-    } finally {
-      setPushBusy(false);
-    }
-  };
-
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={[styles.header, { paddingHorizontal: pad }]}>
@@ -378,36 +305,19 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </Pressable>
         <View style={styles.headerActions}>
-          {user && canWrite ? (
-            <Pressable
-              style={[
-                styles.searchBtn,
-                isMobile && styles.searchBtnMobile,
-                pushOn && styles.pushBtnOn,
-                pushBusy && { opacity: 0.6 },
-              ]}
-              onPress={togglePush}
-              disabled={pushBusy}
-              accessibilityRole="button"
-              accessibilityLabel={pushOn ? 'ปิดแจ้งเตือน' : 'เปิดแจ้งเตือน'}
-            >
-              <Ionicons
-                name={pushOn ? 'notifications' : 'notifications-outline'}
-                size={isMobile ? 16 : 15}
-                color={colors.onNavy}
-              />
-            </Pressable>
-          ) : null}
           {user ? (
             <Pressable
               style={[styles.searchBtn, isMobile && styles.searchBtnMobile]}
-              onPress={confirmLogout}
+              onPress={() => navigation.navigate('Settings')}
               accessibilityRole="button"
-              accessibilityLabel="ออกจากระบบ"
+              accessibilityLabel="ตั้งค่า"
             >
-              <Text style={[styles.searchBtnText, isMobile && styles.searchBtnTextMobile]} numberOfLines={1}>
-                {isMobile ? `${user.username} · ออก` : `${user.username} · ออกจากระบบ`}
-              </Text>
+              <View style={styles.searchBtnInner}>
+                <Ionicons name="settings-outline" size={isMobile ? 16 : 15} color={colors.onNavy} />
+                <Text style={[styles.searchBtnText, isMobile && styles.searchBtnTextMobile]} numberOfLines={1}>
+                  {user.username}
+                </Text>
+              </View>
             </Pressable>
           ) : (
             <Pressable style={[styles.searchBtn, isMobile && styles.searchBtnMobile]} onPress={() => navigation.navigate('Login')}>
@@ -768,10 +678,6 @@ const styles = StyleSheet.create({
   searchBtnText: { color: colors.onNavy, fontSize: 13, fontWeight: '700' },
   searchBtnInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   searchBtnTextMobile: { fontSize: 12, maxWidth: 110 },
-  pushBtnOn: {
-    backgroundColor: 'rgba(31, 169, 122, 0.45)',
-    borderColor: 'rgba(31, 169, 122, 0.8)',
-  },
   headerTitle: { color: colors.onNavy, fontSize: 24, fontWeight: '800', letterSpacing: 0.3 },
   headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
   headerSubMobile: { fontSize: 11 },

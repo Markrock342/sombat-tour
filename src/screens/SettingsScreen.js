@@ -1,0 +1,498 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Platform,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+
+import { colors, spacing, radius, shadow } from '../theme';
+import {
+  TopBackLink,
+  MobileBackBar,
+  useScreenLayout,
+  mobileScrollInset,
+  contentSheetStyle,
+} from '../components/BackNavigation';
+import { useAuth } from '../auth/AuthContext';
+import { showAlert, confirmDialog } from '../utils/dialog';
+import {
+  pushSupported,
+  getExistingSubscription,
+  subscribeStaffPush,
+  unsubscribeStaffPush,
+  showLocalTestNotification,
+  sendServerTestPush,
+} from '../data/pushNotifications';
+import {
+  initPwaInstallCapture,
+  onInstallPromptChange,
+  canPromptInstall,
+  isRunningAsPwa,
+  isIosSafari,
+  promptPwaInstall,
+} from '../data/pwaInstall';
+
+function roleLabel(role) {
+  if (role === 'admin') return 'ผู้ดูแลระบบ';
+  if (role === 'staff') return 'เจ้าหน้าที่';
+  if (role === 'technician') return 'ช่าง';
+  if (role === 'viewer') return 'ผู้ชม';
+  return role || 'ผู้ใช้';
+}
+
+function SettingRow({
+  icon,
+  iconColor = colors.navy,
+  title,
+  subtitle,
+  onPress,
+  right,
+  disabled,
+  danger,
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.row,
+        pressed && !disabled && styles.rowPressed,
+        disabled && styles.rowDisabled,
+      ]}
+      onPress={onPress}
+      disabled={disabled || !onPress}
+    >
+      <View style={[styles.iconWrap, danger && styles.iconWrapDanger]}>
+        <Ionicons name={icon} size={20} color={danger ? '#B91C1C' : iconColor} />
+      </View>
+      <View style={styles.rowBody}>
+        <Text style={[styles.rowTitle, danger && styles.rowTitleDanger]}>{title}</Text>
+        {subtitle ? <Text style={styles.rowSub}>{subtitle}</Text> : null}
+      </View>
+      {right != null ? right : onPress ? (
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      ) : null}
+    </Pressable>
+  );
+}
+
+function StatusPill({ ok, label }) {
+  return (
+    <View style={[styles.pill, ok ? styles.pillOk : styles.pillMuted]}>
+      <Text style={[styles.pillText, ok ? styles.pillTextOk : styles.pillTextMuted]}>{label}</Text>
+    </View>
+  );
+}
+
+export default function SettingsScreen({ navigation }) {
+  const { user, logout, canWrite } = useAuth();
+  const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
+  const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, 520));
+  const goBack = () => navigation.goBack();
+
+  const [asPwa, setAsPwa] = useState(false);
+  const [canInstall, setCanInstall] = useState(false);
+  const [pushOn, setPushOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setAsPwa(isRunningAsPwa());
+    setCanInstall(canPromptInstall());
+    if (user && canWrite && pushSupported()) {
+      try {
+        const sub = await getExistingSubscription();
+        setPushOn(!!sub);
+      } catch (_) {
+        setPushOn(false);
+      }
+    } else {
+      setPushOn(false);
+    }
+  }, [user, canWrite]);
+
+  useEffect(() => {
+    initPwaInstallCapture();
+    refresh();
+    const off = onInstallPromptChange(() => refresh());
+    return off;
+  }, [refresh]);
+
+  const onInstall = async () => {
+    if (isRunningAsPwa()) {
+      showAlert('ติดตั้งแล้ว', 'คุณกำลังใช้งานแบบแอปบนหน้าจอโฮมอยู่');
+      return;
+    }
+    if (canPromptInstall()) {
+      setBusy(true);
+      try {
+        const res = await promptPwaInstall();
+        if (res.ok) showAlert('ติดตั้งแล้ว', 'เปิดจากไอคอนบนจอโฮมได้เลย');
+        else showAlert('ยังไม่ติดตั้ง', 'กดยกเลิก หรือเบราว์เซอร์ยังไม่พร้อม');
+        refresh();
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    if (isIosSafari()) {
+      showAlert(
+        'ติดตั้งบน iPhone / iPad',
+        '1) กดปุ่ม Share (แชร์)\n2) เลือก “เพิ่มไปยังหน้าโฮมสกรีน”\n3) เปิดจากไอคอน แล้วค่อยเปิดแจ้งเตือน'
+      );
+      return;
+    }
+    showAlert(
+      'ติดตั้งแอป',
+      'เปิดเมนูเบราว์เซอร์ → “ติดตั้งแอป” / “Add to Home screen”\nหรือใช้ Chrome บน Android จะขึ้นปุ่มติดตั้งอัตโนมัติ'
+    );
+  };
+
+  const onTogglePush = async () => {
+    if (!canWrite) {
+      showAlert('ต้องเป็นเจ้าหน้าที่', 'ล็อกอินด้วยบัญชี staff ก่อน');
+      return;
+    }
+    if (!pushSupported()) {
+      showAlert('ยังใช้ไม่ได้', 'ต้องเปิดผ่าน PWA ที่ติดตั้งลงจอโฮม (iOS 16.4+)');
+      return;
+    }
+    setBusy(true);
+    try {
+      if (pushOn) {
+        await unsubscribeStaffPush();
+        setPushOn(false);
+        showAlert('ปิดแล้ว', 'จะไม่ได้รับการแจ้งเมื่อมีงานใหม่');
+      } else {
+        if (!isRunningAsPwa() && Platform.OS === 'web') {
+          const cont = await confirmDialog(
+            'แนะนำให้ติดตั้งแอปก่อน',
+            'บนมือถือควรติดตั้งลงจอโฮมก่อน แล้วค่อยเปิดแจ้งเตือน — ทำต่อเลยไหม?',
+            { confirmText: 'เปิดแจ้งเตือน', cancelText: 'ยกเลิก' }
+          );
+          if (!cont) return;
+        }
+        await subscribeStaffPush();
+        setPushOn(true);
+        showAlert('เปิดแล้ว', 'เมื่อมีแจ้งซ่อม/เสียกลางทาง จะเด้งบนเครื่องนี้');
+      }
+    } catch (e) {
+      showAlert('ไม่สำเร็จ', e.message || '');
+    } finally {
+      setBusy(false);
+      refresh();
+    }
+  };
+
+  const onTestLocal = async () => {
+    setBusy(true);
+    try {
+      await showLocalTestNotification();
+      showAlert('ทดสอบบนเครื่อง', 'ควรเห็นแจ้งเตือนทันทีบนอุปกรณ์นี้');
+    } catch (e) {
+      showAlert('ทดสอบไม่สำเร็จ', e.message || '');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onTestPush = async () => {
+    if (!pushOn) {
+      showAlert('ยังไม่เปิดรับ', 'กด “รับการแจ้งเตือน” ก่อน แล้วค่อยทดสอบ');
+      return;
+    }
+    setBusy(true);
+    try {
+      await sendServerTestPush();
+      showAlert('ส่งแล้ว', 'ถ้าตั้งค่าถูก จะมีแจ้งเตือนเข้าในอีกสักครู่');
+    } catch (e) {
+      showAlert('ส่งไม่ถึง', e.message || '');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onLogout = async () => {
+    const name = user?.username || '';
+    const ok = await confirmDialog('ออกจากระบบ', name ? `ออกจากบัญชี ${name} ใช่ไหม?` : 'ออกจากระบบใช่ไหม?', {
+      confirmText: 'ออกจากระบบ',
+      cancelText: 'ยกเลิก',
+      icon: 'warning',
+      destructive: true,
+    });
+    if (!ok) return;
+    logout();
+    navigation.navigate('Dashboard');
+  };
+
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={[styles.header, { paddingHorizontal: pad }]}>
+          {!isMobile ? <TopBackLink onPress={goBack} /> : null}
+          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>ตั้งค่า</Text>
+        </View>
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyText}>กรุณาเข้าสู่ระบบก่อน</Text>
+          <Pressable style={styles.primaryBtn} onPress={() => navigation.navigate('Login')}>
+            <Text style={styles.primaryBtnText}>เข้าสู่ระบบ</Text>
+          </Pressable>
+        </View>
+        {isMobile ? <MobileBackBar onPress={goBack} /> : null}
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={[styles.header, { paddingHorizontal: pad }, centerContent && styles.headerCentered]}>
+        <View style={[styles.headerInner, sheetStyle]}>
+          {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
+          <Text style={[styles.headerTitle, { fontSize: titleSize }]}>ตั้งค่า</Text>
+          <Text style={styles.headerSub}>บัญชี · แอป · การแจ้งเตือน</Text>
+        </View>
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scroll,
+          centerContent && styles.scrollCentered,
+          isMobile && mobileScrollInset,
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={sheetStyle}>
+          <View style={styles.profileCard}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {(user.username || '?').slice(0, 1).toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.profileBody}>
+              <Text style={styles.profileName}>{user.username}</Text>
+              <Text style={styles.profileRole}>{roleLabel(user.role)}</Text>
+            </View>
+            <StatusPill ok={asPwa} label={asPwa ? 'โหมดแอป' : 'ในเบราว์เซอร์'} />
+          </View>
+
+          <Text style={styles.sectionLabel}>แอปบนเครื่อง</Text>
+          <View style={styles.group}>
+            <SettingRow
+              icon="phone-portrait-outline"
+              title="สถานะ PWA"
+              subtitle={
+                asPwa
+                  ? 'เปิดจากหน้าจอโฮมแล้ว — พร้อมแจ้งเตือนเต็มรูปแบบ'
+                  : 'ยังเปิดในแท็บเบราว์เซอร์ ติดตั้งลงจอโฮมจะเสถียรกว่า'
+              }
+              right={<StatusPill ok={asPwa} label={asPwa ? 'พร้อม' : 'ยังไม่ติดตั้ง'} />}
+            />
+            <View style={styles.divider} />
+            <SettingRow
+              icon="download-outline"
+              iconColor={colors.barFillAlt}
+              title="ติดตั้งแอป"
+              subtitle={
+                canInstall
+                  ? 'กดเพื่อติดตั้งลงอุปกรณ์นี้'
+                  : isIosSafari()
+                    ? 'iOS: Share → เพิ่มไปยังหน้าโฮมสกรีน'
+                    : 'ใช้เมนูเบราว์เซอร์ หรือรอให้ระบบพร้อมติดตั้ง'
+              }
+              onPress={busy ? undefined : onInstall}
+            />
+          </View>
+
+          <Text style={styles.sectionLabel}>การแจ้งเตือน</Text>
+          <View style={styles.group}>
+            <SettingRow
+              icon={pushOn ? 'notifications' : 'notifications-outline'}
+              iconColor={pushOn ? '#1FA97A' : colors.navy}
+              title="รับการแจ้งเตือน"
+              subtitle={
+                pushOn
+                  ? 'เปิดอยู่ — แจ้งเมื่อมีงานซ่อม/เสียกลางทาง'
+                  : 'ปิดอยู่ — กดเพื่อเปิดรับบนเครื่องนี้'
+              }
+              onPress={busy ? undefined : onTogglePush}
+              right={
+                <View style={[styles.switchTrack, pushOn && styles.switchTrackOn]}>
+                  <View style={[styles.switchThumb, pushOn && styles.switchThumbOn]} />
+                </View>
+              }
+            />
+            <View style={styles.divider} />
+            <SettingRow
+              icon="flash-outline"
+              title="ทดสอบแจ้งเตือน (เครื่องนี้)"
+              subtitle="เด้งทันทีผ่านเบราว์เซอร์ / PWA"
+              onPress={busy ? undefined : onTestLocal}
+            />
+            <View style={styles.divider} />
+            <SettingRow
+              icon="paper-plane-outline"
+              title="ทดสอบจากเซิร์ฟเวอร์"
+              subtitle="จำลองตอนมีคนแจ้งซ่อมเข้ามา"
+              onPress={busy ? undefined : onTestPush}
+              disabled={!pushOn}
+            />
+          </View>
+
+          <Text style={styles.sectionLabel}>บัญชี</Text>
+          <View style={styles.group}>
+            <SettingRow
+              icon="log-out-outline"
+              title="ออกจากระบบ"
+              subtitle="สิ้นสุดเซสชันบนอุปกรณ์นี้"
+              onPress={busy ? undefined : onLogout}
+              danger
+            />
+          </View>
+
+          <Text style={styles.footnote}>
+            เคล็ดลับ: บน iPhone ต้องติดตั้งลงโฮมก่อน แล้วเปิดจากไอคอนนั้น จึงเปิดแจ้งเตือนได้
+          </Text>
+        </View>
+      </ScrollView>
+      {isMobile ? <MobileBackBar onPress={goBack} /> : null}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.navyDeep },
+  scrollView: { flex: 1 },
+  header: { paddingTop: spacing.sm, paddingBottom: spacing.sm },
+  headerCentered: { alignItems: 'center' },
+  headerInner: { width: '100%' },
+  back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
+  headerTitle: { color: colors.onNavy, fontWeight: '800' },
+  headerSub: { color: 'rgba(255,255,255,0.65)', fontSize: 13, marginTop: 2 },
+  scroll: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl * 2,
+    minHeight: '100%',
+  },
+  scrollCentered: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
+  profileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow,
+  },
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: colors.navy,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { color: colors.onNavy, fontWeight: '800', fontSize: 22 },
+  profileBody: { flex: 1, minWidth: 0 },
+  profileName: { color: colors.navy, fontWeight: '800', fontSize: 18 },
+  profileRole: { color: colors.textSecondary, fontWeight: '600', fontSize: 13, marginTop: 2 },
+  sectionLabel: {
+    color: colors.textMuted,
+    fontWeight: '800',
+    fontSize: 12,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  group: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    marginBottom: spacing.lg,
+    ...shadow,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 14,
+    minHeight: 64,
+  },
+  rowPressed: { backgroundColor: '#F3F5FB' },
+  rowDisabled: { opacity: 0.45 },
+  iconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.navyTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapDanger: { backgroundColor: '#FEE2E2' },
+  rowBody: { flex: 1, minWidth: 0 },
+  rowTitle: { color: colors.textPrimary, fontWeight: '800', fontSize: 15 },
+  rowTitleDanger: { color: '#B91C1C' },
+  rowSub: { color: colors.textSecondary, fontSize: 12, marginTop: 3, lineHeight: 17 },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginLeft: 68,
+  },
+  pill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  pillOk: { backgroundColor: 'rgba(31,169,122,0.15)' },
+  pillMuted: { backgroundColor: colors.navyTint },
+  pillText: { fontSize: 11, fontWeight: '800' },
+  pillTextOk: { color: '#059669' },
+  pillTextMuted: { color: colors.textMuted },
+  switchTrack: {
+    width: 44,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#D1D5DB',
+    padding: 3,
+    justifyContent: 'center',
+  },
+  switchTrackOn: { backgroundColor: '#1FA97A' },
+  switchThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    alignSelf: 'flex-start',
+  },
+  switchThumbOn: { alignSelf: 'flex-end' },
+  footnote: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
+  emptyText: { color: 'rgba(255,255,255,0.8)', fontWeight: '600' },
+  primaryBtn: {
+    backgroundColor: colors.barFillAlt,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  primaryBtnText: { color: colors.navy, fontWeight: '800' },
+});

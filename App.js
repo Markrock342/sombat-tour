@@ -20,7 +20,9 @@ import TrackRepairScreen from './src/screens/TrackRepairScreen';
 import BoardScreen from './src/screens/BoardScreen';
 import BreakdownScreen from './src/screens/BreakdownScreen';
 import LocationScreen from './src/screens/LocationScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 import { colors } from './src/theme';
+import { initPwaInstallCapture } from './src/data/pwaInstall';
 
 const Stack = createNativeStackNavigator();
 
@@ -64,6 +66,7 @@ function dismissPwaSplash() {
 export default function App() {
   useEffect(() => {
     dismissPwaSplash();
+    initPwaInstallCapture();
   }, []);
 
   return (
@@ -87,6 +90,7 @@ export default function App() {
               <Stack.Screen name="Board" component={BoardScreen} />
               <Stack.Screen name="Breakdown" component={BreakdownScreen} />
               <Stack.Screen name="Locations" component={LocationScreen} />
+              <Stack.Screen name="Settings" component={SettingsScreen} />
             </Stack.Navigator>
           </NavigationContainer>
         </DialogProvider>

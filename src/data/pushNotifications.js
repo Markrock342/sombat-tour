@@ -119,3 +119,54 @@ export async function unsubscribeStaffPush() {
   }
   return true;
 }
+
+/** Local OS notification (immediate) */
+export async function showLocalTestNotification() {
+  if (!pushSupported()) {
+    const err = new Error('อุปกรณ์ไม่รองรับ');
+    err.code = 'UNSUPPORTED';
+    throw err;
+  }
+  if (Notification.permission !== 'granted') {
+    const p = await Notification.requestPermission();
+    if (p !== 'granted') {
+      const err = new Error('ยังไม่อนุญาตแจ้งเตือน');
+      err.code = 'DENIED';
+      throw err;
+    }
+  }
+  const reg = await navigator.serviceWorker.ready;
+  await reg.showNotification('สมบัติทัวร์ · ทดสอบ', {
+    body: 'ถ้าเห็นข้อความนี้ แสดงว่าระบบแจ้งเตือนบนเครื่องนี้พร้อมใช้งาน',
+    icon: '/logo192.png',
+    badge: '/favicon-48.png',
+    tag: 'sombat-test',
+    data: { url: '/' },
+  });
+  return true;
+}
+
+/** Server → push to this user's subscribed devices */
+export async function sendServerTestPush() {
+  const res = await fetch(`${API_BASE}/push_test.php`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: '{}',
+  });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch (_) {
+    const err = new Error('ทดสอบไม่สำเร็จ — อัป push_test.php ขึ้น cPanel');
+    err.code = 'BAD_RESPONSE';
+    throw err;
+  }
+  if (!data.ok) {
+    const err = new Error(data.message || data.error || 'test failed');
+    err.code = data.error;
+    throw err;
+  }
+  return data;
+}
+
