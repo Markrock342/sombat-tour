@@ -24,16 +24,8 @@ try {
     out(array('ok' => false, 'error' => 'FILE_TOO_LARGE'), 400);
   }
 
-  $finfo = finfo_open(FILEINFO_MIME_TYPE);
-  $mime = finfo_file($finfo, $file['tmp_name']);
-  finfo_close($finfo);
-  $allowed = array(
-    'image/jpeg' => 'jpg',
-    'image/png' => 'png',
-    'image/webp' => 'webp',
-    'image/gif' => 'gif',
-  );
-  if (!isset($allowed[$mime])) out(array('ok' => false, 'error' => 'INVALID_TYPE'), 400);
+  $detected = detect_image_type($file['tmp_name']);
+  if (!$detected) out(array('ok' => false, 'error' => 'INVALID_TYPE'), 400);
 
   $relDir = 'uploads/repair/' . $rId;
   $absDir = dirname(__DIR__) . '/' . $relDir;
@@ -53,7 +45,7 @@ try {
     ), 500);
   }
 
-  $name = make_token(8) . '.' . $allowed[$mime];
+  $name = make_token(8) . '.' . $detected['ext'];
   $absPath = rtrim($absDir, '/') . '/' . $name;
   $relPath = $relDir . '/' . $name;
 

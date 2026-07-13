@@ -22,6 +22,7 @@ import {
 } from '../data/api';
 import { composeRepairList, REPAIR_TYPES } from '../data/repairNotes';
 import { limitPhoneInput } from '../data/contactActions';
+import { showAlert } from '../utils/dialog';
 
 export default function PublicReportScreen({ navigation, route }) {
   const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
@@ -130,6 +131,8 @@ export default function PublicReportScreen({ navigation, route }) {
         payload.r_inv_com = vehicle.inv_company;
       }
       const created = await createPublicRepair(payload);
+      let uploadFailed = 0;
+      let uploadErr = '';
       for (const img of images) {
         try {
           await uploadPublicRepairImage(
@@ -139,9 +142,16 @@ export default function PublicReportScreen({ navigation, route }) {
             img.fileName || 'photo.jpg',
             img.mimeType || 'image/jpeg'
           );
-        } catch (_) {
-          /* continue */
+        } catch (e) {
+          uploadFailed += 1;
+          uploadErr = e.message || uploadErr;
         }
+      }
+      if (uploadFailed > 0) {
+        await showAlert(
+          'แจ้งซ่อมแล้ว แต่รูปไม่ครบ',
+          `อัปโหลดไม่สำเร็จ ${uploadFailed}/${images.length} รูป${uploadErr ? ` (${uploadErr})` : ''} — เปิดรายละเอียดงานแล้วกด "เพิ่มรูป" ได้`
+        );
       }
       navigation.replace('ReportSuccess', {
         rId: created.r_id,

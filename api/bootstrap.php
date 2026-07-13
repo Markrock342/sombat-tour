@@ -101,6 +101,52 @@ function make_token($bytes = 24) {
   return bin2hex(openssl_random_pseudo_bytes($bytes));
 }
 
+/**
+ * Detect image MIME + extension without requiring ext-fileinfo (disabled on
+ * some PHP 5.6 cPanel hosts — finfo_open() fatals and kills uploads).
+ * Returns array(mime => '...', ext => 'jpg'|...) or null if not an image.
+ */
+function detect_image_type($tmpPath) {
+  $mime = '';
+  if (function_exists('finfo_open')) {
+    $finfo = @finfo_open(FILEINFO_MIME_TYPE);
+    if ($finfo) {
+      $mime = (string)@finfo_file($finfo, $tmpPath);
+      finfo_close($finfo);
+    }
+  }
+  if ($mime === '' && function_exists('mime_content_type')) {
+    $mime = (string)@mime_content_type($tmpPath);
+  }
+  if ($mime === '' || strpos($mime, 'image/') !== 0) {
+    $info = @getimagesize($tmpPath);
+    if (is_array($info) && !empty($info['mime'])) {
+      $mime = (string)$info['mime'];
+    }
+  }
+  // Magic bytes fallback (PHP 5.6 without GD webp / fileinfo)
+  if ($mime === '' || strpos($mime, 'image/') !== 0) {
+    $fh = @fopen($tmpPath, 'rb');
+    $head = $fh ? @fread($fh, 12) : '';
+    if ($fh) fclose($fh);
+    if (strlen($head) >= 3 && substr($head, 0, 3) === "\xFF\xD8\xFF") $mime = 'image/jpeg';
+    elseif (strlen($head) >= 8 && substr($head, 0, 8) === "\x89PNG\r\n\x1a\n") $mime = 'image/png';
+    elseif (strlen($head) >= 6 && (substr($head, 0, 6) === 'GIF87a' || substr($head, 0, 6) === 'GIF89a')) $mime = 'image/gif';
+    elseif (strlen($head) >= 12 && substr($head, 0, 4) === 'RIFF' && substr($head, 8, 4) === 'WEBP') $mime = 'image/webp';
+  }
+  $allowed = array(
+    'image/jpeg' => 'jpg',
+    'image/jpg' => 'jpg',
+    'image/pjpeg' => 'jpg',
+    'image/png' => 'png',
+    'image/x-png' => 'png',
+    'image/webp' => 'webp',
+    'image/gif' => 'gif',
+  );
+  if (!isset($allowed[$mime])) return null;
+  return array('mime' => $mime, 'ext' => $allowed[$mime]);
+}
+
 function base64url_encode($data) {
   return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
 }

@@ -142,6 +142,8 @@ export default function RepairFormScreen({ navigation, route }) {
         if (!tankM && vehicle.v_metr) payload.r_tank_m = String(vehicle.v_metr);
       }
       const created = await createRepair(payload);
+      let uploadFailed = 0;
+      let uploadErr = '';
       for (const img of images) {
         try {
           await uploadRepairImage(
@@ -150,11 +152,19 @@ export default function RepairFormScreen({ navigation, route }) {
             img.fileName || 'photo.jpg',
             img.mimeType || 'image/jpeg'
           );
-        } catch (_) {
-          /* continue */
+        } catch (e) {
+          uploadFailed += 1;
+          uploadErr = e.message || uploadErr;
         }
       }
-      showAlert('สำเร็จ', `แจ้งซ่อมแล้ว #${created.r_job_num || created.r_id}`);
+      if (uploadFailed > 0) {
+        await showAlert(
+          'บันทึกงานแล้ว แต่รูปไม่ครบ',
+          `อัปโหลดไม่สำเร็จ ${uploadFailed}/${images.length} รูป${uploadErr ? ` (${uploadErr})` : ''} — กด "เพิ่มรูป" ในหน้ารายละเอียดได้`
+        );
+      } else {
+        await showAlert('สำเร็จ', `แจ้งซ่อมแล้ว #${created.r_job_num || created.r_id}`);
+      }
       navigation.replace('RepairDetail', { rId: created.r_id });
     } catch (e) {
       if (e.code === 'UNAUTHORIZED') {

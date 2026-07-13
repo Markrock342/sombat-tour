@@ -27,10 +27,13 @@ async function parseJson(res) {
     try {
       data = JSON.parse(text);
     } catch (_) {
+      const looksHtml = /<b>Fatal error|<!DOCTYPE|<html/i.test(text || '');
       const err = new Error(
-        res.ok
-          ? 'เซิร์ฟเวอร์ตอบกลับไม่ใช่ JSON'
-          : `เซิร์ฟเวอร์ผิดพลาด (HTTP ${res.status})`
+        looksHtml
+          ? 'เซิร์ฟเวอร์อัปโหลดรูปพัง (PHP) — อัป bootstrap + upload_image*.php ขึ้น cPanel'
+          : res.ok
+            ? 'เซิร์ฟเวอร์ตอบกลับไม่ใช่ JSON'
+            : `เซิร์ฟเวอร์ผิดพลาด (HTTP ${res.status})`
       );
       err.status = res.status;
       err.code = 'BAD_RESPONSE';

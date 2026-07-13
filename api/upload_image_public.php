@@ -22,28 +22,28 @@ try {
   if ($file['error'] !== UPLOAD_ERR_OK) out(array('ok' => false, 'error' => 'UPLOAD_ERROR', 'code' => $file['error']), 400);
   if ($file['size'] > 8 * 1024 * 1024) out(array('ok' => false, 'error' => 'FILE_TOO_LARGE'), 400);
 
-  $finfo = finfo_open(FILEINFO_MIME_TYPE);
-  $mime = finfo_file($finfo, $file['tmp_name']);
-  finfo_close($finfo);
-  $allowed = array(
-    'image/jpeg' => 'jpg',
-    'image/png' => 'png',
-    'image/webp' => 'webp',
-    'image/gif' => 'gif',
-  );
-  if (!isset($allowed[$mime])) out(array('ok' => false, 'error' => 'INVALID_TYPE'), 400);
+  $detected = detect_image_type($file['tmp_name']);
+  if (!$detected) out(array('ok' => false, 'error' => 'INVALID_TYPE'), 400);
 
   $relDir = 'uploads/repair/' . $rId;
   $absDir = dirname(__DIR__) . '/' . $relDir;
   if (!is_dir($absDir)) {
-    if (!mkdir($absDir, 0755, true) && !is_dir($absDir)) {
-      $absDir = __DIR__ . '/../uploads/repair/' . $rId;
+    if (!@mkdir($absDir, 0755, true) && !is_dir($absDir)) {
+      $absDir = __DIR__ . '/uploads/repair/' . $rId;
       @mkdir($absDir, 0755, true);
-      $relDir = 'uploads/repair/' . $rId;
+      $relDir = 'api/uploads/repair/' . $rId;
     }
   }
+  if (!is_dir($absDir) || !is_writable($absDir)) {
+    out(array(
+      'ok' => false,
+      'error' => 'UPLOAD_DIR',
+      'message' => 'สร้าง/เขียนโฟลเดอร์ uploads/repair ไม่ได้ — ตรวจ chmod บน cPanel',
+      'path' => $absDir,
+    ), 500);
+  }
 
-  $name = make_token(8) . '.' . $allowed[$mime];
+  $name = make_token(8) . '.' . $detected['ext'];
   $absPath = rtrim($absDir, '/') . '/' . $name;
   $relPath = $relDir . '/' . $name;
 
