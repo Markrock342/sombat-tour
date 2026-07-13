@@ -289,6 +289,8 @@ export default function DashboardScreen({ navigation }) {
     const ok = await confirmDialog('ออกจากระบบ', msg, {
       confirmText: 'ออกจากระบบ',
       cancelText: 'ยกเลิก',
+      icon: 'warning',
+      destructive: true,
     });
     if (ok) logout();
   };

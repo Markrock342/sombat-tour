@@ -180,6 +180,8 @@ export default function BoardScreen({ navigation }) {
     const ok = await confirmDialog('ลบโน้ต', `ลบ “${note.title || 'โน้ต'}” ใช่ไหม?`, {
       confirmText: 'ลบ',
       cancelText: 'ยกเลิก',
+      destructive: true,
+      icon: 'danger',
     });
     if (!ok) return;
     try {

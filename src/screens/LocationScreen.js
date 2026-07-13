@@ -127,6 +127,8 @@ export default function LocationScreen({ navigation }) {
                     const ok = await confirmDialog('ลบตำแหน่ง', `ลบ “${r.title || 'จุดจอด'}” ใช่ไหม?`, {
                       confirmText: 'ลบ',
                       cancelText: 'ยกเลิก',
+                      destructive: true,
+                      icon: 'danger',
                     });
                     if (!ok) return;
                     try {

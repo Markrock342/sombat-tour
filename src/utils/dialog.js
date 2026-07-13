@@ -1,73 +1,62 @@
-import { Alert, Platform } from 'react-native';
+import { presentDialog } from '../components/SweetDialog';
 
 /**
- * Web-safe dialogs. RN Alert.alert with buttons often fails on react-native-web.
+ * SweetAlert-style dialogs (custom Modal) — works on web + native.
  */
 
-export function showAlert(title, message = '') {
-  const text = message ? `${title}\n${message}` : title;
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    window.alert(text);
-    return;
-  }
-  Alert.alert(title, message || undefined);
+export async function showAlert(title, message = '', { icon = 'info', confirmText = 'ตกลง' } = {}) {
+  await presentDialog({
+    mode: 'alert',
+    title,
+    message,
+    icon,
+    confirmText,
+  });
 }
 
 /**
  * Confirm OK / Cancel. Returns Promise<boolean>.
  */
-export function confirmDialog(title, message = '', { confirmText = 'ตกลง', cancelText = 'ยกเลิก' } = {}) {
-  const text = message ? `${title}\n\n${message}` : title;
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return Promise.resolve(window.confirm(text));
-  }
-  return new Promise((resolve) => {
-    Alert.alert(title, message || undefined, [
-      { text: cancelText, style: 'cancel', onPress: () => resolve(false) },
-      { text: confirmText, style: 'destructive', onPress: () => resolve(true) },
-    ]);
+export async function confirmDialog(
+  title,
+  message = '',
+  { confirmText = 'ตกลง', cancelText = 'ยกเลิก', icon = 'question', destructive = false } = {}
+) {
+  const res = await presentDialog({
+    mode: 'confirm',
+    title,
+    message,
+    icon: destructive ? 'danger' : icon,
+    confirmText,
+    cancelText,
+    destructive,
   });
+  return !!res?.value;
 }
 
 /**
- * Multi-choice after an action. On web: sequential confirms / first matching confirm.
- * buttons: [{ text, onPress, style?, primary? }] — cancel-style skipped on web unless only option
+ * Multi-choice. buttons: [{ text, onPress, style? }]
+ * style: 'cancel' | 'primary' | 'danger' | 'success'
  */
-export async function chooseAction(title, message, buttons = []) {
+export async function chooseAction(title, message, buttons = [], { icon = 'question' } = {}) {
   const opts = (buttons || []).filter(Boolean);
   if (!opts.length) {
-    showAlert(title, message);
+    await showAlert(title, message, { icon: 'info' });
     return;
   }
 
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    const cancel = opts.find((b) => b.style === 'cancel');
-    const actions = opts.filter((b) => b.style !== 'cancel');
-    const body = message ? `${title}\n\n${message}` : title;
+  const mapped = opts.map((b) => ({
+    text: b.text,
+    style: b.style === 'destructive' ? 'danger' : b.style || 'primary',
+    onPress: b.onPress,
+    value: b.style === 'cancel' ? false : true,
+  }));
 
-    if (actions.length === 0) {
-      window.alert(body);
-      return;
-    }
-
-    if (actions.length === 1) {
-      const ok = window.confirm(body + `\n\n→ ${actions[0].text}`);
-      if (ok && actions[0].onPress) actions[0].onPress();
-      else if (!ok && cancel?.onPress) cancel.onPress();
-      return;
-    }
-
-    // Multiple actions: ask for each until one accepted
-    for (const action of actions) {
-      const ok = window.confirm(`${body}\n\nเลือก: ${action.text}?`);
-      if (ok) {
-        if (action.onPress) action.onPress();
-        return;
-      }
-    }
-    if (cancel?.onPress) cancel.onPress();
-    return;
-  }
-
-  Alert.alert(title, message || undefined, opts);
+  await presentDialog({
+    mode: 'choose',
+    title,
+    message,
+    icon,
+    buttons: mapped,
+  });
 }
