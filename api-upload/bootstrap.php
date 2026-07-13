@@ -228,12 +228,15 @@ function session_secret() {
 
 /**
  * Load push_lib.php safely. Detects wrong uploads (e.g. endpoint file saved as push_lib.php).
+ * $fatal = false → return false instead of emitting a JSON error, so callers
+ * that already did their main work (job create) never die because of push.
  */
-function require_push_lib() {
+function require_push_lib($fatal = true) {
   static $loaded = false;
-  if ($loaded) return;
+  if ($loaded) return true;
   $path = __DIR__ . '/push_lib.php';
   if (!is_file($path)) {
+    if (!$fatal) return false;
     out(array(
       'ok' => false,
       'error' => 'MISSING_PUSH_LIB',
@@ -241,15 +244,17 @@ function require_push_lib() {
     ), 500);
   }
   $raw = @file_get_contents($path);
-  if ($raw === false || strpos($raw, 'function push_ensure_table') === false || strpos($raw, 'auth_user') !== false) {
+  if ($raw === false || strpos($raw, 'function push_ensure_table') === false || strpos($raw, 'auth' . '_user') !== false) {
+    if (!$fatal) return false;
     out(array(
       'ok' => false,
       'error' => 'BAD_PUSH_LIB',
-      'message' => 'ไฟล์ push_lib.php บนเซิร์ฟเวอร์ผิดชื่อ/ผิดเนื้อหา — ลบแล้วอัปใหม่จาก api-upload/push_lib.php (ขนาดประมาณ 4–5 KB ไม่ใช่ไฟล์ subscribe)',
+      'message' => 'ไฟล์ push_lib.php บนเซิร์ฟเวอร์ผิดชื่อ/ผิดเนื้อหา — ลบแล้วอัปใหม่จาก api-upload/push_lib.php (~20 KB ไม่ใช่ไฟล์ subscribe)',
     ), 500);
   }
   require_once $path;
   if (!function_exists('push_ensure_table') || !defined('SOMBAT_PUSH_LIB')) {
+    if (!$fatal) return false;
     out(array(
       'ok' => false,
       'error' => 'BAD_PUSH_LIB',
@@ -257,6 +262,7 @@ function require_push_lib() {
     ), 500);
   }
   $loaded = true;
+  return true;
 }
 
 /**

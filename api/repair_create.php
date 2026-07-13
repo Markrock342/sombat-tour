@@ -94,29 +94,35 @@ try {
 
   $rId = (int)$pdo->lastInsertId();
 
-  // Persist response first, keep script alive for push (shared hosts abort otherwise)
-  ignore_user_abort(true);
-  out_flush(array(
+  // Alert desk staff BEFORE responding — the encrypted push (iPhone needs a
+  // payload) is sent synchronously so shared hosts can't kill it mid-flight,
+  // and the app can see the real result in the response.
+  $push = array('ok' => false, 'sent' => 0, 'error' => 'PUSH_LIB_NOT_LOADED');
+  try {
+    ignore_user_abort(true);
+    @set_time_limit(60);
+    if (require_push_lib(false)) {
+      $kind = ($type === 'breakdown') ? 'เสียกลางทาง' : 'แจ้งซ่อม';
+      $label = $vPlate !== '' ? $vPlate : ($vName !== '' ? $vName : ('#' . $jobNum));
+      $who = $techName !== '' ? $techName : (isset($user['username']) ? $user['username'] : '');
+      $push = push_notify_staff($pdo, array(
+        'title' => 'สมบัติทัวร์ · ' . $kind,
+        'body' => $label . ($who !== '' ? (' · ' . $who) : ''),
+        'url' => '/',
+      ));
+    }
+  } catch (Exception $e) {
+    $push = array('ok' => false, 'sent' => 0, 'error' => $e->getMessage());
+  }
+
+  out(array(
     'ok' => true,
     'r_id' => $rId,
     'r_job_num' => $jobNum,
     'created_by' => $user['username'],
     'r_type' => $type,
+    'push' => $push,
   ));
-
-  // Alert desk staff for every new job from this form (ซ่อมปกติ / เสียกลางทาง)
-  try {
-    require_push_lib();
-    $kind = ($type === 'breakdown') ? 'เสียกลางทาง' : 'แจ้งซ่อม';
-    $label = $vPlate !== '' ? $vPlate : ($vName !== '' ? $vName : ('#' . $jobNum));
-    $who = $techName !== '' ? $techName : (isset($user['username']) ? $user['username'] : '');
-    push_notify_staff($pdo, array(
-      'title' => 'สมบัติทัวร์ · ' . $kind,
-      'body' => $label . ($who !== '' ? (' · ' . $who) : ''),
-      'url' => 'https://425service.vercel.app/',
-    ));
-  } catch (Exception $e) { /* ignore */ }
-  exit;
 } catch (Exception $e) {
   out(array('ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()), 500);
 }

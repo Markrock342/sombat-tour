@@ -170,84 +170,64 @@ export async function showLocalTestNotification() {
   return true;
 }
 
-/** Server → push to this user's subscribed devices */
+/**
+ * Server → real encrypted Web Push to THIS device, sent synchronously.
+ * Resolves with the push service's actual result — no local fallback that
+ * hides failures. Throws with a Thai reason when the push did not go out.
+ */
 export async function sendServerTestPush() {
-  async function postPushTest(body, timeoutMs) {
-    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
-    try {
-      const res = await fetch(`${API_BASE}/push_test.php`, {
-        method: 'POST',
-        mode: 'cors',
-        cache: 'no-store',
-        headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify(body),
-        signal: ctrl ? ctrl.signal : undefined,
-      });
-      const text = await res.text();
-      let data = null;
-      try {
-        data = JSON.parse(text);
-      } catch (_) {
-        const snippet = String(text || '')
-          .replace(/\s+/g, ' ')
-          .slice(0, 120);
-        const err = new Error(
-          snippet
-            ? `เซิร์ฟเวอร์ตอบผิดรูปแบบ (${res.status}): ${snippet}`
-            : 'เซิร์ฟเวอร์ตอบว่าง — อัป bootstrap.php + push_test.php ใหม่'
-        );
-        err.code = 'BAD_RESPONSE';
-        throw err;
-      }
-      if (!data.ok) {
-        const err = new Error(data.message || data.error || 'test failed');
-        err.code = data.error;
-        throw err;
-      }
-      return data;
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-  }
-
-  // 1) Fast ping — proves API + subscription + VAPID without outbound curl
+  let endpoint = '';
   try {
-    await postPushTest({ mode: 'ping' }, 10000);
+    const sub = await getExistingSubscription();
+    if (sub) endpoint = sub.endpoint || '';
+  } catch (_) {}
+
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), 25000) : null;
+  let res;
+  try {
+    res = await fetch(`${API_BASE}/push_test.php`, {
+      method: 'POST',
+      mode: 'cors',
+      cache: 'no-store',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ mode: 'send', endpoint }),
+      signal: ctrl ? ctrl.signal : undefined,
+    });
   } catch (e) {
     const aborted = e && (e.name === 'AbortError' || /abort/i.test(String(e.message || '')));
-    if (aborted || e.code === 'BAD_RESPONSE') throw e;
-    // fetch threw → network / CORS
-    if (!e.code || e.code === 'NETWORK') {
-      const err = new Error(
-        'เชื่อมต่อ push_test ไม่ได้ — อัป bootstrap.php + push_test.php ขึ้น cPanel แล้วรีเฟรช'
-      );
-      err.code = 'NETWORK';
-      err.cause = e;
-      throw err;
-    }
-    throw e;
+    const err = new Error(
+      aborted
+        ? 'เซิร์ฟเวอร์ตอบช้าเกิน 25 วิ — ลองใหม่อีกครั้ง'
+        : 'เชื่อมต่อ push_test ไม่ได้ — อัปไฟล์ push ชุดใหม่ขึ้น cPanel แล้วลองอีกครั้ง'
+    );
+    err.code = aborted ? 'TIMEOUT' : 'NETWORK';
+    err.cause = e;
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 
-  // 2) Queue real send (server flushes JSON first — should return fast)
+  const text = await res.text();
+  let data = null;
   try {
-    const data = await postPushTest({ mode: 'send' }, 12000);
-    // Also bump a local notification so tester always sees something
-    try {
-      await showLocalTestNotification();
-    } catch (_) {}
-    return { ...data, localShown: true };
-  } catch (e) {
-    // Ping worked: server is fine. Host may block outbound curl — still show local alert.
-    try {
-      await showLocalTestNotification();
-    } catch (_) {}
-    return {
-      ok: true,
-      queued: false,
-      simulated: true,
-      warning: e.message || 'send slow',
-    };
+    data = JSON.parse(text);
+  } catch (_) {
+    const snippet = String(text || '').replace(/\s+/g, ' ').slice(0, 120);
+    const err = new Error(
+      snippet
+        ? `เซิร์ฟเวอร์ตอบผิดรูปแบบ (${res.status}): ${snippet}`
+        : 'เซิร์ฟเวอร์ตอบว่าง — อัป bootstrap.php + push_test.php + push_lib.php ใหม่'
+    );
+    err.code = 'BAD_RESPONSE';
+    throw err;
   }
+  if (!data.ok) {
+    const err = new Error(data.message || data.error || 'ส่งไม่สำเร็จ');
+    err.code = data.error || `HTTP_${data.code || res.status}`;
+    err.data = data;
+    throw err;
+  }
+  return data;
 }
 

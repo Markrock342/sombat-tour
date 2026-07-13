@@ -120,8 +120,23 @@ try {
 
   log_repair_status($pdo, $rId, 'submitted', 'แจ้งซ่อมออนไลน์', $reporterName);
 
-  ignore_user_abort(true);
-  out_flush(array(
+  // Notify desk staff BEFORE responding (best effort, synchronous —
+  // shared hosts kill the script after the response is flushed)
+  try {
+    ignore_user_abort(true);
+    @set_time_limit(60);
+    if (require_push_lib(false)) {
+      $kind = ($type === 'breakdown' || $type === 'roadside') ? 'เสียกลางทาง' : 'แจ้งซ่อม';
+      $label = $vPlate !== '' ? $vPlate : ($vName !== '' ? $vName : ('#' . $jobNum));
+      push_notify_staff($pdo, array(
+        'title' => 'สมบัติทัวร์ · ' . $kind,
+        'body' => $label . ' · ' . $reporterName,
+        'url' => '/',
+      ));
+    }
+  } catch (Exception $e) { /* ignore */ }
+
+  out(array(
     'ok' => true,
     'r_id' => $rId,
     'r_job_num' => $jobNum,
@@ -129,19 +144,6 @@ try {
     'public_status' => 'submitted',
     'public_status_label' => public_repair_status_label('submitted'),
   ));
-
-  // After client already got response — notify desk staff (best effort)
-  try {
-    require_push_lib();
-    $kind = ($type === 'breakdown' || $type === 'roadside') ? 'เสียกลางทาง' : 'แจ้งซ่อม';
-    $label = $vPlate !== '' ? $vPlate : ($vName !== '' ? $vName : ('#' . $jobNum));
-    push_notify_staff($pdo, array(
-      'title' => 'สมบัติทัวร์ · ' . $kind,
-      'body' => $label . ' · ' . $reporterName,
-      'url' => 'https://425service.vercel.app/',
-    ));
-  } catch (Exception $e) { /* ignore */ }
-  exit;
 } catch (Exception $e) {
   out(array('ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()), 500);
 }

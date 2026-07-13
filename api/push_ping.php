@@ -58,4 +58,18 @@ if (empty($info['lib_ok'])) {
   out($info, 500);
 }
 
+// Encrypted-payload capability (iPhone ต้องได้ mode "payload" + selftest true)
+if (function_exists('push_capabilities')) {
+  $info['caps'] = push_capabilities();
+  $info['crypto_selftest'] = function_exists('push_crypto_selftest') ? push_crypto_selftest() : false;
+  $info['lib_version'] = defined('SOMBAT_PUSH_LIB') ? SOMBAT_PUSH_LIB : '?';
+  if ($info['caps']['mode'] !== 'payload' || !$info['crypto_selftest']) {
+    $info['warning'] = $info['caps']['mode'] !== 'payload'
+      ? 'โฮสต์ไม่มี GMP/bcmath — iPhone จะไม่ได้รับแจ้งเตือน (Android ยังได้)'
+      : 'crypto selftest ไม่ผ่าน — แจ้งทีมพัฒนา';
+  }
+} else {
+  $info['warning'] = 'push_lib.php เป็นรุ่นเก่า (ไม่มีตัวเข้ารหัส payload) — อัปรุ่นใหม่จาก api-upload';
+}
+
 out($info);

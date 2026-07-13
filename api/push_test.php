@@ -1,10 +1,11 @@
 <?php
 /**
  * POST /api/push_test.php
- * Body: { "mode": "ping" | "send" }  (default send)
+ * Body: { "mode": "ping" | "send", "endpoint": "<optional — test this device>" }
  *
- * ping  = auth + subscription + JWT only (fast, no outbound curl)
- * send  = reply JSON immediately, then curl push in background if possible
+ * ping = auth + subscription + JWT + crypto capability check (no outbound curl)
+ * send = encrypted Web Push to this user's device, synchronous, returns the
+ *        REAL result (HTTP code from the push service) — no more guessing.
  */
 require_once __DIR__ . '/bootstrap.php';
 cors_headers(array('POST', 'OPTIONS'));
@@ -19,8 +20,8 @@ if (!function_exists('require_push_lib')) {
 }
 require_push_lib();
 
-@set_time_limit(30);
-@ini_set('max_execution_time', '30');
+@set_time_limit(45);
+@ini_set('max_execution_time', '45');
 ignore_user_abort(true);
 
 try {
@@ -31,10 +32,20 @@ try {
   $b = read_json_body();
   $mode = strtolower(trim((string)pick($b, array('mode', 'action'), 'send')));
   if ($mode === '') $mode = 'send';
+  $wantEndpoint = trim((string)pick($b, array('endpoint')));
 
-  $st = $pdo->prepare('SELECT id, endpoint FROM push_subscription WHERE username = ? ORDER BY id DESC LIMIT 1');
-  $st->execute(array($user['username']));
-  $row = $st->fetch();
+  // Prefer the exact device that pressed the button, else newest for this user
+  $row = null;
+  if ($wantEndpoint !== '') {
+    $st = $pdo->prepare('SELECT id, endpoint, p256dh, auth_key FROM push_subscription WHERE endpoint_hash = ? LIMIT 1');
+    $st->execute(array(sha1($wantEndpoint)));
+    $row = $st->fetch();
+  }
+  if (!$row) {
+    $st = $pdo->prepare('SELECT id, endpoint, p256dh, auth_key FROM push_subscription WHERE username = ? ORDER BY id DESC LIMIT 1');
+    $st->execute(array($user['username']));
+    $row = $st->fetch();
+  }
   if (!$row) {
     out(array(
       'ok' => false,
@@ -62,6 +73,8 @@ try {
     ), 500);
   }
 
+  $caps = push_capabilities();
+
   if ($mode === 'ping' || $mode === 'check') {
     out(array(
       'ok' => true,
@@ -69,51 +82,36 @@ try {
       'username' => $user['username'],
       'audience' => $aud,
       'jwt_ok' => true,
-      'curl' => function_exists('curl_init'),
+      'caps' => $caps,
+      'crypto_selftest' => push_crypto_selftest(),
     ));
   }
 
-  // ---- send: respond first so browser never hits Failed to fetch ----
-  if (!function_exists('out_flush')) {
+  if (!function_exists('curl_init')) {
     out(array(
       'ok' => false,
-      'error' => 'OLD_BOOTSTRAP',
-      'message' => 'อัป bootstrap.php ชุดใหม่ (ต้องมี out_flush)',
+      'error' => 'NO_CURL',
+      'message' => 'โฮสต์ไม่มี curl — ยิงแจ้งเตือนออกไม่ได้',
     ), 500);
   }
 
-  out_flush(array(
-    'ok' => true,
-    'mode' => 'send',
-    'queued' => true,
-    'username' => $user['username'],
-    'message' => 'รับคำสั่งแล้ว กำลังยิงไปที่เครื่อง',
-  ));
+  // ---- send: encrypted payload (iPhone needs it), synchronous, real result ----
+  $payload = json_encode(array(
+    'title' => 'สมบัติทัวร์ · ทดสอบ',
+    'body' => 'แจ้งเตือนจากเซิร์ฟเวอร์ถึงเครื่องนี้ทำงานแล้ว ✓',
+    'url' => '/',
+  ), defined('JSON_UNESCAPED_UNICODE') ? JSON_UNESCAPED_UNICODE : 0);
 
-  // After client already got JSON — try real push (best effort)
-  if (!function_exists('curl_init')) {
-    exit;
+  $body = null;
+  if ($caps['mode'] === 'payload' && !empty($row['p256dh']) && !empty($row['auth_key'])) {
+    $body = push_encrypt_payload($row['p256dh'], $row['auth_key'], $payload);
   }
 
-  $public = vapid_public_key();
-  $ch = curl_init($endpoint);
-  curl_setopt($ch, CURLOPT_POST, true);
-  curl_setopt($ch, CURLOPT_POSTFIELDS, '');
-  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-  curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
-  curl_setopt($ch, CURLOPT_TIMEOUT, 6);
-  if (defined('CURL_SSLVERSION_TLSv1_2')) {
-    curl_setopt($ch, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
-  }
-  curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-    'TTL: 60',
-    'Urgency: high',
-    'Content-Length: 0',
-    'Authorization: vapid t=' . $jwt . ', k=' . $public,
-  ));
-  curl_exec($ch);
-  $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-  curl_close($ch);
+  $results = push_send_webpush_multi(array(array(
+    'endpoint' => $endpoint,
+    'body' => $body,
+  )), 60, 15);
+  $code = isset($results[0]['code']) ? (int)$results[0]['code'] : 0;
 
   if ($code === 404 || $code === 410) {
     try {
@@ -121,7 +119,27 @@ try {
     } catch (Exception $e) { /* ignore */ }
   }
 
-  exit;
+  $sent = ($code >= 200 && $code < 300);
+  $hint = '';
+  if ($code === 0) $hint = 'ยิงไม่ออกจากโฮสต์ (curl ต่อไม่ได้/หมดเวลา)';
+  elseif ($code === 401 || $code === 403) $hint = 'push service ปฏิเสธลายเซ็น VAPID';
+  elseif ($code === 404 || $code === 410) $hint = 'การสมัครรับหมดอายุ — ปิดแล้วเปิดรับใหม่บนเครื่องนั้น';
+  elseif ($code === 413) $hint = 'payload ใหญ่เกิน';
+  elseif (!$sent) $hint = 'push service ตอบ ' . $code;
+
+  out(array(
+    'ok' => $sent,
+    'mode' => 'send',
+    'sent' => $sent ? 1 : 0,
+    'code' => $code,
+    'push_mode' => $body !== null ? 'payload' : 'empty',
+    'crypto' => $caps['bignum'] !== '' ? 'aes128gcm/' . $caps['bignum'] : 'none',
+    'host' => $parts['host'],
+    'username' => $user['username'],
+    'message' => $sent
+      ? 'push service รับเรื่องแล้ว (' . $code . ') — แจ้งเตือนควรเด้งภายในไม่กี่วินาที'
+      : ($hint !== '' ? $hint : 'ส่งไม่สำเร็จ'),
+  ), $sent ? 200 : 502);
 } catch (Exception $e) {
   out(array('ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()), 500);
 }
