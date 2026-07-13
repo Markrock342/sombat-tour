@@ -113,7 +113,11 @@ function push_notify_staff(PDO $pdo, $meta = array()) {
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, '');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 4);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+    if (defined('CURL_SSLVERSION_TLSv1_2')) {
+      curl_setopt($ch, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
+    }
     curl_setopt($ch, CURLOPT_HTTPHEADER, array(
       'TTL: 86400',
       'Urgency: high',

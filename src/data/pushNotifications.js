@@ -173,19 +173,29 @@ export async function showLocalTestNotification() {
 /** Server → push to this user's subscribed devices */
 export async function sendServerTestPush() {
   let res;
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), 22000) : null;
   try {
     res = await fetch(`${API_BASE}/push_test.php`, {
       method: 'POST',
+      mode: 'cors',
+      cache: 'no-store',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: '{}',
+      signal: ctrl ? ctrl.signal : undefined,
     });
   } catch (e) {
+    const aborted = e && (e.name === 'AbortError' || /abort/i.test(String(e.message || '')));
     const err = new Error(
-      'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — อัปไฟล์ push_test.php ขึ้น 425store.com/api/'
+      aborted
+        ? 'เซิร์ฟเวอร์ตอบช้าเกิน — อัป push_test.php ชุดใหม่ขึ้น cPanel แล้วลองอีกครั้ง'
+        : 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจเน็ต หรืออัป push_test.php + bootstrap.php ขึ้น cPanel'
     );
-    err.code = 'NETWORK';
+    err.code = aborted ? 'TIMEOUT' : 'NETWORK';
     err.cause = e;
     throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   const text = await res.text();
   if (res.status === 404) {
@@ -197,7 +207,14 @@ export async function sendServerTestPush() {
   try {
     data = JSON.parse(text);
   } catch (_) {
-    const err = new Error('ทดสอบไม่สำเร็จ — อัป push_test.php ขึ้น cPanel');
+    const snippet = String(text || '')
+      .replace(/\s+/g, ' ')
+      .slice(0, 120);
+    const err = new Error(
+      snippet
+        ? `เซิร์ฟเวอร์ตอบผิดรูปแบบ (${res.status}): ${snippet}`
+        : 'เซิร์ฟเวอร์ตอบว่าง — อัป bootstrap.php + push_test.php ใหม่'
+    );
     err.code = 'BAD_RESPONSE';
     throw err;
   }
