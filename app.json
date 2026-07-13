@@ -33,7 +33,8 @@
       "description": "โปรแกรมซ่อมบำรุง สมบัติทัวร์"
     },
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      "expo-font"
     ]
   }
 }
