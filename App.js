@@ -40,7 +40,15 @@ const linking = {
   prefixes: ['https://425service.vercel.app', 'http://localhost:8081', 'http://localhost:19006'],
   config: {
     screens: {
-      TrackRepair: 'track/:token',
+      TrackRepair: {
+        path: 'track/:token?',
+        parse: {
+          token: (value) => {
+            if (!value || value === 'undefined' || value === 'null') return undefined;
+            return value;
+          },
+        },
+      },
       PublicReport: 'report',
       ReportSuccess: 'report/success',
     },

@@ -30,15 +30,19 @@ export function qrImageUrl(url, size = 240) {
 
 /** Extract token from pasted URL or raw token string */
 export function parseTrackToken(input) {
-  const t = (input || '').trim();
-  if (!t) return '';
+  let t = String(input ?? '').trim();
+  if (!t || t === 'undefined' || t === 'null') return '';
   const m = t.match(/\/track\/([^/?#]+)/i);
-  if (m) return decodeURIComponent(m[1]);
+  if (m) {
+    t = decodeURIComponent(m[1]);
+    if (!t || t === 'undefined' || t === 'null') return '';
+    return t;
+  }
   if (t.includes('token=')) {
     try {
       const u = new URL(t.startsWith('http') ? t : `https://x/?${t.replace(/^\?/, '')}`);
       const q = u.searchParams.get('token');
-      if (q) return q;
+      if (q && q !== 'undefined' && q !== 'null') return q;
     } catch (_) {
       /* ignore */
     }

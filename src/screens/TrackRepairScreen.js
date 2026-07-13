@@ -26,7 +26,8 @@ import { decodeQrFromImageUri } from '../utils/decodeQrFromImage';
 import { showAlert } from '../utils/dialog';
 
 export default function TrackRepairScreen({ navigation, route }) {
-  const initialToken = route?.params?.token || '';
+  const rawParam = route?.params?.token;
+  const initialToken = parseTrackToken(rawParam);
   const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
   const sheetStyle = contentSheetStyle(centerContent, contentMaxWidth);
   const goBack = () => {
@@ -47,8 +48,10 @@ export default function TrackRepairScreen({ navigation, route }) {
     const t = parseTrackToken(token || '');
     if (!t) {
       setData(null);
+      setError(null);
       setLoading(false);
       setRefreshing(false);
+      setShowSearch(true);
       return;
     }
     setError(null);
@@ -57,12 +60,16 @@ export default function TrackRepairScreen({ navigation, route }) {
       const res = await fetchTrackByToken(t);
       setData(res);
       setActiveToken(t);
+      setTokenInput(t);
       setShowSearch(false);
     } catch (e) {
       setData(null);
+      const code = e.code || '';
       const msg = e.message || '';
-      if (/1146|doesn't exist|repair_public_meta/i.test(msg)) {
+      if (/1146|doesn't exist|repair_public_meta|SCHEMA/i.test(msg + code)) {
         setError('ระบบติดตามยังไม่พร้อม — รอแผนกติดตั้งตารางฐานข้อมูล');
+      } else if (code === 'NOT_FOUND' || msg === 'NOT_FOUND') {
+        setError('ไม่พบใบงานนี้ — ตรวจลิงก์ / QR อีกครั้ง หรือเลือกรูป QR จากแกลเลอรี');
       } else {
         setError(msg || 'ไม่พบใบงานนี้ — ตรวจลิงก์ / QR อีกครั้ง');
       }
