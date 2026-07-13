@@ -15,6 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, radius } from '../theme';
 import DateRangePicker from '../components/DateRangePicker';
 import LoadingView from '../components/LoadingView';
+import RepairJobCard, { mapRepairToCardJob, jobCardSearchHay } from '../components/RepairJobCard';
 import {
   TopBackLink,
   MobileBackBar,
@@ -27,10 +28,8 @@ import {
   fetchPendingJobs,
   fmtThaiDate,
   fmtDate,
-  isOpenRepair,
   repairMatchesTech,
 } from '../data/api';
-import { parseRepairList } from '../data/repairNotes';
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'ทั้งหมด' },
@@ -38,71 +37,10 @@ const STATUS_FILTERS = [
   { key: 'closed', label: 'ปิดงานแล้ว' },
 ];
 
-const PAGE_SIZE = 40;
-
 function parseDateStr(str) {
   if (!str) return new Date();
   const [y, m, d] = String(str).split('-').map(Number);
   return new Date(y, m - 1, d);
-}
-
-function fmtListWhen(str) {
-  const m = String(str || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}):(\d{2})(?::\d{2})?)?/);
-  if (!m) return { date: str || '-', time: '' };
-  return {
-    date: `${+m[3]}/${m[2]}/${+m[1] + 543}`,
-    time: m[4] ? `${m[4]}:${m[5]}` : '',
-  };
-}
-
-function shortSymptom(raw) {
-  const parsed = parseRepairList(raw);
-  const text = (parsed.symptom || raw || 'งานแจ้งซ่อม').replace(/\s+/g, ' ').trim();
-  return text.length > 72 ? `${text.slice(0, 72)}…` : text;
-}
-
-function PaginationBar({ page, pageCount, total, pageSize, onChange }) {
-  if (pageCount <= 1) return null;
-  const from = (page - 1) * pageSize + 1;
-  const to = Math.min(page * pageSize, total);
-
-  const window = [];
-  const start = Math.max(1, page - 2);
-  const end = Math.min(pageCount, start + 4);
-  for (let i = start; i <= end; i += 1) window.push(i);
-
-  return (
-    <View style={styles.pager}>
-      <Text style={styles.pagerMeta}>
-        แสดง {from}–{to} จาก {total} · หน้า {page}/{pageCount}
-      </Text>
-      <View style={styles.pagerBtns}>
-        <Pressable
-          style={[styles.pageBtn, page <= 1 && styles.pageBtnDisabled]}
-          disabled={page <= 1}
-          onPress={() => onChange(page - 1)}
-        >
-          <Text style={styles.pageBtnText}>‹</Text>
-        </Pressable>
-        {window.map((n) => (
-          <Pressable
-            key={n}
-            style={[styles.pageBtn, n === page && styles.pageBtnActive]}
-            onPress={() => onChange(n)}
-          >
-            <Text style={[styles.pageBtnText, n === page && styles.pageBtnTextActive]}>{n}</Text>
-          </Pressable>
-        ))}
-        <Pressable
-          style={[styles.pageBtn, page >= pageCount && styles.pageBtnDisabled]}
-          disabled={page >= pageCount}
-          onPress={() => onChange(page + 1)}
-        >
-          <Text style={styles.pageBtnText}>›</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
 }
 
 export default function JobDetailScreen({ route, navigation }) {
@@ -135,13 +73,12 @@ export default function JobDetailScreen({ route, navigation }) {
   const [jobs, setJobs] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [textFilter, setTextFilter] = useState('');
-  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
   const goBack = () => navigation.goBack();
-  const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, 820));
+  const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, 640));
   const lastDeviceDay = useRef(fmtDate(new Date()));
 
   const load = useCallback(
@@ -168,23 +105,11 @@ export default function JobDetailScreen({ route, navigation }) {
           });
         }
 
+        // เรียงวันเวลาใหม่ → เก่า (แบบเดิมก่อน dense table)
         const sorted = [...rows].sort((a, b) =>
           String(b.r_dt_rec || '').localeCompare(String(a.r_dt_rec || ''))
         );
-
-        const mapped = sorted.map((r) => ({
-          rId: r.r_id,
-          raw: r,
-          code: r.r_job_num ? `#${r.r_job_num}` : `#${r.r_id}`,
-          title: shortSymptom(r.r_repair_list),
-          closed: !isOpenRepair(r),
-          vehicleNo: r.r_v_name || '',
-          plate: r.r_v_plate || '',
-          technician: r.r_technician || '',
-          datetime: r.r_dt_rec,
-        }));
-        setJobs(mapped);
-        setPage(1);
+        setJobs(sorted.map((r, i) => mapRepairToCardJob(r, i)));
       } catch (e) {
         setError(e.message || 'โหลดข้อมูลไม่สำเร็จ');
       } finally {
@@ -216,26 +141,20 @@ export default function JobDetailScreen({ route, navigation }) {
     return () => sub.remove();
   }, [load]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [statusFilter, textFilter]);
-
   const visibleJobs = useMemo(() => {
     const term = textFilter.trim().toLowerCase();
-    return jobs.filter((job) => {
-      if (statusFilter === 'open' && job.closed) return false;
-      if (statusFilter === 'closed' && !job.closed) return false;
-      if (!term) return true;
-      const hay = [job.code, job.title, job.vehicleNo, job.plate, job.technician, job.datetime]
-        .map((x) => String(x || '').toLowerCase())
-        .join(' ');
-      return hay.includes(term);
-    });
+    return jobs
+      .filter((job) => {
+        if (statusFilter === 'open') return !job.closed;
+        if (statusFilter === 'closed') return job.closed;
+        return true;
+      })
+      .filter((job) => {
+        if (!term) return true;
+        return jobCardSearchHay(job).includes(term);
+      })
+      .map((job, i) => ({ ...job, displayId: i + 1 }));
   }, [jobs, statusFilter, textFilter]);
-
-  const pageCount = Math.max(1, Math.ceil(visibleJobs.length / PAGE_SIZE));
-  const safePage = Math.min(page, pageCount);
-  const pageJobs = visibleJobs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const countLabel =
     statusFilter === 'all' && !textFilter.trim()
@@ -296,6 +215,8 @@ export default function JobDetailScreen({ route, navigation }) {
               onChangeText={setTextFilter}
               placeholder="ค้นเลขงาน · ทะเบียน · ช่าง · อาการ..."
               placeholderTextColor={colors.textMuted}
+              autoCorrect={false}
+              autoCapitalize="none"
             />
 
             {loading ? (
@@ -309,22 +230,24 @@ export default function JobDetailScreen({ route, navigation }) {
               </View>
             ) : (
               <>
-                <View style={styles.filterRow}>
-                  {STATUS_FILTERS.map((f) => {
-                    const active = statusFilter === f.key;
-                    return (
-                      <Pressable
-                        key={f.key}
-                        onPress={() => setStatusFilter(f.key)}
-                        style={[styles.filterChip, active && styles.filterChipActive]}
-                      >
-                        <Text style={[styles.filterText, active && styles.filterTextActive]}>
-                          {f.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                {jobs.length > 0 ? (
+                  <View style={styles.filterRow}>
+                    {STATUS_FILTERS.map((f) => {
+                      const active = statusFilter === f.key;
+                      return (
+                        <Pressable
+                          key={f.key}
+                          onPress={() => setStatusFilter(f.key)}
+                          style={[styles.filterChip, active && styles.filterChipActive]}
+                        >
+                          <Text style={[styles.filterText, active && styles.filterTextActive]}>
+                            {f.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
 
                 {jobs.length === 0 ? (
                   <View style={styles.center}>
@@ -337,120 +260,19 @@ export default function JobDetailScreen({ route, navigation }) {
                     <Text style={styles.centerText}>ไม่มีงานที่ตรงกับตัวกรอง</Text>
                   </View>
                 ) : (
-                  <View style={styles.listCard}>
-                    <PaginationBar
-                      page={safePage}
-                      pageCount={pageCount}
-                      total={visibleJobs.length}
-                      pageSize={PAGE_SIZE}
-                      onChange={setPage}
-                    />
-
-                    {!isMobile ? (
-                      <View style={styles.colHead}>
-                        <Text style={[styles.col, styles.colNo]}>#</Text>
-                        <Text style={[styles.col, styles.colWhen]}>เวลา</Text>
-                        <Text style={[styles.col, styles.colCode]}>งาน</Text>
-                        <Text style={[styles.col, styles.colVehicle]}>รถ</Text>
-                        <Text style={[styles.col, styles.colTitle]}>อาการ</Text>
-                        <Text style={[styles.col, styles.colTech]}>ช่าง</Text>
-                        <Text style={[styles.col, styles.colStatus]}>สถานะ</Text>
-                      </View>
-                    ) : null}
-
-                    {pageJobs.map((job, i) => {
-                      const idx = (safePage - 1) * PAGE_SIZE + i + 1;
-                      const vehicle = [job.vehicleNo, job.plate].filter(Boolean).join(' · ') || '-';
-                      const when = fmtListWhen(job.datetime);
-                      return (
-                        <Pressable
-                          key={`${job.rId}-${job.code}`}
-                          style={({ pressed }) => [
-                            styles.row,
-                            isMobile && styles.rowMobile,
-                            pressed && styles.pressed,
-                          ]}
-                          onPress={() =>
-                            navigation.navigate('RepairDetail', {
-                              repair: job.raw,
-                              rId: job.rId,
-                            })
-                          }
-                        >
-                          {isMobile ? (
-                            <>
-                              <View style={styles.rowTop}>
-                                <Text style={styles.mobileCode}>
-                                  {idx}. {job.code}
-                                </Text>
-                                <Text
-                                  style={[
-                                    styles.statusText,
-                                    { color: job.closed ? '#E5544B' : '#1FA97A' },
-                                  ]}
-                                >
-                                  {job.closed ? 'ปิดงาน' : 'กำลังซ่อม'}
-                                </Text>
-                              </View>
-                              <Text style={styles.mobileTitle} numberOfLines={2}>
-                                {job.title}
-                              </Text>
-                              <Text style={styles.mobileMeta} numberOfLines={2}>
-                                {vehicle}
-                                {job.technician ? ` · ${job.technician}` : ''}
-                                {when.date
-                                  ? ` · ${when.date}${when.time ? ` ${when.time}` : ''}`
-                                  : ''}
-                              </Text>
-                            </>
-                          ) : (
-                            <>
-                              <Text style={[styles.col, styles.colNo]}>{idx}</Text>
-                              <View style={styles.colWhen}>
-                                <Text style={styles.whenDate} numberOfLines={1}>
-                                  {when.date}
-                                </Text>
-                                {when.time ? (
-                                  <Text style={styles.whenTime} numberOfLines={1}>
-                                    {when.time}
-                                  </Text>
-                                ) : null}
-                              </View>
-                              <Text style={[styles.col, styles.colCode]} numberOfLines={1}>
-                                {job.code}
-                              </Text>
-                              <Text style={[styles.col, styles.colVehicle]} numberOfLines={1}>
-                                {vehicle}
-                              </Text>
-                              <Text style={[styles.col, styles.colTitle]} numberOfLines={1}>
-                                {job.title}
-                              </Text>
-                              <Text style={[styles.col, styles.colTech]} numberOfLines={1}>
-                                {job.technician || '—'}
-                              </Text>
-                              <Text
-                                style={[
-                                  styles.col,
-                                  styles.colStatus,
-                                  styles.statusText,
-                                  { color: job.closed ? '#E5544B' : '#1FA97A' },
-                                ]}
-                              >
-                                {job.closed ? 'ปิดงาน' : 'กำลังซ่อม'}
-                              </Text>
-                            </>
-                          )}
-                        </Pressable>
-                      );
-                    })}
-
-                    <PaginationBar
-                      page={safePage}
-                      pageCount={pageCount}
-                      total={visibleJobs.length}
-                      pageSize={PAGE_SIZE}
-                      onChange={setPage}
-                    />
+                  <View style={styles.grid}>
+                    {visibleJobs.map((job) => (
+                      <RepairJobCard
+                        key={`${job.rId}-${job.code}`}
+                        job={job}
+                        onPress={() =>
+                          navigation.navigate('RepairDetail', {
+                            repair: job.raw,
+                            rId: job.rId,
+                          })
+                        }
+                      />
+                    ))}
                   </View>
                 )}
               </>
@@ -464,7 +286,7 @@ export default function JobDetailScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.navyDeep },
+  safe: { flex: 1, backgroundColor: colors.navy },
   body: { flex: 1 },
   scrollView: { flex: 1 },
   header: {
@@ -524,100 +346,5 @@ const styles = StyleSheet.create({
   filterChipActive: { backgroundColor: colors.navy },
   filterText: { fontSize: 13, fontWeight: '700', color: colors.navySoft },
   filterTextActive: { color: colors.onNavy },
-  listCard: {
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  colHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    backgroundColor: colors.navyTint,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  col: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  colNo: { width: 36, flexShrink: 0 },
-  colWhen: { width: 92, flexShrink: 0, paddingRight: 6 },
-  colCode: { width: 78, flexShrink: 0 },
-  colVehicle: { width: 140, flexShrink: 1, paddingRight: 8 },
-  colTitle: { flex: 1, minWidth: 120, paddingRight: 8 },
-  colTech: { width: 96, flexShrink: 0 },
-  colStatus: { width: 78, flexShrink: 0, textAlign: 'right' },
-  whenDate: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '700',
-    flexShrink: 0,
-  },
-  whenTime: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 1,
-    flexShrink: 0,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    minHeight: 48,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  rowMobile: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    paddingVertical: 12,
-  },
-  pressed: { backgroundColor: '#F3F5FB' },
-  statusText: { fontWeight: '800', fontSize: 12 },
-  rowTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    marginBottom: 2,
-  },
-  mobileCode: { color: colors.navy, fontWeight: '800', fontSize: 13 },
-  mobileTitle: { color: colors.textPrimary, fontWeight: '700', fontSize: 14, lineHeight: 20 },
-  mobileMeta: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
-  pager: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: '#F7F8FC',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  pagerMeta: { color: colors.textSecondary, fontSize: 12, fontWeight: '600' },
-  pagerBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
-  pageBtn: {
-    minWidth: 36,
-    minHeight: 36,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pageBtnActive: { backgroundColor: colors.navy, borderColor: colors.navy },
-  pageBtnDisabled: { opacity: 0.35 },
-  pageBtnText: { color: colors.navy, fontWeight: '800', fontSize: 13 },
-  pageBtnTextActive: { color: colors.onNavy },
+  grid: { gap: spacing.sm },
 });
