@@ -37,6 +37,21 @@ export function composeRepairList({ type, symptom, location, parts, action }) {
   return lines.join('\n');
 }
 
+/** Update/replace สถานที่ in existing r_repair_list, keep other fields */
+export function withRepairLocation(raw, location) {
+  const p = parseRepairList(raw);
+  const known = Object.values(LABELS);
+  const structured = known.some((l) => String(raw || '').includes(`${l}:`));
+  const symptom = p.symptom || (!structured ? String(raw || '').trim() : '');
+  return composeRepairList({
+    type: p.type,
+    symptom,
+    location: location == null ? p.location : String(location).trim(),
+    parts: p.parts,
+    action: p.action,
+  });
+}
+
 export function parseRepairList(text) {
   const raw = (text || '').trim();
   const empty = { type: 'normal', symptom: '', location: '', parts: '', action: '', raw };

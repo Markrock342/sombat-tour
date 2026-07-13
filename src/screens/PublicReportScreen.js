@@ -19,9 +19,8 @@ import {
   createPublicRepair,
   searchVehicles,
   uploadPublicRepairImage,
-  fetchTechnicians,
 } from '../data/api';
-import { composeRepairList, REPAIR_TYPES, workshopNamesFromTechs } from '../data/repairNotes';
+import { composeRepairList, REPAIR_TYPES } from '../data/repairNotes';
 import { limitPhoneInput } from '../data/contactActions';
 
 export default function PublicReportScreen({ navigation, route }) {
@@ -38,10 +37,6 @@ export default function PublicReportScreen({ navigation, route }) {
   const [vehicle, setVehicle] = useState(null);
   const [symptom, setSymptom] = useState('');
   const [location, setLocation] = useState('');
-  const [workshopPicked, setWorkshopPicked] = useState(false);
-  const [workshops, setWorkshops] = useState(() => workshopNamesFromTechs([]));
-  const [mile, setMile] = useState('');
-  const [tankM, setTankM] = useState('');
   const [images, setImages] = useState([]);
   const [honeypot, setHoneypot] = useState('');
   const [saving, setSaving] = useState(false);
@@ -51,14 +46,6 @@ export default function PublicReportScreen({ navigation, route }) {
 
   const isBreakdown = jobType === 'breakdown';
 
-  const workshopHits = useMemo(() => {
-    if (isBreakdown || workshopPicked) return [];
-    const term = location.trim().toLowerCase();
-    const list = workshops;
-    if (!term) return list.slice(0, 8);
-    return list.filter((n) => n.toLowerCase().includes(term)).slice(0, 8);
-  }, [isBreakdown, workshopPicked, location, workshops]);
-
   const activeStep = useMemo(() => {
     if (!reporterName.trim()) return 1;
     if (!symptom.trim()) return 2;
@@ -66,20 +53,6 @@ export default function PublicReportScreen({ navigation, route }) {
   }, [reporterName, symptom]);
 
   const canSubmit = reporterName.trim() && symptom.trim() && !saving;
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchTechnicians()
-      .then((rows) => {
-        if (!cancelled) setWorkshops(workshopNamesFromTechs(rows));
-      })
-      .catch(() => {
-        if (!cancelled) setWorkshops(workshopNamesFromTechs([]));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     const term = vehicleQ.trim();
@@ -105,7 +78,6 @@ export default function PublicReportScreen({ navigation, route }) {
   const setType = (key) => {
     setJobType(key);
     setLocation('');
-    setWorkshopPicked(false);
   };
 
   const pickImage = useCallback(async () => {
@@ -136,7 +108,7 @@ export default function PublicReportScreen({ navigation, route }) {
       const repairList = composeRepairList({
         type: jobType,
         symptom,
-        location,
+        location: isBreakdown ? location : '',
         parts: '',
         action: '',
       });
@@ -144,9 +116,7 @@ export default function PublicReportScreen({ navigation, route }) {
         reporter_name: reporterName.trim(),
         reporter_phone: limitPhoneInput(reporterPhone),
         r_repair_list: repairList,
-        r_mile: Number(mile) || 0,
         r_type: jobType === 'breakdown' ? 'breakdown' : 'normal',
-        r_tank_m: tankM,
         _website: honeypot,
       };
       if (vehicle) {
@@ -158,7 +128,6 @@ export default function PublicReportScreen({ navigation, route }) {
         payload.r_v_chassis = vehicle.v_chassis;
         payload.r_v_company = vehicle.v_company;
         payload.r_inv_com = vehicle.inv_company;
-        if (!tankM && vehicle.v_metr) payload.r_tank_m = String(vehicle.v_metr);
       }
       const created = await createPublicRepair(payload);
       for (const img of images) {
@@ -297,7 +266,6 @@ export default function PublicReportScreen({ navigation, route }) {
                           setVehicle(v);
                           setVehicleQ(v.v_name || v.v_plate || String(v.v_id));
                           setVehicleHits([]);
-                          if (v.v_metr) setTankM(String(v.v_metr));
                         }}
                       >
                         <Text style={styles.hitTitle}>{v.v_name || v.v_plate || `ID ${v.v_id}`}</Text>
@@ -334,82 +302,8 @@ export default function PublicReportScreen({ navigation, route }) {
                   placeholder="เช่น กม.45 ถ.พหลโยธิน · หน้าปั๊ม"
                   placeholderTextColor={colors.textMuted}
                 />
-                <View style={[styles.row2, isMobile && styles.row2Stack]}>
-                  <View style={styles.half}>
-                    <Text style={styles.label}>ไมล์</Text>
-                    <TextInput
-                      style={inputStyle}
-                      value={mile}
-                      onChangeText={setMile}
-                      keyboardType="number-pad"
-                      placeholder="0"
-                      placeholderTextColor={colors.textMuted}
-                    />
-                  </View>
-                  <View style={styles.half}>
-                    <Text style={styles.label}>เมตรถัง</Text>
-                    <TextInput
-                      style={inputStyle}
-                      value={tankM}
-                      onChangeText={setTankM}
-                      placeholder="ม."
-                      placeholderTextColor={colors.textMuted}
-                    />
-                  </View>
-                </View>
               </>
-            ) : (
-              <>
-                <Text style={styles.label}>อู่</Text>
-                <Text style={styles.sectionHint}>พิมพ์ชื่อแล้วเลือกจากรายการ</Text>
-                {workshopPicked ? (
-                  <View style={styles.vehicleCard}>
-                    <View style={styles.vehicleHead}>
-                      <Text style={styles.vehicleName}>{location}</Text>
-                      <Pressable
-                        onPress={() => {
-                          setWorkshopPicked(false);
-                          setLocation('');
-                        }}
-                        hitSlop={8}
-                      >
-                        <Text style={styles.link}>เปลี่ยน</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                ) : (
-                  <>
-                    <TextInput
-                      style={inputStyle}
-                      value={location}
-                      onChangeText={(v) => {
-                        setLocation(v);
-                        setWorkshopPicked(false);
-                      }}
-                      placeholder="เช่น อู่เชียงราย"
-                      placeholderTextColor={colors.textMuted}
-                      autoCorrect={false}
-                    />
-                    {workshopHits.length > 0 ? (
-                      <View style={styles.suggestBox}>
-                        {workshopHits.map((name) => (
-                          <Pressable
-                            key={name}
-                            style={styles.hit}
-                            onPress={() => {
-                              setLocation(name);
-                              setWorkshopPicked(true);
-                            }}
-                          >
-                            <Text style={styles.hitTitle}>{name}</Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                    ) : null}
-                  </>
-                )}
-              </>
-            )}
+            ) : null}
           </View>
 
           <View style={styles.section}>
@@ -487,43 +381,54 @@ const styles = StyleSheet.create({
   sheet: { gap: spacing.md },
   section: { backgroundColor: colors.card, borderRadius: radius.md, padding: spacing.lg, ...shadow },
   sectionTitle: { color: colors.navy, fontWeight: '800', fontSize: 16 },
-  sectionHint: { color: colors.textMuted, fontSize: 12, marginTop: 2, marginBottom: spacing.sm },
-  label: { color: colors.textSecondary, fontWeight: '700', fontSize: 12, marginTop: spacing.sm, marginBottom: 6 },
+  sectionHint: { color: colors.textMuted, fontSize: 12, marginTop: 4, marginBottom: spacing.sm },
+  label: {
+    color: colors.textSecondary,
+    fontWeight: '700',
+    fontSize: 12,
+    marginTop: spacing.sm,
+    marginBottom: 6,
+  },
   input: {
     backgroundColor: colors.background,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-    fontSize: 16,
+    fontSize: 15,
     color: colors.textPrimary,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  inputMobile: { minHeight: 48, paddingVertical: 12 },
-  inputError: { borderColor: '#E5544B', borderWidth: 2 },
-  textarea: { minHeight: 96, textAlignVertical: 'top' },
+  inputMobile: { minHeight: 48 },
+  inputError: { borderColor: '#E5544B' },
+  textarea: { minHeight: 88, textAlignVertical: 'top' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.sm },
-  chipRowMobile: { flexDirection: 'column' },
+  chipRowMobile: { gap: 8 },
   typeChip: {
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: radius.sm,
     backgroundColor: colors.navyTint,
-    minHeight: 44,
-    justifyContent: 'center',
   },
-  typeChipMobile: { width: '100%' },
+  typeChipMobile: { flex: 1, alignItems: 'center' },
   typeChipActive: { backgroundColor: colors.navy },
-  typeChipText: { color: colors.navySoft, fontWeight: '700', fontSize: 14, textAlign: 'center' },
+  typeChipText: { color: colors.navySoft, fontWeight: '700', fontSize: 13 },
   typeChipTextActive: { color: colors.onNavy },
-  vehicleCard: { backgroundColor: colors.navyTint, borderRadius: radius.sm, padding: spacing.md, marginBottom: spacing.sm },
+  vehicleCard: {
+    backgroundColor: colors.background,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+  },
   vehicleHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  vehicleName: { color: colors.navy, fontWeight: '800', fontSize: 16, flex: 1 },
-  vehicleMeta: { color: colors.textSecondary, marginTop: 4, fontSize: 13 },
-  vehicleId: { color: colors.textMuted, fontSize: 11, marginTop: 2, fontWeight: '600' },
-  searchStatus: { color: colors.textMuted, fontSize: 12, marginTop: 8, fontWeight: '600' },
+  vehicleName: { color: colors.navy, fontWeight: '800', fontSize: 15, flex: 1 },
+  vehicleMeta: { color: colors.textSecondary, fontSize: 12, marginTop: 4 },
+  vehicleId: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
+  searchStatus: { color: colors.textMuted, fontSize: 12, marginTop: 6 },
   suggestBox: {
-    marginTop: 8,
+    marginTop: spacing.sm,
     borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.border,
@@ -540,9 +445,6 @@ const styles = StyleSheet.create({
   },
   hitTitle: { color: colors.textPrimary, fontWeight: '700', fontSize: 15 },
   hitMeta: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
-  row2: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  row2Stack: { flexDirection: 'column' },
-  half: { flex: 1 },
   secondaryBtn: {
     alignSelf: 'stretch',
     backgroundColor: colors.background,

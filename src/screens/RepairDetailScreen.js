@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -23,10 +23,16 @@ import {
   uploadRepairImage,
   fetchRepairTracking,
   updateRepairStatus,
+  fetchTechnicians,
   fmtDateTime,
   isOpenRepair,
 } from '../data/api';
-import { repairListSections, parseRepairList } from '../data/repairNotes';
+import {
+  repairListSections,
+  parseRepairList,
+  withRepairLocation,
+  workshopNamesFromTechs,
+} from '../data/repairNotes';
 import { statusColor } from '../data/repairTracking';
 import StatusPicker from '../components/StatusPicker';
 import RepairStatusTimeline from '../components/RepairStatusTimeline';
@@ -62,6 +68,21 @@ export default function RepairDetailScreen({ route, navigation }) {
   const [loading, setLoading] = useState(!initial);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+
+  const [techs, setTechs] = useState([]);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignTechId, setAssignTechId] = useState(null);
+  const [assignTechName, setAssignTechName] = useState('');
+  const [workshopQ, setWorkshopQ] = useState('');
+  const [workshopPicked, setWorkshopPicked] = useState(false);
+
+  const workshops = useMemo(() => workshopNamesFromTechs(techs), [techs]);
+  const workshopHits = useMemo(() => {
+    if (workshopPicked) return [];
+    const term = workshopQ.trim().toLowerCase();
+    if (!term) return workshops.slice(0, 8);
+    return workshops.filter((n) => n.toLowerCase().includes(term)).slice(0, 8);
+  }, [workshopPicked, workshopQ, workshops]);
 
   const load = useCallback(async () => {
     if (!rId) return;
@@ -99,6 +120,69 @@ export default function RepairDetailScreen({ route, navigation }) {
       load();
     }, [load])
   );
+
+  useEffect(() => {
+    if (!canWrite) return undefined;
+    let cancelled = false;
+    fetchTechnicians()
+      .then((rows) => {
+        if (!cancelled) setTechs(rows || []);
+      })
+      .catch(() => {
+        if (!cancelled) setTechs([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canWrite]);
+
+  useEffect(() => {
+    if (!repair) return;
+    setAssignTechId(repair.r_technician_id || null);
+    setAssignTechName(repair.r_technician || '');
+    const loc = parseRepairList(repair.r_repair_list).location || '';
+    setWorkshopQ(loc);
+    setWorkshopPicked(!!loc);
+  }, [repair?.r_id, repair?.r_technician, repair?.r_technician_id, repair?.r_repair_list]);
+
+  const openAssign = () => {
+    if (!canWrite) {
+      navigation.navigate('Login');
+      return;
+    }
+    setAssignOpen(true);
+  };
+
+  const saveAssign = async () => {
+    if (!canWrite) {
+      navigation.navigate('Login');
+      return;
+    }
+    if (!assignTechId && !assignTechName.trim() && !workshopQ.trim()) {
+      showAlert('เลือกอย่างน้อยช่าง หรือ อู่');
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload = { r_id: rId };
+      if (assignTechId || assignTechName.trim()) {
+        payload.r_technician = assignTechName.trim();
+        payload.r_technician_id = assignTechId || 0;
+      }
+      if (workshopQ.trim()) {
+        payload.r_repair_list = withRepairLocation(repair?.r_repair_list || '', workshopQ.trim());
+      }
+      const data = await updateRepair(payload);
+      setRepair(data.row || repair);
+      setAssignOpen(false);
+      showAlert('มอบหมายแล้ว');
+    } catch (e) {
+      if (e.code === 'UNAUTHORIZED') navigation.navigate('Login');
+      else showAlert('ไม่สำเร็จ', e.message || '');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const closeJob = async () => {
     if (!canWrite) {
@@ -253,7 +337,7 @@ export default function RepairDetailScreen({ route, navigation }) {
           value={
             repair.r_technician
               ? `${repair.r_technician}${repair.r_technician_id ? ` · ID ${repair.r_technician_id}` : ''}`
-              : 'ไม่ระบุ'
+              : 'ยังไม่มอบหมาย'
           }
         />
         <Fact label="รถ" value={vehicleLine} />
@@ -263,6 +347,115 @@ export default function RepairDetailScreen({ route, navigation }) {
           value={repair.r_dt_rec ? fmtDateTime(repair.r_dt_rec) : '-'}
         />
       </View>
+
+      {canWrite ? (
+        <View style={styles.assignBox}>
+          <View style={styles.assignHead}>
+            <Text style={styles.assignTitle}>มอบหมายงาน</Text>
+            {!assignOpen ? (
+              <Pressable onPress={openAssign} hitSlop={8}>
+                <Text style={styles.assignLink}>
+                  {repair.r_technician ? 'เปลี่ยน' : 'เลือกช่าง / อู่'}
+                </Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={() => setAssignOpen(false)} hitSlop={8}>
+                <Text style={styles.assignLinkMuted}>ปิด</Text>
+              </Pressable>
+            )}
+          </View>
+
+          {!assignOpen ? (
+            <Text style={styles.assignHint}>
+              {repair.r_technician
+                ? `ช่าง: ${repair.r_technician}`
+                : 'งานจากแจ้งสาธารณะ — staff เลือกช่าง/อู่ที่นี่'}
+              {parsed?.location ? `\nอู่/ที่: ${parsed.location}` : ''}
+            </Text>
+          ) : (
+            <>
+              <Text style={styles.assignLabel}>อู่ (ไม่บังคับ)</Text>
+              {workshopPicked ? (
+                <View style={styles.pickedRow}>
+                  <Text style={styles.pickedText}>{workshopQ}</Text>
+                  <Pressable
+                    onPress={() => {
+                      setWorkshopPicked(false);
+                      setWorkshopQ('');
+                    }}
+                  >
+                    <Text style={styles.assignLink}>เปลี่ยน</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <>
+                  <TextInput
+                    style={styles.assignInput}
+                    value={workshopQ}
+                    onChangeText={(v) => {
+                      setWorkshopQ(v);
+                      setWorkshopPicked(false);
+                    }}
+                    placeholder="เช่น อู่เชียงราย"
+                    placeholderTextColor={colors.textMuted}
+                    autoCorrect={false}
+                  />
+                  {workshopHits.map((name) => (
+                    <Pressable
+                      key={name}
+                      style={styles.hit}
+                      onPress={() => {
+                        setWorkshopQ(name);
+                        setWorkshopPicked(true);
+                      }}
+                    >
+                      <Text style={styles.hitTitle}>{name}</Text>
+                    </Pressable>
+                  ))}
+                </>
+              )}
+
+              <Text style={styles.assignLabel}>ช่าง</Text>
+              <View style={styles.techGrid}>
+                {techs.map((t) => {
+                  const active = String(assignTechId) === String(t.id);
+                  return (
+                    <Pressable
+                      key={t.id}
+                      style={[styles.techChip, active && styles.techChipActive]}
+                      onPress={() => {
+                        setAssignTechId(t.id);
+                        setAssignTechName(t.name);
+                      }}
+                    >
+                      <Text
+                        style={[styles.techChipText, active && styles.techChipTextActive]}
+                        numberOfLines={1}
+                      >
+                        {t.name}
+                      </Text>
+                      <Text style={[styles.techChipId, active && styles.techChipTextActive]}>
+                        #{t.id}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {techs.length === 0 ? (
+                <Text style={styles.assignHint}>โหลดรายชื่อช่างไม่สำเร็จ — ลองรีเฟรช</Text>
+              ) : null}
+
+              <Pressable
+                style={[styles.btn, styles.btnAssign, busy && styles.btnDisabled]}
+                onPress={saveAssign}
+                disabled={busy}
+              >
+                <Text style={styles.btnText}>{busy ? 'กำลังบันทึก...' : 'บันทึกมอบหมาย'}</Text>
+              </Pressable>
+            </>
+          )}
+        </View>
+      ) : null}
 
       <View style={styles.actions}>
         {open ? (
@@ -554,6 +747,81 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 20,
   },
+  assignBox: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  assignHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  assignTitle: { color: colors.navy, fontWeight: '800', fontSize: 15 },
+  assignLink: { color: colors.barFillAlt, fontWeight: '800', fontSize: 13 },
+  assignLinkMuted: { color: colors.textMuted, fontWeight: '700', fontSize: 13 },
+  assignHint: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
+  assignLabel: {
+    color: colors.textSecondary,
+    fontWeight: '700',
+    fontSize: 12,
+    marginTop: spacing.sm,
+    marginBottom: 6,
+  },
+  assignInput: {
+    backgroundColor: colors.background,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  pickedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+  },
+  pickedText: { color: colors.textPrimary, fontWeight: '700', fontSize: 14, flex: 1 },
+  hit: {
+    paddingVertical: 10,
+    paddingHorizontal: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  hitTitle: { color: colors.textPrimary, fontWeight: '700', fontSize: 14 },
+  techGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  techChip: {
+    width: '48%',
+    flexGrow: 1,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  techChipActive: {
+    backgroundColor: colors.navy,
+    borderColor: colors.navy,
+  },
+  techChipText: { color: colors.textPrimary, fontWeight: '700', fontSize: 13 },
+  techChipId: { color: colors.textMuted, fontSize: 11, marginTop: 2, fontWeight: '600' },
+  techChipTextActive: { color: colors.onNavy },
+  btnAssign: { marginTop: spacing.md, alignSelf: 'stretch', alignItems: 'center' },
   actions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
