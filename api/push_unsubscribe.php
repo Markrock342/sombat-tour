@@ -7,7 +7,7 @@ require_push_lib();
 
 try {
   $user = auth_user($pdo, true);
-  require_roles($user, array('admin', 'staff', 'technician'));
+  require_roles($user, array('admin', 'staff'));
   push_ensure_table($pdo);
 
   $b = read_json_body();

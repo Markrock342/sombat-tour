@@ -148,7 +148,7 @@ function InstallGuideModal({ visible, onClose, target }) {
 }
 
 export default function SettingsScreen({ navigation }) {
-  const { user, logout, canWrite } = useAuth();
+  const { user, logout, canSeePartsPrice } = useAuth();
   const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
   const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, 520));
   const goBack = () => navigation.goBack();
@@ -164,7 +164,7 @@ export default function SettingsScreen({ navigation }) {
     setAsPwa(isRunningAsPwa());
     setCanInstall(canPromptInstall());
     setInstallTarget(detectInstallTarget());
-    if (user && canWrite && pushSupported()) {
+    if (user && canSeePartsPrice && pushSupported()) {
       try {
         const sub = await getExistingSubscription();
         setPushOn(!!sub);
@@ -174,7 +174,7 @@ export default function SettingsScreen({ navigation }) {
     } else {
       setPushOn(false);
     }
-  }, [user, canWrite]);
+  }, [user, canSeePartsPrice]);
 
   useEffect(() => {
     initPwaInstallCapture();
@@ -231,8 +231,8 @@ export default function SettingsScreen({ navigation }) {
   };
 
   const onTogglePush = async () => {
-    if (!canWrite) {
-      showAlert('ต้องเป็นเจ้าหน้าที่', 'ล็อกอินด้วยบัญชี staff ก่อน');
+    if (!canSeePartsPrice) {
+      showAlert('สำหรับเจ้าหน้าที่รับเรื่อง', 'แจ้งเตือนงานใหม่ส่งเฉพาะ admin / staff ที่รับและจัดการเรื่อง');
       return;
     }
     if (!pushSupported()) {
@@ -387,37 +387,47 @@ export default function SettingsScreen({ navigation }) {
 
           <Text style={styles.sectionLabel}>การแจ้งเตือน</Text>
           <View style={styles.group}>
-            <SettingRow
-              icon={pushOn ? 'notifications' : 'notifications-outline'}
-              iconColor={pushOn ? '#1FA97A' : colors.navy}
-              title="รับการแจ้งเตือน"
-              subtitle={
-                pushOn
-                  ? 'เปิดอยู่ — แจ้งเมื่อมีงานซ่อม/เสียกลางทาง'
-                  : 'ปิดอยู่ — กดเพื่อเปิดรับบนเครื่องนี้'
-              }
-              onPress={busy ? undefined : onTogglePush}
-              right={
-                <View style={[styles.switchTrack, pushOn && styles.switchTrackOn]}>
-                  <View style={[styles.switchThumb, pushOn && styles.switchThumbOn]} />
-                </View>
-              }
-            />
-            <View style={styles.divider} />
-            <SettingRow
-              icon="flash-outline"
-              title="ทดสอบแจ้งเตือน (เครื่องนี้)"
-              subtitle="เด้งทันทีบนเครื่องนี้"
-              onPress={busy ? undefined : onTestLocal}
-            />
-            <View style={styles.divider} />
-            <SettingRow
-              icon="paper-plane-outline"
-              title="ทดสอบจากเซิร์ฟเวอร์"
-              subtitle="จำลองตอนมีคนแจ้งซ่อมเข้ามา"
-              onPress={busy ? undefined : onTestPush}
-              disabled={!pushOn}
-            />
+            {canSeePartsPrice ? (
+              <>
+                <SettingRow
+                  icon={pushOn ? 'notifications' : 'notifications-outline'}
+                  iconColor={pushOn ? '#1FA97A' : colors.navy}
+                  title="รับการแจ้งเตือนงานใหม่"
+                  subtitle={
+                    pushOn
+                      ? 'เปิดอยู่ — แจ้งเมื่อมีคนแจ้งซ่อม/เสียกลางทาง'
+                      : 'สำหรับเจ้าหน้าที่รับเรื่อง · กดเพื่อเปิดบนเครื่องนี้'
+                  }
+                  onPress={busy ? undefined : onTogglePush}
+                  right={
+                    <View style={[styles.switchTrack, pushOn && styles.switchTrackOn]}>
+                      <View style={[styles.switchThumb, pushOn && styles.switchThumbOn]} />
+                    </View>
+                  }
+                />
+                <View style={styles.divider} />
+                <SettingRow
+                  icon="flash-outline"
+                  title="ทดสอบแจ้งเตือน (เครื่องนี้)"
+                  subtitle="เด้งทันทีบนเครื่องนี้"
+                  onPress={busy ? undefined : onTestLocal}
+                />
+                <View style={styles.divider} />
+                <SettingRow
+                  icon="paper-plane-outline"
+                  title="ทดสอบจากเซิร์ฟเวอร์"
+                  subtitle="จำลองตอนมีคนแจ้งซ่อมเข้ามา"
+                  onPress={busy ? undefined : onTestPush}
+                  disabled={!pushOn}
+                />
+              </>
+            ) : (
+              <SettingRow
+                icon="notifications-off-outline"
+                title="แจ้งเตือนงานใหม่"
+                subtitle="ส่งเฉพาะ admin / staff ที่รับเรื่องและจัดการ — บัญชีช่างไม่ได้รับกลุ่มนี้"
+              />
+            )}
           </View>
 
           <Text style={styles.sectionLabel}>บัญชี</Text>

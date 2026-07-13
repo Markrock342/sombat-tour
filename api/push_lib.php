@@ -64,6 +64,7 @@ function push_ensure_table(PDO $pdo) {
         p256dh VARCHAR(255) DEFAULT '',
         auth_key VARCHAR(255) DEFAULT '',
         username VARCHAR(128) DEFAULT '',
+        role VARCHAR(32) DEFAULT '',
         user_agent VARCHAR(255) DEFAULT '',
         created_at DATETIME DEFAULT NULL,
         updated_at DATETIME DEFAULT NULL,
@@ -73,27 +74,82 @@ function push_ensure_table(PDO $pdo) {
   } catch (Exception $e) {
     /* ignore */
   }
+  // Existing installs may lack role column
+  try {
+    $pdo->exec("ALTER TABLE push_subscription ADD COLUMN role VARCHAR(32) DEFAULT '' AFTER username");
+  } catch (Exception $e) {
+    /* already exists */
+  }
+}
+
+/** Desk roles that receive new-job alerts (รับเรื่อง / จัดการ) — not technicians. */
+function push_is_desk_role($role) {
+  $role = (string)$role;
+  return ($role === 'admin' || $role === 'staff');
 }
 
 /**
- * Send empty Web Push to all staff subscriptions.
+ * True if this username is admin/staff (desk). Caches lookups per request.
+ */
+function push_username_is_desk(PDO $pdo, $username) {
+  static $cache = array();
+  $username = trim((string)$username);
+  if ($username === '') return false;
+  if (isset($cache[$username])) return $cache[$username];
+
+  $ok = false;
+  try {
+    if (function_exists('find_user_by_login') && function_exists('normalize_user_row')) {
+      $found = find_user_by_login($pdo, $username);
+      if ($found) {
+        $u = normalize_user_row($found['row'], $found['map']);
+        $ok = push_is_desk_role(isset($u['role']) ? $u['role'] : '');
+      }
+    }
+  } catch (Exception $e) {
+    $ok = false;
+  }
+  $cache[$username] = $ok;
+  return $ok;
+}
+
+/**
+ * Send empty Web Push to desk staff subscriptions only (admin/staff).
  * $meta: title, body, url (optional hints stored for future; SW uses defaults for empty push)
  */
 function push_notify_staff(PDO $pdo, $meta = array()) {
   push_ensure_table($pdo);
   try {
-    $rows = $pdo->query('SELECT id, endpoint FROM push_subscription ORDER BY id DESC LIMIT 200')->fetchAll();
+    $rows = $pdo->query('SELECT id, endpoint, username, role FROM push_subscription ORDER BY id DESC LIMIT 200')->fetchAll();
   } catch (Exception $e) {
-    return array('ok' => false, 'sent' => 0, 'error' => $e->getMessage());
+    // Older schema without role column
+    try {
+      $rows = $pdo->query('SELECT id, endpoint, username FROM push_subscription ORDER BY id DESC LIMIT 200')->fetchAll();
+    } catch (Exception $e2) {
+      return array('ok' => false, 'sent' => 0, 'error' => $e2->getMessage());
+    }
   }
   if (!$rows) return array('ok' => true, 'sent' => 0, 'skipped' => 'no_subscribers');
 
   $public = vapid_public_key();
   $sent = 0;
   $failed = 0;
+  $skipped = 0;
   $gone = array();
 
   foreach ($rows as $row) {
+    $role = isset($row['role']) ? (string)$row['role'] : '';
+    $username = isset($row['username']) ? (string)$row['username'] : '';
+    $isDesk = push_is_desk_role($role);
+    if (!$isDesk) {
+      // Fallback: look up member table (covers old rows without role column)
+      $isDesk = push_username_is_desk($pdo, $username);
+    }
+    if (!$isDesk) {
+      $skipped++;
+      continue;
+    }
+
     $endpoint = (string)$row['endpoint'];
     if ($endpoint === '') continue;
     $parts = parse_url($endpoint);
@@ -149,6 +205,7 @@ function push_notify_staff(PDO $pdo, $meta = array()) {
     'ok' => true,
     'sent' => $sent,
     'failed' => $failed,
+    'skipped' => $skipped,
     'title' => isset($meta['title']) ? $meta['title'] : '',
   );
 }
