@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,41 +7,54 @@ import {
   Pressable,
   StyleSheet,
   useWindowDimensions,
+  RefreshControl,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 
 import Card from '../components/Card';
 import TechnicianBar from '../components/TechnicianBar';
 import LoadingView from '../components/LoadingView';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
+import BreakdownSummaryCard from '../components/BreakdownSummaryCard';
 import { colors, spacing } from '../theme';
-import { fetchTechnicians, fetchRepairs, fmtDate, fmtThaiDate } from '../data/api';
-
-const isOpenRepair = (r) => !r.r_close || r.r_close === '0';
+import {
+  fetchTechnicians,
+  fetchRepairs,
+  fetchBoard,
+  fmtDate,
+  fmtThaiDate,
+  isOpenRepair,
+} from '../data/api';
+import { useAuth } from '../auth/AuthContext';
 
 export default function DashboardScreen({ navigation }) {
+  const { user, logout, canWrite, canSeePartsPrice } = useAuth();
   const [dateRange, setDateRange] = useState(() => presetRange('today'));
   const [datePreset, setDatePreset] = useState('today');
   const [techs, setTechs] = useState([]);
   const [repairs, setRepairs] = useState([]);
+  const [boardPreview, setBoardPreview] = useState([]);
   const [meta, setMeta] = useState({ date: null, total: 0 });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const lastDeviceDay = useRef(fmtDate(new Date()));
 
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
   const dateStart = fmtDate(dateRange.start);
   const dateEnd = fmtDate(dateRange.end);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts = {}) => {
+    if (opts.soft) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     try {
       const rep = await fetchRepairs(dateRange.start, dateRange.end);
       const rows = rep.rows || [];
 
-      // รายชื่อช่าง: เอาจาก technician_list; ถ้าโหลดไม่ได้ (เช่น CORS ตอน dev)
-      // ให้ดึงรายชื่อจากตัวงานแทน เพื่อให้ยังแสดงผลได้
       let techRows = [];
       try {
         techRows = await fetchTechnicians();
@@ -56,10 +69,18 @@ export default function DashboardScreen({ navigation }) {
       setRepairs(rows);
       setTechs(techRows);
       setMeta({ date: rep.date, total: rep.total ?? rows.length });
+
+      try {
+        const notes = await fetchBoard();
+        setBoardPreview((notes || []).slice(0, 3));
+      } catch (_) {
+        setBoardPreview([]);
+      }
     } catch (e) {
       setError(e.message || 'โหลดข้อมูลไม่สำเร็จ');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [dateRange.start, dateRange.end]);
 
@@ -67,52 +88,148 @@ export default function DashboardScreen({ navigation }) {
     load();
   }, [load]);
 
-  // นับจำนวนงานต่อช่าง (จับคู่ด้วยชื่อ r_technician)
-  const countByName = {};
-  repairs.forEach((r) => {
-    const n = r.r_technician?.trim() ? r.r_technician.trim() : 'ไม่ระบุช่าง';
-    countByName[n] = (countByName[n] || 0) + 1;
-  });
-  const techNames = new Set(techs.map((t) => t.name));
-  const routine = [
-    ...techs.map((t) => ({ id: t.id, name: t.name, today: countByName[t.name] || 0 })),
-    ...Object.entries(countByName)
-      .filter(([name]) => !techNames.has(name))
-      .map(([name, count], i) => ({
-        id: `routine-${i}`,
-        name,
-        today: count,
-        queryName: name === 'ไม่ระบุช่าง' ? '' : name,
-      })),
-  ].sort((a, b) => b.today - a.today);
-  const routineMax = Math.max(...routine.map((t) => t.today), 1);
-  const total = meta.total || repairs.length;
-  const active = routine.filter((t) => t.today > 0).length;
+  useFocusEffect(
+    useCallback(() => {
+      const today = fmtDate(new Date());
+      if (today !== lastDeviceDay.current) {
+        lastDeviceDay.current = today;
+        setDateRange(presetRange('today'));
+        setDatePreset('today');
+      } else {
+        load({ soft: true });
+      }
+    }, [load])
+  );
 
-  // งานค้างซ่อมต่อช่าง — งานในช่วงวันที่ที่ยังไม่ปิด
-  const openRepairs = repairs.filter(isOpenRepair);
-  const pendingByName = {};
-  openRepairs.forEach((r) => {
-    const name = r.r_technician?.trim() ? r.r_technician.trim() : 'ไม่ระบุช่าง';
-    pendingByName[name] = (pendingByName[name] || 0) + 1;
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        const today = fmtDate(new Date());
+        if (today !== lastDeviceDay.current) {
+          lastDeviceDay.current = today;
+          setDateRange(presetRange('today'));
+          setDatePreset('today');
+        } else {
+          load({ soft: true });
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [load]);
+
+  const countByKey = {};
+  repairs.forEach((r) => {
+    const key = r.r_technician_id
+      ? `id:${r.r_technician_id}`
+      : r.r_technician?.trim()
+        ? `name:${r.r_technician.trim()}`
+        : 'none';
+    countByNameOrId(countByKey, key, r);
   });
-  const pendingList = [
-    ...techs.map((t) => ({ id: t.id, name: t.name, pending: pendingByName[t.name] || 0 })),
-    ...Object.entries(pendingByName)
-      .filter(([name]) => !techNames.has(name))
-      .map(([name, count], i) => ({
-        id: `pending-${i}`,
-        name,
-        pending: count,
-        queryName: name === 'ไม่ระบุช่าง' ? '' : name,
-      })),
+
+  function countByNameOrId(map, key) {
+    map[key] = (map[key] || 0) + 1;
+  }
+
+  const routine = [
+    ...techs.map((t) => {
+      const byId = countByKey[`id:${t.id}`] || 0;
+      const byName = countByKey[`name:${t.name}`] || 0;
+      // repairs keyed by id OR by name (mutually exclusive per row)
+      const today = byId + byName;
+      return { id: t.id, name: t.name, today, queryName: t.name };
+    }),
+    ...Object.entries(countByKey)
+      .filter(([key]) => {
+        if (key === 'none') return true;
+        if (key.startsWith('id:')) {
+          const id = key.slice(3);
+          return !techs.some((t) => String(t.id) === String(id));
+        }
+        const name = key.slice(5);
+        return !techs.some((t) => t.name === name);
+      })
+      .map(([key, count], i) => {
+        if (key === 'none') {
+          return { id: `routine-none-${i}`, name: 'ไม่ระบุช่าง', today: count, queryName: '' };
+        }
+        const name = key.startsWith('name:') ? key.slice(5) : key;
+        return { id: `routine-${i}`, name, today: count, queryName: name };
+      }),
+  ].sort((a, b) => b.today - a.today);
+
+  // dedupe names that appear twice (id + orphan name)
+  const seenNames = new Set();
+  const routineDedup = [];
+  for (const t of routine) {
+    const k = t.name;
+    if (seenNames.has(k)) {
+      const existing = routineDedup.find((x) => x.name === k);
+      if (existing) existing.today = Math.max(existing.today, t.today);
+      continue;
+    }
+    seenNames.add(k);
+    routineDedup.push(t);
+  }
+
+  const routineMax = Math.max(...routineDedup.map((t) => t.today), 1);
+  const total = meta.total || repairs.length;
+  const active = routineDedup.filter((t) => t.today > 0).length;
+
+  const openRepairs = repairs.filter(isOpenRepair);
+  const pendingByKey = {};
+  openRepairs.forEach((r) => {
+    const key = r.r_technician_id
+      ? `id:${r.r_technician_id}`
+      : r.r_technician?.trim()
+        ? `name:${r.r_technician.trim()}`
+        : 'none';
+    pendingByKey[key] = (pendingByKey[key] || 0) + 1;
+  });
+
+  const pendingListRaw = [
+    ...techs.map((t) => {
+      const byId = pendingByKey[`id:${t.id}`] || 0;
+      const byName = pendingByKey[`name:${t.name}`] || 0;
+      return { id: t.id, name: t.name, pending: byId + byName, queryName: t.name };
+    }),
+    ...Object.entries(pendingByKey)
+      .filter(([key]) => {
+        if (key === 'none') return true;
+        if (key.startsWith('id:')) {
+          const id = key.slice(3);
+          return !techs.some((t) => String(t.id) === String(id));
+        }
+        const name = key.slice(5);
+        return !techs.some((t) => t.name === name);
+      })
+      .map(([key, count], i) => {
+        if (key === 'none') {
+          return { id: `pending-none-${i}`, name: 'ไม่ระบุช่าง', pending: count, queryName: '' };
+        }
+        const name = key.startsWith('name:') ? key.slice(5) : key;
+        return { id: `pending-${i}`, name, pending: count, queryName: name };
+      }),
   ].sort((a, b) => b.pending - a.pending);
+
+  const pendingSeen = new Set();
+  const pendingList = [];
+  for (const t of pendingListRaw) {
+    if (pendingSeen.has(t.name)) {
+      const existing = pendingList.find((x) => x.name === t.name);
+      if (existing) existing.pending = Math.max(existing.pending, t.pending);
+      continue;
+    }
+    pendingSeen.add(t.name);
+    pendingList.push(t);
+  }
   const pendingMax = Math.max(...pendingList.map((t) => t.pending), 1);
   const pendingSum = pendingList.reduce((s, t) => s + t.pending, 0);
 
   const openJobs = (tech) =>
     navigation.navigate('JobDetail', {
       technician: tech.queryName ?? tech.name,
+      technicianId: tech.id,
       date: dateStart,
       dateEnd,
       datePreset,
@@ -122,16 +239,24 @@ export default function DashboardScreen({ navigation }) {
   const openPendingJobs = (tech) =>
     navigation.navigate('JobDetail', {
       technician: tech.queryName ?? tech.name,
+      technicianId: tech.id,
       date: dateStart,
       dateEnd,
       datePreset,
       mode: 'pending',
     });
 
+  const refreshHome = () => {
+    lastDeviceDay.current = fmtDate(new Date());
+    setDateRange(presetRange('today'));
+    setDatePreset('today');
+    load();
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
+        <Pressable style={styles.headerLeft} onPress={refreshHome}>
           <View style={styles.brandRow}>
             <Image source={require('../../assets/sombatlogobg.png')} style={styles.logo} />
             <View style={styles.brandText}>
@@ -139,122 +264,202 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.headerSub}>โปรแกรมงานซ่อมบำรุง</Text>
             </View>
           </View>
-        </View>
-        <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('VehicleSearch')}>
-          <Text style={styles.searchBtnText}>🔍 ค้นหารถ</Text>
         </Pressable>
+        <View style={styles.headerActions}>
+          {user ? (
+            <Pressable style={styles.searchBtn} onPress={logout}>
+              <Text style={styles.searchBtnText}>{user.username}</Text>
+            </Pressable>
+          ) : (
+            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.searchBtnText}>เข้าสู่ระบบ</Text>
+            </Pressable>
+          )}
+          <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Search')}>
+            <Text style={styles.searchBtnText}>🔍 ค้นหา</Text>
+          </Pressable>
+        </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => load({ soft: true })} tintColor={colors.navy} />
+        }
+      >
         {loading ? (
           <LoadingView />
         ) : (
-        <View style={[styles.grid, isWide && styles.gridWide]}>
-          {/* 1 — งานประจำวัน (ข้อมูลจริง) */}
-          <Card
-            starred
-            title="งานประจำวัน"
-            style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
-          >
-            <DateRangePicker
-              value={dateRange}
-              presetKey={datePreset}
-              onChange={(range, key) => {
-                setDateRange(range);
-                setDatePreset(key);
-              }}
+          <View style={[styles.grid, isWide && styles.gridWide]}>
+            <Card
+              starred
+              title="งานประจำวัน"
+              style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
+            >
+              <DateRangePicker
+                value={dateRange}
+                presetKey={datePreset}
+                onChange={(range, key) => {
+                  setDateRange(range);
+                  setDatePreset(key);
+                }}
+              />
+
+              {error ? (
+                <View style={styles.errorBox}>
+                  <Text style={styles.errorText}>โหลดข้อมูลไม่สำเร็จ</Text>
+                  <Text style={styles.errorMsg}>{error}</Text>
+                  <Pressable style={styles.retryBtn} onPress={load}>
+                    <Text style={styles.retryText}>ลองใหม่</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.cardHeadRow}>
+                    <Text style={styles.summary}>
+                      มีงาน <Text style={styles.summaryNum}>{active}</Text> ผู้ซ่อม · รวม{' '}
+                      <Text style={styles.summaryNum}>{total}</Text> งาน
+                    </Text>
+                    <Pressable onPress={() => navigation.navigate('JobDetail', {
+                      technician: '',
+                      date: dateStart,
+                      dateEnd,
+                      datePreset,
+                      mode: 'day',
+                      viewAll: true,
+                    })}>
+                      <Text style={styles.viewAll}>ดูทั้งหมด</Text>
+                    </Pressable>
+                  </View>
+                  <ScrollView style={styles.list} nestedScrollEnabled>
+                    {routineDedup.map((tech) => (
+                      <TechnicianBar
+                        key={tech.id}
+                        name={tech.name}
+                        value={tech.today}
+                        max={routineMax}
+                        color={colors.barFill}
+                        onPress={() => openJobs(tech)}
+                      />
+                    ))}
+                  </ScrollView>
+                </>
+              )}
+            </Card>
+
+            <Card
+              starred
+              title="งานค้างซ่อม"
+              style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
+            >
+              {error ? (
+                <View style={styles.errorBox}>
+                  <Text style={styles.errorText}>โหลดข้อมูลไม่สำเร็จ</Text>
+                  <Pressable style={styles.retryBtn} onPress={load}>
+                    <Text style={styles.retryText}>ลองใหม่</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.cardHeadRow}>
+                    <Text style={styles.summary}>
+                      {dateStart === dateEnd
+                        ? fmtThaiDate(dateStart)
+                        : `${fmtThaiDate(dateStart)} – ${fmtThaiDate(dateEnd)}`}
+                      {' · '}รวม <Text style={styles.summaryNum}>{pendingSum}</Text> งานที่ยังไม่ปิด
+                    </Text>
+                    <Pressable onPress={() => navigation.navigate('JobDetail', {
+                      technician: '',
+                      date: dateStart,
+                      dateEnd,
+                      datePreset,
+                      mode: 'pending',
+                      viewAll: true,
+                    })}>
+                      <Text style={styles.viewAll}>ดูทั้งหมด</Text>
+                    </Pressable>
+                  </View>
+                  <ScrollView style={styles.list} nestedScrollEnabled>
+                    {pendingList.map((tech) => (
+                      <TechnicianBar
+                        key={tech.id}
+                        name={tech.name}
+                        value={tech.pending}
+                        max={pendingMax}
+                        color={colors.barFillAlt}
+                        onPress={() => openPendingJobs(tech)}
+                      />
+                    ))}
+                  </ScrollView>
+                </>
+              )}
+            </Card>
+
+            <NavCard
+              title="แจ้งซ่อมออนไลน์"
+              icon="🛠️"
+              subtitle={canWrite ? 'ช่างแจ้งผ่านระบบได้เลย' : 'ต้องเข้าสู่ระบบก่อน'}
+              isWide={isWide}
+              onPress={() => (canWrite ? navigation.navigate('RepairForm') : navigation.navigate('Login'))}
             />
-
-            {error ? (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>โหลดข้อมูลไม่สำเร็จ</Text>
-                <Text style={styles.errorMsg}>{error}</Text>
-                <Pressable style={styles.retryBtn} onPress={load}>
-                  <Text style={styles.retryText}>ลองใหม่</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <>
-                <Text style={styles.summary}>
-                  มีงาน <Text style={styles.summaryNum}>{active}</Text> ผู้ซ่อม · รวม{' '}
-                  <Text style={styles.summaryNum}>{total}</Text> งาน
-                </Text>
-                <ScrollView style={styles.list} nestedScrollEnabled>
-                  {routine.map((tech) => (
-                    <TechnicianBar
-                      key={tech.id}
-                      name={tech.name}
-                      value={tech.today}
-                      max={routineMax}
-                      color={colors.barFill}
-                      onPress={() => openJobs(tech)}
-                    />
-                  ))}
-                </ScrollView>
-              </>
-            )}
-          </Card>
-
-          {/* 2 — งานค้างซ่อมแต่ละช่าง (ข้อมูลจริง) */}
-          <Card
-            starred
-            title="งานค้างซ่อม"
-            style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
-          >
-            {error ? (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>โหลดข้อมูลไม่สำเร็จ</Text>
-                <Pressable style={styles.retryBtn} onPress={load}>
-                  <Text style={styles.retryText}>ลองใหม่</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <>
-                <Text style={styles.summary}>
-                  {dateStart === dateEnd
-                    ? fmtThaiDate(dateStart)
-                    : `${fmtThaiDate(dateStart)} – ${fmtThaiDate(dateEnd)}`}
-                  {' · '}รวม <Text style={styles.summaryNum}>{pendingSum}</Text> งานที่ยังไม่ปิด
-                </Text>
-                <ScrollView style={styles.list} nestedScrollEnabled>
-                  {pendingList.map((tech) => (
-                    <TechnicianBar
-                      key={tech.id}
-                      name={tech.name}
-                      value={tech.pending}
-                      max={pendingMax}
-                      color={colors.barFillAlt}
-                      onPress={() => openPendingJobs(tech)}
-                    />
-                  ))}
-                </ScrollView>
-              </>
-            )}
-          </Card>
-
-          {/* 3-6 — รอเชื่อม endpoint เพิ่ม */}
-          <Placeholder title="ประวัติแจ้งซ่อมรายคัน" tag="อาจจะ" icon="🚗" isWide={isWide} />
-          <Placeholder title="สต็อกอะไหล่" tag="อาจจะ" icon="📦" isWide={isWide} />
-          <Placeholder title="ข้อมูลด้านอื่น ๆ" icon="📊" isWide={isWide} />
-          <Placeholder title="xxx" icon="➕" isWide={isWide} />
-        </View>
+            <BreakdownSummaryCard
+              navigation={navigation}
+              style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
+            />
+            <NavCard
+              title="ประวัติแจ้งซ่อมรายคัน"
+              icon="🚗"
+              subtitle="ค้นหารถแล้วดูประวัติ"
+              isWide={isWide}
+              onPress={() => navigation.navigate('Search', { q: '' })}
+            />
+            <NavCard
+              title="บอร์ดข่าว"
+              icon="📋"
+              subtitle={boardPreview[0]?.title || 'ไวท์บอร์ดแผนก'}
+              isWide={isWide}
+              onPress={() => navigation.navigate('Board')}
+            />
+            <NavCard
+              title="ตำแหน่งรถจอด"
+              icon="🅿️"
+              subtitle="มาร์กจุดจอดด้วยมือ"
+              isWide={isWide}
+              onPress={() => navigation.navigate('Locations')}
+            />
+            <NavCard
+              title="สต็อกอะไหล่"
+              icon="📦"
+              subtitle={canSeePartsPrice ? 'ราคาอะไหล่ (สิทธิ์ staff+)' : 'ซ่อนราคา — สิทธิ์ไม่พอ'}
+              isWide={isWide}
+              onPress={() => {}}
+              disabled
+            />
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function Placeholder({ title, tag, icon, isWide }) {
+function NavCard({ title, icon, subtitle, isWide, onPress, disabled }) {
   return (
-    <Card
-      title={tag ? `${title} (${tag})` : title}
-      style={[styles.card, isWide ? styles.cardWide : styles.cardFull, styles.placeholderCard]}
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      style={({ pressed }) => [
+        styles.card,
+        isWide ? styles.cardWide : styles.cardFull,
+        pressed && !disabled && { opacity: 0.9 },
+      ]}
     >
-      <View style={styles.placeholderBody}>
-        <Text style={styles.placeholderIcon}>{icon}</Text>
-        <Text style={styles.placeholderText}>อยู่ระหว่างพัฒนา</Text>
-      </View>
-    </Card>
+      <Card title={title} style={styles.navInner}>
+        <View style={styles.placeholderBody}>
+          <Text style={styles.placeholderIcon}>{icon}</Text>
+          <Text style={styles.placeholderText}>{subtitle}</Text>
+        </View>
+      </Card>
+    </Pressable>
   );
 }
 
@@ -267,8 +472,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   headerLeft: { flexShrink: 1 },
+  headerActions: { flexDirection: 'row', gap: 8, flexShrink: 0 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   logo: { width: 44, height: 44, borderRadius: 10, backgroundColor: colors.card },
   brandText: { flexShrink: 1 },
@@ -296,8 +503,17 @@ const styles = StyleSheet.create({
   card: {},
   cardFull: { width: '100%' },
   cardWide: { flexBasis: '30%', flexGrow: 1, minWidth: 280 },
-  summary: { fontSize: 13, color: colors.textSecondary, marginBottom: spacing.sm },
+  navInner: { margin: 0 },
+  cardHeadRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: spacing.sm,
+  },
+  summary: { fontSize: 13, color: colors.textSecondary, flex: 1 },
   summaryNum: { color: colors.navy, fontWeight: '800', fontSize: 15 },
+  viewAll: { color: colors.barFillAlt, fontWeight: '800', fontSize: 12 },
   list: { maxHeight: 320 },
   errorBox: { paddingVertical: spacing.xl, alignItems: 'center' },
   errorText: { color: colors.textPrimary, fontWeight: '700', marginBottom: 4 },
@@ -309,8 +525,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryText: { color: colors.onNavy, fontWeight: '700' },
-  placeholderCard: { minHeight: 170 },
-  placeholderBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl },
+  placeholderBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.lg },
   placeholderIcon: { fontSize: 30, marginBottom: spacing.sm, opacity: 0.7 },
-  placeholderText: { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
+  placeholderText: { fontSize: 13, color: colors.textMuted, fontWeight: '600', textAlign: 'center' },
 });

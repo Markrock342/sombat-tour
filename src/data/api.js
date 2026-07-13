@@ -1,5 +1,35 @@
-// เชื่อมต่อ API จริงของ 425store
+// เชื่อมต่อ API จริงของ 425store + endpoints ใหม่ใน repo นี้
 export const API_BASE = 'https://425store.com/api';
+
+let _authToken = null;
+
+export function setAuthToken(token) {
+  _authToken = token || null;
+}
+
+export function getAuthToken() {
+  return _authToken;
+}
+
+function authHeaders(extra = {}) {
+  const h = { ...extra };
+  if (_authToken) {
+    h.Authorization = `Bearer ${_authToken}`;
+    h['X-Auth-Token'] = _authToken;
+  }
+  return h;
+}
+
+async function parseJson(res) {
+  const data = await res.json();
+  if (!data.ok) {
+    const err = new Error(data.message || data.error || 'request failed');
+    err.code = data.error;
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
 
 // แปลง Date → "YYYY-MM-DD" (เวลาท้องถิ่น)
 export function fmtDate(d) {
@@ -20,14 +50,12 @@ function parseYmd(str) {
   return { y: +m[1], mo: +m[2], d: +m[3] };
 }
 
-// "2026-06-09" → "9 มิ.ย. 2569"
 export function fmtThaiDate(str) {
   const p = parseYmd(str);
   if (!p) return str || '';
   return `${p.d} ${TH_MONTHS_SHORT[p.mo - 1]} ${p.y + 543}`;
 }
 
-// "2026-06-09 07:07:01" → "9/06/2569 07:07:01" (แบบระบบต้นทาง)
 export function fmtDateTime(str) {
   const m = String(str || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}:\d{2}:\d{2}))?/);
   if (!m) return str || '';
@@ -57,20 +85,15 @@ function eachDayInRange(start, end) {
 async function fetchRepairsForDay(dateStr) {
   const q = dateStr ? `?date=${encodeURIComponent(dateStr)}` : '?date=latest';
   const res = await fetch(`${API_BASE}/list_repair.php${q}`);
-  const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'list_repair failed');
-  return data;
+  return parseJson(res);
 }
 
-// รายชื่อช่างทั้งหมด → [{ id, name, v_sort }]
 export async function fetchTechnicians() {
   const res = await fetch(`${API_BASE}/technician_list.php?limit=500`);
-  const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'technician_list failed');
+  const data = await parseJson(res);
   return data.rows || [];
 }
 
-// งานแจ้งซ่อมของวันที่ระบุ (หรือช่วงวันที่) → { date, total, rows: [...] }
 export async function fetchRepairs(start, end) {
   if (!start) return fetchRepairsForDay(null);
 
@@ -99,42 +122,29 @@ export async function fetchRepairs(start, end) {
   return { ok: true, date: `${startStr}..${endStr}`, total: rows.length, rows };
 }
 
-// งานค้างซ่อม นับต่อช่าง → { total, rows: [{ name, pending }] }
-// หมายเหตุ: ใช้ backlog.php (โฮสต์บล็อก URL ที่มีคำว่า "pending")
 export async function fetchPending() {
   const res = await fetch(`${API_BASE}/backlog.php`);
-  const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'backlog failed');
-  return data;
+  return parseJson(res);
 }
 
-// รายการงานค้างของช่างคนเดียว → { rows: [...] }
 export async function fetchPendingJobs(tech) {
   const res = await fetch(`${API_BASE}/backlog.php?tech=${encodeURIComponent(tech)}`);
-  const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'backlog jobs failed');
-  return data;
+  return parseJson(res);
 }
 
-// ดึงรถ 1 คันจาก v_id (ตาราง vihicle)
 export async function getVehicle(id) {
   const res = await fetch(`${API_BASE}/vehicle_get.php?id=${encodeURIComponent(id)}`);
-  const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'vehicle get failed');
+  const data = await parseJson(res);
   return data.row || null;
 }
 
-// ค้นหารถจาก ID/เบอร์รถ (v_name) — ไม่ค้นทะเบียน
-// คืน rows จากตาราง vihicle: [{ v_id, v_name, v_plate, v_brand, v_model, ... }]
 export async function searchVehicles(term) {
   const res = await fetch(
     `${API_BASE}/vehicle_search.php?name=${encodeURIComponent(term)}&limit=50`
   );
-  const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'search failed');
+  const data = await parseJson(res);
   let rows = data.rows || [];
 
-  // ถ้าพิมพ์เป็นตัวเลขล้วน ลองหา v_id ตรง ๆ แล้วเอามาไว้บนสุด
   if (/^\d+$/.test(term)) {
     try {
       const row = await getVehicle(term);
@@ -142,8 +152,207 @@ export async function searchVehicles(term) {
         rows = [row, ...rows];
       }
     } catch (_) {
-      /* ไม่พบก็ข้าม */
+      /* skip */
     }
   }
   return rows;
+}
+
+/** Global search across repairs + vehicles */
+export async function globalSearch({
+  q = '',
+  type = 'all',
+  dateStart,
+  dateEnd,
+  technicianId,
+  technician,
+  status,
+  limit = 50,
+  offset = 0,
+} = {}) {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (type) params.set('type', type);
+  if (dateStart) params.set('date_start', dateStart);
+  if (dateEnd) params.set('date_end', dateEnd);
+  if (technicianId) params.set('technician_id', String(technicianId));
+  if (technician) params.set('technician', technician);
+  if (status) params.set('status', status);
+  params.set('limit', String(limit));
+  params.set('offset', String(offset));
+  const res = await fetch(`${API_BASE}/search.php?${params}`);
+  return parseJson(res);
+}
+
+export async function getRepair(id) {
+  const res = await fetch(`${API_BASE}/repair_get.php?id=${encodeURIComponent(id)}`);
+  const data = await parseJson(res);
+  return data.row || null;
+}
+
+export async function createRepair(payload) {
+  const res = await fetch(`${API_BASE}/repair_create.php`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function updateRepair(payload) {
+  const res = await fetch(`${API_BASE}/repair_update.php`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function fetchRepairImages(rId) {
+  const res = await fetch(`${API_BASE}/repair_images.php?r_id=${encodeURIComponent(rId)}`);
+  const data = await parseJson(res);
+  return data.rows || [];
+}
+
+export async function uploadRepairImage(rId, uri, fileName = 'photo.jpg', mime = 'image/jpeg') {
+  const form = new FormData();
+  form.append('r_id', String(rId));
+  form.append('image', {
+    uri,
+    name: fileName,
+    type: mime,
+  });
+  const res = await fetch(`${API_BASE}/upload_image.php`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: form,
+  });
+  return parseJson(res);
+}
+
+export async function fetchVehicleHistory({ vehicle, vId, vName, vPlate, limit = 100 } = {}) {
+  const params = new URLSearchParams();
+  if (vehicle) params.set('vehicle', vehicle);
+  if (vId) params.set('v_id', String(vId));
+  if (vName) params.set('v_name', vName);
+  if (vPlate) params.set('v_plate', vPlate);
+  params.set('limit', String(limit));
+  const res = await fetch(`${API_BASE}/vehicle_history.php?${params}`);
+  return parseJson(res);
+}
+
+export async function login(username, pin) {
+  const res = await fetch(`${API_BASE}/auth.php`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'login', username, pin }),
+  });
+  return parseJson(res);
+}
+
+export async function logout() {
+  try {
+    const res = await fetch(`${API_BASE}/auth.php`, {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ action: 'logout' }),
+    });
+    await parseJson(res);
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+export async function fetchMe() {
+  const res = await fetch(`${API_BASE}/auth.php?action=me`, {
+    headers: authHeaders(),
+  });
+  return parseJson(res);
+}
+
+export async function fetchBoard() {
+  const res = await fetch(`${API_BASE}/board_list.php`);
+  const data = await parseJson(res);
+  return data.rows || [];
+}
+
+export async function createBoardNote(payload) {
+  const res = await fetch(`${API_BASE}/board_create.php`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function updateBoardNote(payload) {
+  const res = await fetch(`${API_BASE}/board_update.php`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function deleteBoardNote(id) {
+  const res = await fetch(`${API_BASE}/board_delete.php`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ id }),
+  });
+  return parseJson(res);
+}
+
+export async function fetchBreakdowns({ q = '', status = '', limit = 100 } = {}) {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (status) params.set('status', status);
+  params.set('limit', String(limit));
+  const res = await fetch(`${API_BASE}/breakdown_list.php?${params}`);
+  return parseJson(res);
+}
+
+export async function fetchLocations(vId) {
+  const q = vId ? `?v_id=${encodeURIComponent(vId)}` : '';
+  const res = await fetch(`${API_BASE}/location_list.php${q}`);
+  const data = await parseJson(res);
+  return data.rows || [];
+}
+
+export async function saveLocation(payload) {
+  const res = await fetch(`${API_BASE}/location_save.php`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function deleteLocation(id) {
+  const res = await fetch(`${API_BASE}/location_delete.php`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ id }),
+  });
+  return parseJson(res);
+}
+
+/** Match repair row to technician by id first, then name */
+export function repairMatchesTech(repair, tech) {
+  if (!tech) return true;
+  const wantId = tech.id != null ? String(tech.id) : '';
+  const wantName = (tech.queryName ?? tech.name ?? '').trim();
+  const rowId = repair.r_technician_id != null ? String(repair.r_technician_id) : '';
+  const rowName = (repair.r_technician || '').trim();
+
+  if (wantName === '' || wantName === 'ไม่ระบุช่าง') {
+    return !rowName && !rowId;
+  }
+  if (wantId && rowId && wantId === rowId) return true;
+  if (wantId && rowId) return false;
+  return rowName === wantName;
+}
+
+export function isOpenRepair(r) {
+  return !r.r_close || r.r_close === '0' || r.r_close === 0;
 }
