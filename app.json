@@ -25,8 +25,8 @@
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png",
-      "name": "โปรแกรมซ่อมบำรุง",
-      "shortName": "โปรแกรมซ่อมบำรุง",
+      "name": "สมบัติทัวร์",
+      "shortName": "สมบัติทัวร์",
       "lang": "th",
       "themeColor": "#0F1A38",
       "backgroundColor": "#0F1A38",
