@@ -356,6 +356,26 @@ function repair_has_column(PDO $pdo, $col) {
 }
 
 /**
+ * Next job number — CAST to number so VARCHAR job nums don't stick at 100000
+ * (string MAX prefers values starting with 9 over 100000).
+ */
+function next_repair_job_num(PDO $pdo) {
+  try {
+    $n = (int)$pdo->query(
+      'SELECT COALESCE(MAX(CAST(r_job_num AS UNSIGNED)), 0) + 1 FROM repair'
+    )->fetchColumn();
+    if ($n > 0) return $n;
+  } catch (Exception $e) { /* fall through */ }
+  try {
+    $n = (int)$pdo->query(
+      'SELECT COALESCE(MAX(r_id), 0) + 1 FROM repair'
+    )->fetchColumn();
+    if ($n > 0) return $n;
+  } catch (Exception $e) { /* fall through */ }
+  return (int)(time() % 1000000);
+}
+
+/**
  * Stateless session token: base64url(json payload) + '.' + HMAC-SHA256 signature.
  * Requires zero database writes, so it works even though the API's DB user
  * cannot write to new tables.

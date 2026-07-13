@@ -60,12 +60,7 @@ try {
     }
   }
 
-  $jobNum = 0;
-  try {
-    $jobNum = (int)$pdo->query('SELECT COALESCE(MAX(r_job_num), 0) + 1 FROM repair')->fetchColumn();
-  } catch (Exception $e) {
-    $jobNum = (int)(time() % 1000000);
-  }
+  $jobNum = next_repair_job_num($pdo);
 
   $dt = date('Y-m-d H:i:s');
   $recorder = $reporterName;
