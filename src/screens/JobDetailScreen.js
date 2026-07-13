@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,10 +12,16 @@ import { RefreshControl } from '../components/AppRefreshControl';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { colors, spacing, radius, shadow } from '../theme';
+import { colors, spacing, radius } from '../theme';
 import DateRangePicker from '../components/DateRangePicker';
 import LoadingView from '../components/LoadingView';
-import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset, contentSheetStyle } from '../components/BackNavigation';
+import {
+  TopBackLink,
+  MobileBackBar,
+  useScreenLayout,
+  mobileScrollInset,
+  contentSheetStyle,
+} from '../components/BackNavigation';
 import {
   fetchRepairs,
   fetchPendingJobs,
@@ -25,6 +31,7 @@ import {
   isOpenRepair,
   repairMatchesTech,
 } from '../data/api';
+import { parseRepairList } from '../data/repairNotes';
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'ทั้งหมด' },
@@ -32,10 +39,62 @@ const STATUS_FILTERS = [
   { key: 'closed', label: 'ปิดงานแล้ว' },
 ];
 
+const PAGE_SIZE = 40;
+
 function parseDateStr(str) {
   if (!str) return new Date();
   const [y, m, d] = String(str).split('-').map(Number);
   return new Date(y, m - 1, d);
+}
+
+function shortSymptom(raw) {
+  const parsed = parseRepairList(raw);
+  const text = (parsed.symptom || raw || 'งานแจ้งซ่อม').replace(/\s+/g, ' ').trim();
+  return text.length > 72 ? `${text.slice(0, 72)}…` : text;
+}
+
+function PaginationBar({ page, pageCount, total, pageSize, onChange }) {
+  if (pageCount <= 1) return null;
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+
+  const window = [];
+  const start = Math.max(1, page - 2);
+  const end = Math.min(pageCount, start + 4);
+  for (let i = start; i <= end; i += 1) window.push(i);
+
+  return (
+    <View style={styles.pager}>
+      <Text style={styles.pagerMeta}>
+        แสดง {from}–{to} จาก {total} · หน้า {page}/{pageCount}
+      </Text>
+      <View style={styles.pagerBtns}>
+        <Pressable
+          style={[styles.pageBtn, page <= 1 && styles.pageBtnDisabled]}
+          disabled={page <= 1}
+          onPress={() => onChange(page - 1)}
+        >
+          <Text style={styles.pageBtnText}>‹</Text>
+        </Pressable>
+        {window.map((n) => (
+          <Pressable
+            key={n}
+            style={[styles.pageBtn, n === page && styles.pageBtnActive]}
+            onPress={() => onChange(n)}
+          >
+            <Text style={[styles.pageBtnText, n === page && styles.pageBtnTextActive]}>{n}</Text>
+          </Pressable>
+        ))}
+        <Pressable
+          style={[styles.pageBtn, page >= pageCount && styles.pageBtnDisabled]}
+          disabled={page >= pageCount}
+          onPress={() => onChange(page + 1)}
+        >
+          <Text style={styles.pageBtnText}>›</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
 }
 
 export default function JobDetailScreen({ route, navigation }) {
@@ -68,64 +127,65 @@ export default function JobDetailScreen({ route, navigation }) {
   const [jobs, setJobs] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [textFilter, setTextFilter] = useState('');
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const { isMobile, isWide, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
+  const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
   const goBack = () => navigation.goBack();
-  const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, 640));
+  const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, 820));
   const lastDeviceDay = useRef(fmtDate(new Date()));
 
-  const load = useCallback(async (opts = {}) => {
-    if (opts.soft) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
-    try {
-      const techObj = viewAll
-        ? null
-        : { id: technicianId, name: technician, queryName: technician };
+  const load = useCallback(
+    async (opts = {}) => {
+      if (opts.soft) setRefreshing(true);
+      else setLoading(true);
+      setError(null);
+      try {
+        const techObj = viewAll
+          ? null
+          : { id: technicianId, name: technician, queryName: technician };
 
-      let rows;
-      if (isPending) {
-        const data = await fetchPendingJobs(viewAll ? null : technician);
-        rows = data.rows || [];
-        if (!viewAll && techObj) {
-          rows = rows.filter((r) => repairMatchesTech(r, techObj));
+        let rows;
+        if (isPending) {
+          const data = await fetchPendingJobs(viewAll ? null : technician);
+          rows = data.rows || [];
+          if (!viewAll && techObj) {
+            rows = rows.filter((r) => repairMatchesTech(r, techObj));
+          }
+        } else {
+          rows = ((await fetchRepairs(dateRange.start, dateRange.end)).rows || []).filter((r) => {
+            if (viewAll) return true;
+            return repairMatchesTech(r, techObj);
+          });
         }
-      } else {
-        rows = ((await fetchRepairs(dateRange.start, dateRange.end)).rows || []).filter((r) => {
-          if (viewAll) return true;
-          return repairMatchesTech(r, techObj);
-        });
+
+        const sorted = [...rows].sort((a, b) =>
+          String(b.r_dt_rec || '').localeCompare(String(a.r_dt_rec || ''))
+        );
+
+        const mapped = sorted.map((r) => ({
+          rId: r.r_id,
+          raw: r,
+          code: r.r_job_num ? `#${r.r_job_num}` : `#${r.r_id}`,
+          title: shortSymptom(r.r_repair_list),
+          closed: !isOpenRepair(r),
+          vehicleNo: r.r_v_name || '',
+          plate: r.r_v_plate || '',
+          technician: r.r_technician || '',
+          datetime: r.r_dt_rec,
+        }));
+        setJobs(mapped);
+        setPage(1);
+      } catch (e) {
+        setError(e.message || 'โหลดข้อมูลไม่สำเร็จ');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-
-      const sorted = [...rows].sort((a, b) => (b.r_dt_rec || '').localeCompare(a.r_dt_rec || ''));
-
-      const mapped = sorted.map((r, i) => ({
-        id: i + 1,
-        rId: r.r_id,
-        raw: r,
-        code: r.r_job_num ? `#${r.r_job_num}` : `#${r.r_id}`,
-        title: r.r_repair_list || 'งานแจ้งซ่อม',
-        closed: !isOpenRepair(r),
-        vehicleNo: r.r_v_name || '',
-        plate: r.r_v_plate || '',
-        chassis: r.r_v_chassis || '',
-        model: [r.r_v_brand, r.r_v_model].filter(Boolean).join(' • '),
-        mile: Number(r.r_mile) || 0,
-        company: r.r_v_company || r.r_inv_com || '',
-        technician: r.r_technician || '',
-        datetime: r.r_dt_rec,
-      }));
-      setJobs(mapped);
-      setStatusFilter('all');
-    } catch (e) {
-      setError(e.message || 'โหลดข้อมูลไม่สำเร็จ');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [technician, technicianId, dateRange.start, dateRange.end, isPending, viewAll]);
+    },
+    [technician, technicianId, dateRange.start, dateRange.end, isPending, viewAll]
+  );
 
   useEffect(() => {
     load();
@@ -148,24 +208,26 @@ export default function JobDetailScreen({ route, navigation }) {
     return () => sub.remove();
   }, [load]);
 
-  const visibleJobs = jobs
-    .filter((job) => {
-      if (statusFilter === 'open') return !job.closed;
-      if (statusFilter === 'closed') return job.closed;
-      return true;
-    })
-    .filter((job) => {
-      const term = textFilter.trim().toLowerCase();
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, textFilter]);
+
+  const visibleJobs = useMemo(() => {
+    const term = textFilter.trim().toLowerCase();
+    return jobs.filter((job) => {
+      if (statusFilter === 'open' && job.closed) return false;
+      if (statusFilter === 'closed' && !job.closed) return false;
       if (!term) return true;
-      const hay = [
-        job.code, job.title, job.vehicleNo, job.plate, job.chassis,
-        job.model, job.company, job.technician, job.datetime, job.mile,
-      ]
+      const hay = [job.code, job.title, job.vehicleNo, job.plate, job.technician, job.datetime]
         .map((x) => String(x || '').toLowerCase())
         .join(' ');
       return hay.includes(term);
-    })
-    .map((job, i) => ({ ...job, displayId: i + 1 }));
+    });
+  }, [jobs, statusFilter, textFilter]);
+
+  const pageCount = Math.max(1, Math.ceil(visibleJobs.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageJobs = visibleJobs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const countLabel =
     statusFilter === 'all' && !textFilter.trim()
@@ -175,7 +237,9 @@ export default function JobDetailScreen({ route, navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View style={[styles.header, { paddingHorizontal: pad }, centerContent && styles.headerCentered]}>
+        <View
+          style={[styles.header, { paddingHorizontal: pad }, centerContent && styles.headerCentered]}
+        >
           <View style={[styles.headerInner, sheetStyle]}>
             {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
             <Text style={[styles.headerTitle, { fontSize: titleSize }]}>
@@ -198,42 +262,45 @@ export default function JobDetailScreen({ route, navigation }) {
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => load({ soft: true })} tintColor={colors.navy} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => load({ soft: true })}
+              tintColor={colors.navy}
+            />
           }
           keyboardShouldPersistTaps="handled"
         >
           <View style={sheetStyle}>
-          {!isPending ? (
-            <DateRangePicker
-              value={dateRange}
-              presetKey={datePreset}
-              onChange={(range, key) => {
-                setDateRange(range);
-                setDatePreset(key);
-              }}
+            {!isPending ? (
+              <DateRangePicker
+                value={dateRange}
+                presetKey={datePreset}
+                onChange={(range, key) => {
+                  setDateRange(range);
+                  setDatePreset(key);
+                }}
+              />
+            ) : null}
+
+            <TextInput
+              style={styles.filterInput}
+              value={textFilter}
+              onChangeText={setTextFilter}
+              placeholder="ค้นเลขงาน · ทะเบียน · ช่าง · อาการ..."
+              placeholderTextColor={colors.textMuted}
             />
-          ) : null}
 
-          <TextInput
-            style={styles.filterInput}
-            value={textFilter}
-            onChangeText={setTextFilter}
-            placeholder="พิมพ์ค้นในแถว..."
-            placeholderTextColor={colors.textMuted}
-          />
-
-          {loading ? (
-            <LoadingView compact />
-          ) : error ? (
-            <View style={styles.center}>
-              <Text style={styles.centerText}>{error}</Text>
-              <Pressable style={styles.retryBtn} onPress={load}>
-                <Text style={styles.retryText}>ลองใหม่</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <>
-              {jobs.length > 0 ? (
+            {loading ? (
+              <LoadingView compact />
+            ) : error ? (
+              <View style={styles.center}>
+                <Text style={styles.centerText}>{error}</Text>
+                <Pressable style={styles.retryBtn} onPress={load}>
+                  <Text style={styles.retryText}>ลองใหม่</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
                 <View style={styles.filterRow}>
                   {STATUS_FILTERS.map((f) => {
                     const active = statusFilter === f.key;
@@ -250,69 +317,126 @@ export default function JobDetailScreen({ route, navigation }) {
                     );
                   })}
                 </View>
-              ) : null}
 
-              {jobs.length === 0 ? (
-                <View style={styles.center}>
-                  <Text style={styles.centerText}>
-                    {isPending
-                      ? 'ไม่มีงานค้างซ่อม'
-                      : 'ไม่มีงานในช่วงวันที่เลือก'}
-                  </Text>
-                </View>
-              ) : visibleJobs.length === 0 ? (
-                <View style={styles.center}>
-                  <Text style={styles.centerText}>ไม่มีงานที่ตรงกับตัวกรอง</Text>
-                </View>
-              ) : (
-                <View style={styles.grid}>
-                  {visibleJobs.map((job) => (
-                    <Pressable
-                      key={`${job.rId}-${job.code}`}
-                      style={({ pressed }) => [
-                        styles.jobCard,
-                        styles.jobCardFull,
-                        pressed && styles.pressed,
-                      ]}
-                      onPress={() =>
-                        navigation.navigate('RepairDetail', { repair: job.raw, rId: job.rId })
-                      }
-                    >
-                      <View style={styles.jobTopRow}>
-                        <View style={styles.indexBadge}>
-                          <Text style={styles.indexText}>{job.displayId}</Text>
-                        </View>
-                        <StatusPill closed={job.closed} />
+                {jobs.length === 0 ? (
+                  <View style={styles.center}>
+                    <Text style={styles.centerText}>
+                      {isPending ? 'ไม่มีงานค้างซ่อม' : 'ไม่มีงานในช่วงวันที่เลือก'}
+                    </Text>
+                  </View>
+                ) : visibleJobs.length === 0 ? (
+                  <View style={styles.center}>
+                    <Text style={styles.centerText}>ไม่มีงานที่ตรงกับตัวกรอง</Text>
+                  </View>
+                ) : (
+                  <View style={styles.listCard}>
+                    <PaginationBar
+                      page={safePage}
+                      pageCount={pageCount}
+                      total={visibleJobs.length}
+                      pageSize={PAGE_SIZE}
+                      onChange={setPage}
+                    />
+
+                    {!isMobile ? (
+                      <View style={styles.colHead}>
+                        <Text style={[styles.col, styles.colNo]}>#</Text>
+                        <Text style={[styles.col, styles.colWhen]}>เวลา</Text>
+                        <Text style={[styles.col, styles.colCode]}>งาน</Text>
+                        <Text style={[styles.col, styles.colVehicle]}>รถ</Text>
+                        <Text style={[styles.col, styles.colTitle]}>อาการ</Text>
+                        <Text style={[styles.col, styles.colTech]}>ช่าง</Text>
+                        <Text style={[styles.col, styles.colStatus]}>สถานะ</Text>
                       </View>
-                      {/* วันที่ก่อน แล้วตามด้วยรหัสงาน */}
-                      <Text style={styles.jobCode}>
-                        {job.datetime ? `${fmtDateTime(job.datetime)} | ` : ''}
-                        {job.code}
-                      </Text>
+                    ) : null}
 
-                      <View style={styles.vehicleBox}>
-                        {job.vehicleNo ? (
-                          <Text style={styles.vehicleNo}>🚚 {job.vehicleNo}</Text>
-                        ) : null}
-                        <Text style={styles.jobDetail}>
-                          {job.plate || '-'}
-                          {job.chassis ? ` • ${job.chassis}` : ''}
-                        </Text>
-                        {job.model ? <Text style={styles.jobDetail}>{job.model}</Text> : null}
-                        <Text style={styles.jobDetail}>
-                          ผู้ซ่อม: {job.technician || 'ไม่ระบุ'}
-                          {job.mile > 0 ? ` • ไมล์ ${job.mile.toLocaleString()}` : ''}
-                        </Text>
-                        {job.company ? <Text style={styles.jobDetail}>{job.company}</Text> : null}
-                      </View>
+                    {pageJobs.map((job, i) => {
+                      const idx = (safePage - 1) * PAGE_SIZE + i + 1;
+                      const vehicle = [job.vehicleNo, job.plate].filter(Boolean).join(' · ') || '-';
+                      return (
+                        <Pressable
+                          key={`${job.rId}-${job.code}`}
+                          style={({ pressed }) => [
+                            styles.row,
+                            isMobile && styles.rowMobile,
+                            pressed && styles.pressed,
+                          ]}
+                          onPress={() =>
+                            navigation.navigate('RepairDetail', {
+                              repair: job.raw,
+                              rId: job.rId,
+                            })
+                          }
+                        >
+                          {isMobile ? (
+                            <>
+                              <View style={styles.rowTop}>
+                                <Text style={styles.mobileCode}>
+                                  {idx}. {job.code}
+                                </Text>
+                                <Text
+                                  style={[
+                                    styles.statusText,
+                                    { color: job.closed ? '#E5544B' : '#1FA97A' },
+                                  ]}
+                                >
+                                  {job.closed ? 'ปิดงาน' : 'กำลังซ่อม'}
+                                </Text>
+                              </View>
+                              <Text style={styles.mobileTitle} numberOfLines={2}>
+                                {job.title}
+                              </Text>
+                              <Text style={styles.mobileMeta} numberOfLines={1}>
+                                {vehicle}
+                                {job.technician ? ` · ${job.technician}` : ''}
+                                {job.datetime ? ` · ${fmtDateTime(job.datetime)}` : ''}
+                              </Text>
+                            </>
+                          ) : (
+                            <>
+                              <Text style={[styles.col, styles.colNo]}>{idx}</Text>
+                              <Text style={[styles.col, styles.colWhen]} numberOfLines={1}>
+                                {job.datetime ? fmtDateTime(job.datetime) : '-'}
+                              </Text>
+                              <Text style={[styles.col, styles.colCode]} numberOfLines={1}>
+                                {job.code}
+                              </Text>
+                              <Text style={[styles.col, styles.colVehicle]} numberOfLines={1}>
+                                {vehicle}
+                              </Text>
+                              <Text style={[styles.col, styles.colTitle]} numberOfLines={1}>
+                                {job.title}
+                              </Text>
+                              <Text style={[styles.col, styles.colTech]} numberOfLines={1}>
+                                {job.technician || '—'}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.col,
+                                  styles.colStatus,
+                                  styles.statusText,
+                                  { color: job.closed ? '#E5544B' : '#1FA97A' },
+                                ]}
+                              >
+                                {job.closed ? 'ปิดงาน' : 'กำลังซ่อม'}
+                              </Text>
+                            </>
+                          )}
+                        </Pressable>
+                      );
+                    })}
 
-                      <Text style={styles.jobTitle}>{job.title}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
-            </>
-          )}
+                    <PaginationBar
+                      page={safePage}
+                      pageCount={pageCount}
+                      total={visibleJobs.length}
+                      pageSize={PAGE_SIZE}
+                      onChange={setPage}
+                    />
+                  </View>
+                )}
+              </>
+            )}
           </View>
         </ScrollView>
         {isMobile ? <MobileBackBar onPress={goBack} /> : null}
@@ -321,16 +445,8 @@ export default function JobDetailScreen({ route, navigation }) {
   );
 }
 
-function StatusPill({ closed }) {
-  return (
-    <View style={[styles.pill, { backgroundColor: closed ? '#E5544B' : '#1FA97A' }]}>
-      <Text style={styles.pillText}>{closed ? 'ปิดงานแล้ว' : 'กำลังซ่อม'}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.navy },
+  safe: { flex: 1, backgroundColor: colors.navyDeep },
   body: { flex: 1 },
   scrollView: { flex: 1 },
   header: {
@@ -357,12 +473,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: 10,
+    minHeight: 44,
     marginBottom: spacing.md,
     color: colors.textPrimary,
+    fontWeight: '600',
   },
   center: { paddingVertical: spacing.xl * 2, alignItems: 'center' },
-  centerText: { color: colors.textSecondary, fontSize: 14, marginTop: spacing.sm, textAlign: 'center' },
+  centerText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
   retryBtn: {
     backgroundColor: colors.navy,
     paddingHorizontal: spacing.xl,
@@ -371,69 +494,99 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   retryText: { color: colors.onNavy, fontWeight: '700' },
-  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.lg },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
   filterChip: {
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingVertical: 8,
+    minHeight: 36,
     borderRadius: 999,
     backgroundColor: colors.navyTint,
+    justifyContent: 'center',
   },
   filterChipActive: { backgroundColor: colors.navy },
   filterText: { fontSize: 13, fontWeight: '700', color: colors.navySoft },
   filterTextActive: { color: colors.onNavy },
-  grid: { gap: spacing.md },
-  gridWide: { flexDirection: 'row', flexWrap: 'wrap' },
-  jobCard: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.lg, ...shadow },
-  jobCardFull: { width: '100%' },
-  jobCardWide: { flexBasis: '22%', flexGrow: 1, minWidth: 220 },
-  pressed: { opacity: 0.85 },
-  jobTopRow: {
+  listCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  colHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  indexBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
     backgroundColor: colors.navyTint,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  col: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  colNo: { width: 36 },
+  colWhen: { width: 118 },
+  colCode: { width: 72 },
+  colVehicle: { width: 150, paddingRight: 8 },
+  colTitle: { flex: 1, paddingRight: 8 },
+  colTech: { width: 88 },
+  colStatus: { width: 78, textAlign: 'right' },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    minHeight: 48,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  rowMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    paddingVertical: 12,
+  },
+  pressed: { backgroundColor: '#F3F5FB' },
+  statusText: { fontWeight: '800', fontSize: 12 },
+  rowTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 2,
+  },
+  mobileCode: { color: colors.navy, fontWeight: '800', fontSize: 13 },
+  mobileTitle: { color: colors.textPrimary, fontWeight: '700', fontSize: 14, lineHeight: 20 },
+  mobileMeta: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
+  pager: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: '#F7F8FC',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  pagerMeta: { color: colors.textSecondary, fontSize: 12, fontWeight: '600' },
+  pagerBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  pageBtn: {
+    minWidth: 36,
+    minHeight: 36,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  indexText: { color: colors.textMuted, fontWeight: '700', fontSize: 12 },
-  jobCode: { color: colors.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginBottom: 2 },
-  jobTitle: {
-    color: colors.navy,
-    fontSize: 20,
-    fontWeight: '800',
-    lineHeight: 27,
-    marginTop: 8,
-    marginBottom: 6,
-    backgroundColor: '#FFF0C2',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  vehicleBox: {
-    backgroundColor: '#F3F5FB',
-    borderLeftWidth: 3,
-    borderLeftColor: colors.barFill,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginTop: 2,
-    marginBottom: 2,
-  },
-  vehicleNo: {
-    color: colors.textPrimary,
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 3,
-  },
-  jobDetail: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: 2 },
-  pill: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: 999 },
-  pillText: { color: colors.onNavy, fontSize: 11, fontWeight: '700' },
+  pageBtnActive: { backgroundColor: colors.navy, borderColor: colors.navy },
+  pageBtnDisabled: { opacity: 0.35 },
+  pageBtnText: { color: colors.navy, fontWeight: '800', fontSize: 13 },
+  pageBtnTextActive: { color: colors.onNavy },
 });
