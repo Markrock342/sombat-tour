@@ -28,9 +28,14 @@ async function parseJson(res) {
       data = JSON.parse(text);
     } catch (_) {
       const looksHtml = /<b>Fatal error|<!DOCTYPE|<html/i.test(text || '');
+      const snippet = String(text || '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 120);
       const err = new Error(
         looksHtml
-          ? `API ฝั่ง PHP พัง (HTTP ${res.status}) — ตรวจไฟล์ใน cPanel หรือดู error log`
+          ? `API ตอบไม่ใช่ JSON (HTTP ${res.status})${snippet ? ` — ${snippet}` : ' — อัปไฟล์ PHP ที่เกี่ยวข้องขึ้น cPanel'}`
           : res.ok
             ? 'เซิร์ฟเวอร์ตอบกลับไม่ใช่ JSON'
             : `เซิร์ฟเวอร์ผิดพลาด (HTTP ${res.status})`
