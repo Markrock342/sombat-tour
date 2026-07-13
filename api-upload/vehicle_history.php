@@ -34,8 +34,8 @@ try {
   }
 
   if ($v) {
-    $vName = (string)($v['v_name'] ?? $vName);
-    $vPlate = (string)($v['v_plate'] ?? $vPlate);
+    $vName = (string)((isset($v['v_name']) ? $v['v_name'] : $vName));
+    $vPlate = (string)((isset($v['v_plate']) ? $v['v_plate'] : $vPlate));
   }
 
   if ($vName === '' && $vPlate === '') {
@@ -60,6 +60,6 @@ try {
   $rows = $st->fetchAll();
 
   out(['ok' => true, 'vehicle' => $v, 'total' => count($rows), 'rows' => $rows]);
-} catch (Throwable $e) {
+} catch (Exception $e) {
   out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
 }

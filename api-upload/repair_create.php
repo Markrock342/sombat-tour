@@ -10,24 +10,24 @@ try {
   require_roles($user, ['admin', 'staff', 'technician']);
 
   $b = read_json_body();
-  $repairList = trim((string)($b['r_repair_list'] ?? $b['repair_list'] ?? ''));
+  $repairList = trim((string)pick($b, array('r_repair_list', 'repair_list')));
   if ($repairList === '') out(['ok' => false, 'error' => 'MISSING_REPAIR_LIST'], 400);
 
   $vId = isset($b['v_id']) ? (int)$b['v_id'] : 0;
-  $vName = trim((string)($b['r_v_name'] ?? $b['v_name'] ?? ''));
-  $vPlate = trim((string)($b['r_v_plate'] ?? $b['v_plate'] ?? ''));
-  $vChassis = trim((string)($b['r_v_chassis'] ?? $b['v_chassis'] ?? ''));
-  $vBrand = trim((string)($b['r_v_brand'] ?? $b['v_brand'] ?? ''));
-  $vModel = trim((string)($b['r_v_model'] ?? $b['v_model'] ?? ''));
-  $vCompany = trim((string)($b['r_v_company'] ?? $b['v_company'] ?? ''));
-  $invCom = trim((string)($b['r_inv_com'] ?? $b['inv_company'] ?? ''));
+  $vName = trim((string)pick($b, array('r_v_name', 'v_name')));
+  $vPlate = trim((string)pick($b, array('r_v_plate', 'v_plate')));
+  $vChassis = trim((string)pick($b, array('r_v_chassis', 'v_chassis')));
+  $vBrand = trim((string)pick($b, array('r_v_brand', 'v_brand')));
+  $vModel = trim((string)pick($b, array('r_v_model', 'v_model')));
+  $vCompany = trim((string)pick($b, array('r_v_company', 'v_company')));
+  $invCom = trim((string)pick($b, array('r_inv_com', 'inv_company')));
   $mile = isset($b['r_mile']) ? (int)$b['r_mile'] : (isset($b['mile']) ? (int)$b['mile'] : 0);
-  $techName = trim((string)($b['r_technician'] ?? $b['technician'] ?? ''));
+  $techName = trim((string)pick($b, array('r_technician', 'technician')));
   $techId = isset($b['r_technician_id']) ? (int)$b['r_technician_id'] : (isset($b['technician_id']) ? (int)$b['technician_id'] : 0);
-  $type = trim((string)($b['r_type'] ?? $b['type'] ?? 'normal'));
+  $type = trim((string)pick($b, array('r_type', 'type'), 'normal'));
   if (!in_array($type, ['normal', 'breakdown', 'roadside'], true)) $type = 'normal';
   if ($type === 'roadside') $type = 'breakdown';
-  $tankM = trim((string)($b['r_tank_m'] ?? $b['tank_m'] ?? ''));
+  $tankM = trim((string)pick($b, array('r_tank_m', 'tank_m')));
 
   // Enrich from vehicle table if v_id given
   if ($vId > 0) {
@@ -35,13 +35,13 @@ try {
     $st->execute([$vId]);
     $v = $st->fetch();
     if ($v) {
-      if ($vName === '') $vName = (string)($v['v_name'] ?? '');
-      if ($vPlate === '') $vPlate = (string)($v['v_plate'] ?? '');
-      if ($vChassis === '') $vChassis = (string)($v['v_chassis'] ?? '');
-      if ($vBrand === '') $vBrand = (string)($v['v_brand'] ?? '');
-      if ($vModel === '') $vModel = (string)($v['v_model'] ?? '');
-      if ($vCompany === '') $vCompany = (string)($v['v_company'] ?? '');
-      if ($invCom === '') $invCom = (string)($v['inv_company'] ?? '');
+      if ($vName === '') $vName = (string)((isset($v['v_name']) ? $v['v_name'] : ''));
+      if ($vPlate === '') $vPlate = (string)((isset($v['v_plate']) ? $v['v_plate'] : ''));
+      if ($vChassis === '') $vChassis = (string)((isset($v['v_chassis']) ? $v['v_chassis'] : ''));
+      if ($vBrand === '') $vBrand = (string)((isset($v['v_brand']) ? $v['v_brand'] : ''));
+      if ($vModel === '') $vModel = (string)((isset($v['v_model']) ? $v['v_model'] : ''));
+      if ($vCompany === '') $vCompany = (string)((isset($v['v_company']) ? $v['v_company'] : ''));
+      if ($invCom === '') $invCom = (string)((isset($v['inv_company']) ? $v['inv_company'] : ''));
       if ($tankM === '' && isset($v['v_metr'])) $tankM = (string)$v['v_metr'];
     }
   }
@@ -53,14 +53,14 @@ try {
       $st->execute([$techId]);
       $t = $st->fetch();
       if ($t) $techName = $t['name'];
-    } catch (Throwable $e) { /* table name may differ */ }
+    } catch (Exception $e) { /* table name may differ */ }
   }
 
   $jobNum = isset($b['r_job_num']) ? (int)$b['r_job_num'] : 0;
   if ($jobNum <= 0) {
     try {
       $jobNum = (int)$pdo->query("SELECT COALESCE(MAX(r_job_num), 0) + 1 FROM repair")->fetchColumn();
-    } catch (Throwable $e) {
+    } catch (Exception $e) {
       $jobNum = (int)(time() % 1000000);
     }
   }
@@ -81,7 +81,7 @@ try {
       $vName, $vPlate, $vChassis, $vBrand, $vModel, $mile,
       $repairList, $vCompany, $invCom, $type, $tankM !== '' ? $tankM : null,
     ]);
-  } catch (Throwable $e) {
+  } catch (Exception $e) {
     $st = $pdo->prepare("
       INSERT INTO repair (
         r_job_num, r_dt_rec, r_close, r_technician,
@@ -98,6 +98,6 @@ try {
 
   $rId = (int)$pdo->lastInsertId();
   out(['ok' => true, 'r_id' => $rId, 'r_job_num' => $jobNum, 'created_by' => $user['username']]);
-} catch (Throwable $e) {
+} catch (Exception $e) {
   out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
 }

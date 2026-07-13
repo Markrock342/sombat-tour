@@ -72,7 +72,23 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const role = user?.role || '';
+  // Real member.m_level is numeric (99=admin, 90=staff, others=technician).
+  // Also accept the string roles used by newer code paths.
+  const rawRole = user?.role ?? user?.level ?? '';
+  const levelNum = Number(rawRole);
+  const role = (() => {
+    if (rawRole === 'admin' || rawRole === 'staff' || rawRole === 'technician' || rawRole === 'viewer') {
+      return rawRole;
+    }
+    if (!Number.isNaN(levelNum)) {
+      if (levelNum >= 99) return 'admin';
+      if (levelNum >= 90) return 'staff';
+      if (levelNum > 0) return 'technician';
+      return 'viewer';
+    }
+    return user ? 'technician' : '';
+  })();
+
   const value = useMemo(
     () => ({
       user,
@@ -80,9 +96,11 @@ export function AuthProvider({ children }) {
       ready,
       login,
       logout,
-      canWrite: ['admin', 'staff', 'technician'].includes(role),
+      // Any signed-in member (except pure viewer / level 0) can report repairs
+      canWrite: !!user && ['admin', 'staff', 'technician'].includes(role),
       canSeePartsPrice: ['admin', 'staff'].includes(role),
       isAdmin: role === 'admin',
+      role,
     }),
     [user, token, ready, login, logout, role]
   );

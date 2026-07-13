@@ -1,9 +1,9 @@
 <?php
-// Shared helpers for all sombat-tour API endpoints
+// Shared helpers — compatible with PHP 5.6 (425store.com host)
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
-function cors_headers(array $methods = ['GET', 'POST', 'OPTIONS']) {
+function cors_headers($methods = array('GET', 'POST', 'OPTIONS')) {
   header('Access-Control-Allow-Origin: *');
   header('Access-Control-Allow-Methods: ' . implode(', ', $methods));
   header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Auth-Token');
@@ -14,45 +14,280 @@ function cors_headers(array $methods = ['GET', 'POST', 'OPTIONS']) {
   header('Content-Type: application/json; charset=utf-8');
 }
 
+/**
+ * Recursively drop/replace bytes that are not valid UTF-8, so json_encode()
+ * never silently fails (PHP <7.2 has no JSON_INVALID_UTF8_* flags). Some
+ * legacy tables on this host store Thai text as TIS-620 / Windows-874,
+ * which is invalid UTF-8 and would otherwise make json_encode() return
+ * false with zero output.
+ */
+function utf8_clean($value) {
+  if (is_array($value)) {
+    $out = array();
+    foreach ($value as $k => $v) {
+      $out[$k] = utf8_clean($v);
+    }
+    return $out;
+  }
+  if (is_string($value)) {
+    if (function_exists('mb_check_encoding') && mb_check_encoding($value, 'UTF-8')) {
+      return $value;
+    }
+    $converted = null;
+    if (function_exists('iconv')) {
+      $converted = @iconv('UTF-8', 'UTF-8//IGNORE', $value);
+    }
+    if ($converted === null || $converted === false) {
+      $converted = function_exists('mb_convert_encoding')
+        ? @mb_convert_encoding($value, 'UTF-8', 'UTF-8')
+        : preg_replace('/[\x80-\xFF]/', '?', $value);
+    }
+    return $converted;
+  }
+  return $value;
+}
+
 function out($data, $code = 200) {
   http_response_code($code);
-  echo json_encode($data, JSON_UNESCAPED_UNICODE);
+  $flags = defined('JSON_UNESCAPED_UNICODE') ? JSON_UNESCAPED_UNICODE : 0;
+  $json = json_encode($data, $flags);
+  if ($json === false) {
+    $json = json_encode(utf8_clean($data), $flags);
+  }
+  if ($json === false) {
+    $json = json_encode(array('ok' => false, 'error' => 'ENCODING_ERROR', 'json_error' => json_last_error_msg()));
+  }
+  echo $json;
   exit;
 }
 
 function read_json_body() {
   $raw = file_get_contents('php://input');
-  if ($raw === false || $raw === '') return [];
+  if ($raw === false || $raw === '') return array();
   $data = json_decode($raw, true);
-  return is_array($data) ? $data : [];
+  return is_array($data) ? $data : array();
 }
 
 function req_method() {
-  return strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+  return isset($_SERVER['REQUEST_METHOD']) ? strtoupper($_SERVER['REQUEST_METHOD']) : 'GET';
+}
+
+function arr_get($arr, $key, $default = '') {
+  return isset($arr[$key]) ? $arr[$key] : $default;
+}
+
+function pick($arr, $keys, $default = '') {
+  foreach ((array)$keys as $k) {
+    if (isset($arr[$k]) && $arr[$k] !== '' && $arr[$k] !== null) {
+      return $arr[$k];
+    }
+  }
+  return $default;
 }
 
 function bearer_token() {
-  $hdr = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['HTTP_X_AUTH_TOKEN'] ?? '';
+  $hdr = '';
+  if (isset($_SERVER['HTTP_AUTHORIZATION'])) $hdr = $_SERVER['HTTP_AUTHORIZATION'];
+  elseif (isset($_SERVER['HTTP_X_AUTH_TOKEN'])) $hdr = $_SERVER['HTTP_X_AUTH_TOKEN'];
   if (preg_match('/Bearer\s+(\S+)/i', $hdr, $m)) return $m[1];
   if ($hdr && strpos($hdr, ' ') === false) return $hdr;
   return isset($_GET['token']) ? trim($_GET['token']) : '';
 }
 
+function make_token($bytes = 24) {
+  if (function_exists('random_bytes')) {
+    return bin2hex(random_bytes($bytes));
+  }
+  return bin2hex(openssl_random_pseudo_bytes($bytes));
+}
+
+function base64url_encode($data) {
+  return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+}
+
+function base64url_decode($data) {
+  return base64_decode(strtr($data, '-_', '+/'));
+}
+
 /**
- * Ensure optional tables exist (idempotent). Never throws — safe on every request.
+ * Secret used to sign session tokens. Derived from the DB password (already
+ * a per-install secret in config.php) so no new storage is needed — the API
+ * DB user on this host (cp021446_Test01) has write access only to the
+ * original tables, so sessions cannot be persisted in a new table.
+ */
+function session_secret() {
+  if (!empty($GLOBALS['DB_PASS'])) {
+    return 'sombat_session_v1::' . $GLOBALS['DB_PASS'];
+  }
+  return 'sombat_session_v1::fallback_static_key_change_me';
+}
+
+/**
+ * Verify PIN against a user row. Checks the detected pin column (from the
+ * schema map) plus common fallbacks, and supports plain / bcrypt / md5 / sha1.
+ */
+function verify_user_pin($pin, $row, $pinCol = null) {
+  if (!$row) return false;
+  $pin = (string)$pin;
+
+  $candidates = array();
+  if ($pinCol && isset($row[$pinCol])) $candidates[] = $row[$pinCol];
+  foreach (array('pin_hash', 'pin', 'password', 'pass', 'pwd', 'pincode') as $c) {
+    if (isset($row[$c])) $candidates[] = $row[$c];
+  }
+
+  foreach ($candidates as $stored) {
+    if ($stored === null) continue;
+    $stored = (string)$stored;
+    if ($stored === '') continue;
+
+    // bcrypt / modern password_hash (any variant: $2y$, $2a$, $2b$, $2x$)
+    if (function_exists('password_verify') && strpos($stored, '$2') === 0) {
+      if (password_verify($pin, $stored)) return true;
+      continue;
+    }
+    // plain
+    if ($stored === $pin) return true;
+    // md5 (32 hex) / sha1 (40 hex)
+    if (strlen($stored) === 32 && ctype_xdigit($stored) && strtolower($stored) === md5($pin)) return true;
+    if (strlen($stored) === 40 && ctype_xdigit($stored) && strtolower($stored) === sha1($pin)) return true;
+  }
+  return false;
+}
+
+function users_table_name(PDO $pdo) {
+  static $name = null;
+  if ($name !== null) return $name;
+  foreach (array('app_users', 'users', 'user', 'member', 'members') as $t) {
+    try {
+      $pdo->query("SELECT 1 FROM `$t` LIMIT 1");
+      $name = $t;
+      return $name;
+    } catch (Exception $e) {
+      /* try next */
+    }
+  }
+  $name = 'app_users';
+  return $name;
+}
+
+/**
+ * Map real user-table columns (existing DB may not use "username").
+ */
+function users_column_map(PDO $pdo, $table = null) {
+  static $cache = array();
+  if ($table === null) $table = users_table_name($pdo);
+  if (isset($cache[$table])) return $cache[$table];
+
+  $cols = array();
+  try {
+    $cols = $pdo->query("SHOW COLUMNS FROM `$table`")->fetchAll(PDO::FETCH_COLUMN);
+  } catch (Exception $e) {
+    $cols = array();
+  }
+  $colSet = array_flip($cols);
+
+  $loginCandidates = array(
+    'username', 'user_name', 'u_name', 'name', 'login', 'user', 'member',
+    'member_name', 'code', 'user_code', 'm_user', 'account', 'email', 'mobile', 'phone',
+  );
+  $pinCandidates = array(
+    'pin', 'pin_hash', 'password', 'pass', 'pwd', 'pincode', 'u_pin', 'm_pin', 'm_pass',
+  );
+  $idCandidates = array('id', 'user_id', 'u_id', 'member_id', 'm_id');
+  $roleCandidates = array('role', 'user_role', 'u_role', 'level', 'type', 'm_level', 'm_status');
+  $deptCandidates = array('department', 'dept', 'branch', 'section', 'm_dpr', 'm_branch');
+
+  $map = array(
+    'table' => $table,
+    'login' => null,
+    'pin' => null,
+    'id' => null,
+    'role' => null,
+    'department' => null,
+    'columns' => $cols,
+  );
+
+  foreach ($loginCandidates as $c) {
+    if (isset($colSet[$c])) { $map['login'] = $c; break; }
+  }
+  foreach ($pinCandidates as $c) {
+    if (isset($colSet[$c])) { $map['pin'] = $c; break; }
+  }
+  foreach ($idCandidates as $c) {
+    if (isset($colSet[$c])) { $map['id'] = $c; break; }
+  }
+  foreach ($roleCandidates as $c) {
+    if (isset($colSet[$c])) { $map['role'] = $c; break; }
+  }
+  foreach ($deptCandidates as $c) {
+    if (isset($colSet[$c])) { $map['department'] = $c; break; }
+  }
+
+  $cache[$table] = $map;
+  return $map;
+}
+
+function find_user_by_login(PDO $pdo, $loginValue) {
+  $table = users_table_name($pdo);
+  $map = users_column_map($pdo, $table);
+  if (!$map['login']) {
+    throw new Exception('USER_LOGIN_COLUMN_NOT_FOUND');
+  }
+  $sql = "SELECT * FROM `$table` WHERE `{$map['login']}` = ? LIMIT 1";
+  $st = $pdo->prepare($sql);
+  $st->execute(array($loginValue));
+  $row = $st->fetch();
+  if ($row) return array('row' => $row, 'map' => $map);
+  return null;
+}
+
+function map_member_role($rawRole) {
+  $rawRole = (string)$rawRole;
+  if ($rawRole === 'admin' || $rawRole === 'staff' || $rawRole === 'technician' || $rawRole === 'viewer') {
+    return $rawRole;
+  }
+  if (is_numeric($rawRole)) {
+    $n = (int)$rawRole;
+    if ($n >= 99) return 'admin';
+    if ($n >= 90) return 'staff';
+    if ($n > 0) return 'technician';
+    return 'viewer';
+  }
+  return $rawRole !== '' ? 'technician' : 'viewer';
+}
+
+function normalize_user_row($row, $map) {
+  $idCol = $map['id'] ? $map['id'] : 'id';
+  $loginCol = $map['login'];
+  $roleCol = $map['role'];
+  $deptCol = $map['department'];
+
+  $rawRole = ($roleCol && isset($row[$roleCol]) && $row[$roleCol] !== '') ? (string)$row[$roleCol] : '';
+  $role = map_member_role($rawRole);
+
+  $user = array(
+    'id' => isset($row[$idCol]) ? (int)$row[$idCol] : 0,
+    'username' => isset($row[$loginCol]) ? (string)$row[$loginCol] : '',
+    'role' => $role,
+    'level' => $rawRole,
+    'department' => ($deptCol && isset($row[$deptCol])) ? (string)$row[$deptCol] : '',
+  );
+
+  // Extra display fields kept for parity with the original login.php profile
+  foreach (array('fname' => 'm_fname', 'lname' => 'm_lname', 'job' => 'm_job') as $key => $col) {
+    if (isset($row[$col])) $user[$key] = (string)$row[$col];
+  }
+
+  return $user;
+}
+
+/**
+ * Ensure helper tables exist. Only CREATEs new tables — never ALTERs any
+ * existing table (user table and repair table are left untouched).
  */
 function ensure_schema(PDO $pdo) {
-  $stmts = [
-    "CREATE TABLE IF NOT EXISTS app_users (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      username VARCHAR(64) NOT NULL UNIQUE,
-      pin_hash VARCHAR(255) NOT NULL,
-      role VARCHAR(32) NOT NULL DEFAULT 'viewer',
-      department VARCHAR(128) DEFAULT '',
-      token VARCHAR(64) DEFAULT NULL,
-      token_expires DATETIME DEFAULT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+  $stmts = array(
     "CREATE TABLE IF NOT EXISTS repair_image (
       id INT AUTO_INCREMENT PRIMARY KEY,
       r_id INT NOT NULL,
@@ -84,73 +319,71 @@ function ensure_schema(PDO $pdo) {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX (v_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-  ];
+  );
 
   foreach ($stmts as $sql) {
     try {
       $pdo->exec($sql);
-    } catch (Throwable $e) {
-      // no CREATE privilege / already exists oddly — continue
+    } catch (Exception $e) {
+      /* continue */
     }
-  }
-
-  // Optional columns on repair (ignore if already exist / permission denied)
-  try {
-    $cols = $pdo->query("SHOW COLUMNS FROM repair")->fetchAll(PDO::FETCH_COLUMN);
-    $colSet = array_flip($cols);
-    if (!isset($colSet['r_technician_id'])) {
-      $pdo->exec("ALTER TABLE repair ADD COLUMN r_technician_id INT DEFAULT NULL");
-    }
-    if (!isset($colSet['r_type'])) {
-      $pdo->exec("ALTER TABLE repair ADD COLUMN r_type VARCHAR(32) DEFAULT 'normal'");
-    }
-    if (!isset($colSet['r_tank_m'])) {
-      $pdo->exec("ALTER TABLE repair ADD COLUMN r_tank_m VARCHAR(64) DEFAULT NULL");
-    }
-  } catch (Throwable $e) {
-    // Host may not allow ALTER — continue without
-  }
-
-  // Seed default admin if empty (PIN 1234 — change after deploy)
-  try {
-    $n = (int)$pdo->query("SELECT COUNT(*) FROM app_users")->fetchColumn();
-    if ($n === 0) {
-      $st = $pdo->prepare("INSERT INTO app_users (username, pin_hash, role, department) VALUES (?, ?, 'admin', 'IT')");
-      $st->execute(['admin', password_hash('1234', PASSWORD_DEFAULT)]);
-    }
-  } catch (Throwable $e) {
-    // table missing / no privilege
   }
 }
 
-/** Whether a repair column exists (cached). */
 function repair_has_column(PDO $pdo, $col) {
   $set = repair_column_set($pdo);
   return isset($set[$col]);
 }
 
 /**
- * @return array|null user row or null
+ * Stateless session token: base64url(json payload) + '.' + HMAC-SHA256 signature.
+ * Requires zero database writes, so it works even though the API's DB user
+ * cannot write to new tables.
  */
-function auth_user(PDO $pdo, $required = true) {
-  $token = bearer_token();
-  if ($token === '') {
-    if ($required) out(['ok' => false, 'error' => 'UNAUTHORIZED'], 401);
-    return null;
-  }
-  $st = $pdo->prepare("SELECT id, username, role, department FROM app_users WHERE token = ? AND (token_expires IS NULL OR token_expires > NOW()) LIMIT 1");
-  $st->execute([$token]);
-  $user = $st->fetch();
-  if (!$user) {
-    if ($required) out(['ok' => false, 'error' => 'UNAUTHORIZED'], 401);
-    return null;
-  }
-  return $user;
+function session_create($pdo, $user, $ttlSeconds = 2592000) {
+  $payload = array(
+    'id' => isset($user['id']) ? (int)$user['id'] : 0,
+    'username' => isset($user['username']) ? $user['username'] : '',
+    'role' => isset($user['role']) ? $user['role'] : 'viewer',
+    'department' => isset($user['department']) ? $user['department'] : '',
+    'exp' => time() + $ttlSeconds,
+  );
+  $payloadB64 = base64url_encode(json_encode($payload));
+  $sig = hash_hmac('sha256', $payloadB64, session_secret());
+  $token = $payloadB64 . '.' . $sig;
+  return array('token' => $token, 'expires' => date('Y-m-d H:i:s', $payload['exp']));
 }
 
-function require_roles(array $user, array $roles) {
-  if (!in_array($user['role'], $roles, true)) {
-    out(['ok' => false, 'error' => 'FORBIDDEN'], 403);
+function verify_session_token($token) {
+  if (!$token || strpos($token, '.') === false) return null;
+  list($payloadB64, $sig) = explode('.', $token, 2);
+  $expected = hash_hmac('sha256', $payloadB64, session_secret());
+  if (!hash_equals($expected, $sig)) return null;
+  $payload = json_decode(base64url_decode($payloadB64), true);
+  if (!is_array($payload)) return null;
+  if (!isset($payload['exp']) || (int)$payload['exp'] < time()) return null;
+  return $payload;
+}
+
+function auth_user($pdo, $required = true) {
+  $token = bearer_token();
+  $payload = $token !== '' ? verify_session_token($token) : null;
+  if (!$payload) {
+    if ($required) out(array('ok' => false, 'error' => 'UNAUTHORIZED'), 401);
+    return null;
+  }
+  return array(
+    'id' => isset($payload['id']) ? (int)$payload['id'] : 0,
+    'username' => isset($payload['username']) ? $payload['username'] : '',
+    'role' => map_member_role(isset($payload['role']) ? $payload['role'] : ''),
+    'department' => isset($payload['department']) ? $payload['department'] : '',
+  );
+}
+
+function require_roles($user, $roles) {
+  $role = isset($user['role']) ? (string)$user['role'] : '';
+  if (!in_array($role, $roles, true)) {
+    out(array('ok' => false, 'error' => 'FORBIDDEN'), 403);
   }
 }
 
@@ -160,19 +393,19 @@ function repair_column_set(PDO $pdo) {
   try {
     $cols = $pdo->query("SHOW COLUMNS FROM repair")->fetchAll(PDO::FETCH_COLUMN);
     $set = array_flip($cols);
-  } catch (Throwable $e) {
-    $set = [];
+  } catch (Exception $e) {
+    $set = array();
   }
   return $set;
 }
 
 function repair_select_cols($pdo = null) {
-  $base = [
+  $base = array(
     'r_id', 'r_job_num', 'r_dt_rec', 'r_close', 'r_technician',
     'r_v_name', 'r_v_plate', 'r_v_chassis', 'r_v_brand', 'r_v_model', 'r_mile',
     'r_repair_list', 'r_v_company', 'r_inv_com',
-  ];
-  $optional = ['r_technician_id', 'r_type', 'r_tank_m'];
+  );
+  $optional = array('r_technician_id', 'r_type', 'r_tank_m');
   if ($pdo) {
     $set = repair_column_set($pdo);
     foreach ($optional as $c) {

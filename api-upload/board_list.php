@@ -4,7 +4,7 @@
 // POST /api/board_create.php | board_update.php | board_delete.php
 require_once __DIR__ . '/bootstrap.php';
 
-$script = basename($_SERVER['SCRIPT_NAME'] ?? 'board_list.php');
+$script = basename((isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : 'board_list.php'));
 
 if ($script === 'board_list.php' || req_method() === 'GET') {
   cors_headers(['GET', 'OPTIONS']);
@@ -22,7 +22,7 @@ if ($script === 'board_list.php' || req_method() === 'GET') {
       $r['id'] = (int)$r['id'];
     }
     out(['ok' => true, 'rows' => $rows]);
-  } catch (Throwable $e) {
+  } catch (Exception $e) {
     out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
   }
 }
@@ -37,11 +37,11 @@ try {
   $b = read_json_body();
 
   if ($script === 'board_create.php') {
-    $title = trim((string)($b['title'] ?? ''));
+    $title = trim((string)((isset($b['title']) ? $b['title'] : '')));
     if ($title === '') out(['ok' => false, 'error' => 'MISSING_TITLE'], 400);
-    $body = (string)($b['body'] ?? '');
-    $department = trim((string)($b['department'] ?? $user['department'] ?? ''));
-    $color = trim((string)($b['color'] ?? '#FFF59D'));
+    $body = (string)((isset($b['body']) ? $b['body'] : ''));
+    $department = trim((string)pick($b, 'department', arr_get($user, 'department', '')));
+    $color = trim((string)((isset($b['color']) ? $b['color'] : '#FFF59D')));
     $pin = !empty($b['pin']) ? 1 : 0;
     $st = $pdo->prepare("INSERT INTO board (title, body, department, color, pin, created_by) VALUES (?,?,?,?,?,?)");
     $st->execute([$title, $body, $department, $color, $pin, $user['username']]);
@@ -49,7 +49,7 @@ try {
   }
 
   if ($script === 'board_update.php') {
-    $id = (int)($b['id'] ?? 0);
+    $id = (int)((isset($b['id']) ? $b['id'] : 0));
     if ($id <= 0) out(['ok' => false, 'error' => 'MISSING_ID'], 400);
     $fields = [];
     $params = [];
@@ -72,7 +72,7 @@ try {
 
   if ($script === 'board_delete.php') {
     require_roles($user, ['admin', 'staff']);
-    $id = (int)($b['id'] ?? 0);
+    $id = (int)((isset($b['id']) ? $b['id'] : 0));
     if ($id <= 0) out(['ok' => false, 'error' => 'MISSING_ID'], 400);
     $st = $pdo->prepare('DELETE FROM board WHERE id = ?');
     $st->execute([$id]);
@@ -80,6 +80,6 @@ try {
   }
 
   out(['ok' => false, 'error' => 'UNKNOWN'], 400);
-} catch (Throwable $e) {
+} catch (Exception $e) {
   out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
 }

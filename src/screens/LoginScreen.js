@@ -99,8 +99,6 @@ export default function LoginScreen({ navigation }) {
                 <Text style={styles.cancel}>ยกเลิก</Text>
               </Pressable>
             </View>
-
-            <Text style={styles.hint}>เริ่มต้น: admin / 1234 (เปลี่ยนหลัง deploy)</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -190,11 +188,5 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     fontSize: 14,
     fontWeight: '700',
-  },
-  hint: {
-    marginTop: spacing.lg,
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: 11,
-    textAlign: 'center',
   },
 });

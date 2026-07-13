@@ -5,7 +5,7 @@
 // POST /api/location_delete.php
 require_once __DIR__ . '/bootstrap.php';
 
-$script = basename($_SERVER['SCRIPT_NAME'] ?? 'location_list.php');
+$script = basename((isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : 'location_list.php'));
 
 if ($script === 'location_list.php' || req_method() === 'GET') {
   cors_headers(['GET', 'OPTIONS']);
@@ -21,7 +21,7 @@ if ($script === 'location_list.php' || req_method() === 'GET') {
       $rows = $pdo->query("SELECT * FROM vehicle_location ORDER BY updated_at DESC LIMIT 200")->fetchAll();
     }
     out(['ok' => true, 'rows' => $rows]);
-  } catch (Throwable $e) {
+  } catch (Exception $e) {
     out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
   }
 }
@@ -36,7 +36,7 @@ try {
   $b = read_json_body();
 
   if ($script === 'location_delete.php') {
-    $id = (int)($b['id'] ?? 0);
+    $id = (int)((isset($b['id']) ? $b['id'] : 0));
     if ($id <= 0) out(['ok' => false, 'error' => 'MISSING_ID'], 400);
     $st = $pdo->prepare('DELETE FROM vehicle_location WHERE id = ?');
     $st->execute([$id]);
@@ -45,12 +45,12 @@ try {
 
   // location_save.php
   $id = isset($b['id']) ? (int)$b['id'] : 0;
-  $title = trim((string)($b['title'] ?? ''));
+  $title = trim((string)((isset($b['title']) ? $b['title'] : '')));
   if ($title === '') out(['ok' => false, 'error' => 'MISSING_TITLE'], 400);
-  $detail = (string)($b['detail'] ?? '');
-  $spot = trim((string)($b['spot'] ?? ''));
+  $detail = (string)((isset($b['detail']) ? $b['detail'] : ''));
+  $spot = trim((string)((isset($b['spot']) ? $b['spot'] : '')));
   $vId = isset($b['v_id']) ? (int)$b['v_id'] : null;
-  $vName = trim((string)($b['v_name'] ?? ''));
+  $vName = trim((string)((isset($b['v_name']) ? $b['v_name'] : '')));
 
   if ($id > 0) {
     $st = $pdo->prepare("UPDATE vehicle_location SET v_id=?, v_name=?, title=?, detail=?, spot=?, created_by=? WHERE id=?");
@@ -61,6 +61,6 @@ try {
   $st = $pdo->prepare("INSERT INTO vehicle_location (v_id, v_name, title, detail, spot, created_by) VALUES (?,?,?,?,?,?)");
   $st->execute([$vId ?: null, $vName, $title, $detail, $spot, $user['username']]);
   out(['ok' => true, 'id' => (int)$pdo->lastInsertId()]);
-} catch (Throwable $e) {
+} catch (Exception $e) {
   out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
 }

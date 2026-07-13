@@ -14,7 +14,7 @@ $out = [
 try {
   require_once __DIR__ . '/bootstrap.php';
   $out['bootstrap'] = true;
-} catch (Throwable $e) {
+} catch (Exception $e) {
   $out['ok'] = false;
   $out['message'] = 'bootstrap: ' . $e->getMessage();
   echo json_encode($out, JSON_UNESCAPED_UNICODE);
@@ -27,7 +27,7 @@ try {
   $out['db'] = true;
   ensure_schema($pdo);
   $out['schema'] = true;
-} catch (Throwable $e) {
+} catch (Exception $e) {
   $out['ok'] = false;
   $out['message'] = 'db: ' . $e->getMessage();
   echo json_encode($out, JSON_UNESCAPED_UNICODE);

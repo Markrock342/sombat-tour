@@ -12,11 +12,11 @@ try {
   $st->execute([$rId]);
   $rows = $st->fetchAll();
   $base = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http')
-    . '://' . ($_SERVER['HTTP_HOST'] ?? '425store.com');
+    . '://' . ((isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '425store.com'));
   foreach ($rows as &$r) {
     $r['url'] = $base . '/' . ltrim($r['path'], '/');
   }
   out(['ok' => true, 'rows' => $rows]);
-} catch (Throwable $e) {
+} catch (Exception $e) {
   out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
 }

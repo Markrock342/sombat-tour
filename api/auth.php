@@ -1,59 +1,77 @@
 <?php
 // POST /api/auth.php  { action: login|logout|me, username, pin }
 // GET  /api/auth.php?action=me  (with token)
+// Reads the existing user table (read-only) and stores tokens in app_sessions.
+// Does NOT modify the existing user table.
 require_once __DIR__ . '/bootstrap.php';
-cors_headers(['GET', 'POST', 'OPTIONS']);
+cors_headers(array('GET', 'POST', 'OPTIONS'));
 require_once __DIR__ . '/db.php';
 ensure_schema($pdo);
 
 try {
   $body = read_json_body();
-  $action = $body['action'] ?? ($_GET['action'] ?? 'login');
+  $action = arr_get($body, 'action', arr_get($_GET, 'action', 'login'));
 
   if ($action === 'me') {
     $user = auth_user($pdo, true);
-    out(['ok' => true, 'user' => $user]);
+    out(array('ok' => true, 'user' => $user));
   }
 
   if ($action === 'logout') {
-    $token = bearer_token();
-    if ($token) {
-      $st = $pdo->prepare("UPDATE app_users SET token = NULL, token_expires = NULL WHERE token = ?");
-      $st->execute([$token]);
-    }
-    out(['ok' => true]);
+    // Tokens are stateless (signed, not stored server-side); the client
+    // just discards it. Nothing to delete on the server.
+    out(array('ok' => true));
   }
 
   if ($action === 'login') {
-    $username = trim((string)($body['username'] ?? ''));
-    $pin = (string)($body['pin'] ?? '');
-    if ($username === '' || $pin === '') {
-      out(['ok' => false, 'error' => 'MISSING_CREDENTIALS'], 400);
+    $loginValue = trim((string)pick($body, array('username', 'user', 'name', 'login', 'code')));
+    $pin = (string)pick($body, array('pin', 'password', 'pass', 'pwd'));
+    if ($loginValue === '' || $pin === '') {
+      out(array('ok' => false, 'error' => 'MISSING_CREDENTIALS'), 400);
     }
-    $st = $pdo->prepare("SELECT id, username, pin_hash, role, department FROM app_users WHERE username = ? LIMIT 1");
-    $st->execute([$username]);
-    $row = $st->fetch();
-    if (!$row || !password_verify($pin, $row['pin_hash'])) {
-      out(['ok' => false, 'error' => 'INVALID_CREDENTIALS'], 401);
+
+    $map = users_column_map($pdo);
+    if (!$map['login']) {
+      out(array(
+        'ok' => false,
+        'error' => 'USER_SCHEMA_MISMATCH',
+        'message' => 'ไม่พบคอลัมน์ชื่อผู้ใช้ในตาราง ' . $map['table'],
+        'columns' => $map['columns'],
+      ), 500);
     }
-    $token = bin2hex(random_bytes(24));
-    $expires = date('Y-m-d H:i:s', time() + 60 * 60 * 24 * 30);
-    $up = $pdo->prepare("UPDATE app_users SET token = ?, token_expires = ? WHERE id = ?");
-    $up->execute([$token, $expires, $row['id']]);
-    out([
+
+    $found = find_user_by_login($pdo, $loginValue);
+    $row = $found ? $found['row'] : null;
+
+    if (!$row) {
+      out(array('ok' => false, 'error' => 'INVALID_CREDENTIALS'), 401);
+    }
+
+    // Same suspension check as the original login.php (member.m_status = 'ON')
+    if (isset($row['m_status']) && $row['m_status'] !== '' && $row['m_status'] !== 'ON') {
+      out(array('ok' => false, 'error' => 'SUSPENDED', 'message' => 'บัญชีถูกระงับการใช้งาน'), 403);
+    }
+
+    if (!verify_user_pin($pin, $row, $map['pin'])) {
+      out(array('ok' => false, 'error' => 'INVALID_CREDENTIALS'), 401);
+    }
+
+    $user = normalize_user_row($row, $map);
+    if ($user['id'] <= 0) {
+      out(array('ok' => false, 'error' => 'USER_ID_NOT_FOUND'), 500);
+    }
+
+    $sess = session_create($pdo, $user);
+
+    out(array(
       'ok' => true,
-      'token' => $token,
-      'expires' => $expires,
-      'user' => [
-        'id' => (int)$row['id'],
-        'username' => $row['username'],
-        'role' => $row['role'],
-        'department' => $row['department'],
-      ],
-    ]);
+      'token' => $sess['token'],
+      'expires' => $sess['expires'],
+      'user' => $user,
+    ));
   }
 
-  out(['ok' => false, 'error' => 'UNKNOWN_ACTION'], 400);
-} catch (Throwable $e) {
-  out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
+  out(array('ok' => false, 'error' => 'UNKNOWN_ACTION'), 400);
+} catch (Exception $e) {
+  out(array('ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()), 500);
 }

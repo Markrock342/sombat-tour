@@ -50,6 +50,6 @@ try {
   $rows = $st->fetchAll();
 
   out(['ok' => true, 'total' => count($rows), 'rows' => $rows]);
-} catch (Throwable $e) {
+} catch (Exception $e) {
   out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
 }

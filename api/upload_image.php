@@ -3,7 +3,7 @@
 // GET  /api/repair_images.php?r_id=...
 require_once __DIR__ . '/bootstrap.php';
 
-$script = basename($_SERVER['SCRIPT_NAME'] ?? '');
+$script = basename((isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : ''));
 
 if ($script === 'repair_images.php') {
   cors_headers(['GET', 'OPTIONS']);
@@ -16,12 +16,12 @@ if ($script === 'repair_images.php') {
     $st->execute([$rId]);
     $rows = $st->fetchAll();
     $base = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http')
-      . '://' . ($_SERVER['HTTP_HOST'] ?? '425store.com');
+      . '://' . ((isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '425store.com'));
     foreach ($rows as &$r) {
       $r['url'] = $base . '/' . ltrim($r['path'], '/');
     }
     out(['ok' => true, 'rows' => $rows]);
-  } catch (Throwable $e) {
+  } catch (Exception $e) {
     out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
   }
 }
@@ -67,7 +67,7 @@ try {
     }
   }
 
-  $name = bin2hex(random_bytes(8)) . '.' . $allowed[$mime];
+  $name = make_token(8) . '.' . $allowed[$mime];
   $absPath = rtrim($absDir, '/') . '/' . $name;
   $relPath = $relDir . '/' . $name;
 
@@ -80,7 +80,7 @@ try {
   $id = (int)$pdo->lastInsertId();
 
   $base = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http')
-    . '://' . ($_SERVER['HTTP_HOST'] ?? '425store.com');
+    . '://' . ((isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '425store.com'));
 
   out([
     'ok' => true,
@@ -88,6 +88,6 @@ try {
     'path' => $relPath,
     'url' => $base . '/' . $relPath,
   ]);
-} catch (Throwable $e) {
+} catch (Exception $e) {
   out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
 }

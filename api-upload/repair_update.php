@@ -54,6 +54,6 @@ try {
   $row = $st2->fetch();
 
   out(['ok' => true, 'row' => $row, 'updated_by' => $user['username']]);
-} catch (Throwable $e) {
+} catch (Exception $e) {
   out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
 }

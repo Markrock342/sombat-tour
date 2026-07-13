@@ -109,6 +109,6 @@ try {
     'vehicles' => $vehicles,
     'total' => count($repairs) + count($vehicles),
   ]);
-} catch (Throwable $e) {
+} catch (Exception $e) {
   out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
 }

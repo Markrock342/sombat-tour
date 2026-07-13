@@ -13,6 +13,6 @@ try {
   $row = $st->fetch();
   if (!$row) out(['ok' => false, 'error' => 'NOT_FOUND'], 404);
   out(['ok' => true, 'row' => $row]);
-} catch (Throwable $e) {
+} catch (Exception $e) {
   out(['ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()], 500);
 }
