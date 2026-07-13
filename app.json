@@ -2,8 +2,9 @@
   "expo": {
     "name": "สมบัติทัวร์",
     "slug": "sombat-tour-dashboard",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -12,15 +13,24 @@
       "backgroundColor": "#16234A"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "icon": "./assets/icon.png"
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#16234A"
       }
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png",
+      "name": "สมบัติทัวร์",
+      "shortName": "สมบัติทัวร์",
+      "lang": "th",
+      "themeColor": "#16234A",
+      "backgroundColor": "#16234A",
+      "description": "โปรแกรมงานซ่อมบำรุง สมบัติทัวร์"
     },
     "plugins": [
       "expo-asset"
