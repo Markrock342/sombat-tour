@@ -259,14 +259,30 @@ export async function fetchRepairImages(rId) {
   return data.rows || [];
 }
 
+async function appendImageToForm(form, uri, fileName, mime) {
+  // RN Web: FormData needs a Blob/File. Native: { uri, name, type }.
+  if (typeof window !== 'undefined' && typeof fetch === 'function' && uri && !uri.startsWith('file:')) {
+    try {
+      const blobRes = await fetch(uri);
+      const blob = await blobRes.blob();
+      const type = mime || blob.type || 'image/jpeg';
+      form.append('image', blob, fileName || 'photo.jpg');
+      return;
+    } catch (_) {
+      /* fall through */
+    }
+  }
+  form.append('image', {
+    uri,
+    name: fileName || 'photo.jpg',
+    type: mime || 'image/jpeg',
+  });
+}
+
 export async function uploadRepairImage(rId, uri, fileName = 'photo.jpg', mime = 'image/jpeg') {
   const form = new FormData();
   form.append('r_id', String(rId));
-  form.append('image', {
-    uri,
-    name: fileName,
-    type: mime,
-  });
+  await appendImageToForm(form, uri, fileName, mime);
   const res = await fetch(`${API_BASE}/upload_image.php`, {
     method: 'POST',
     headers: authHeaders(),
@@ -309,11 +325,7 @@ export async function uploadPublicRepairImage(rId, trackToken, uri, fileName = '
   const form = new FormData();
   form.append('r_id', String(rId));
   form.append('track_token', trackToken);
-  form.append('image', {
-    uri,
-    name: fileName,
-    type: mime,
-  });
+  await appendImageToForm(form, uri, fileName, mime);
   const res = await fetch(`${API_BASE}/upload_image_public.php`, {
     method: 'POST',
     body: form,
