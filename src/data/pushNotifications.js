@@ -100,7 +100,14 @@ export async function subscribeStaffPush() {
   try {
     data = JSON.parse(text);
   } catch (_) {
-    const err = new Error('สมัครแจ้งเตือนไม่สำเร็จ — อัป push_*.php ขึ้น cPanel');
+    const snippet = String(text || '')
+      .replace(/\s+/g, ' ')
+      .slice(0, 120);
+    const err = new Error(
+      snippet
+        ? `เซิร์ฟเวอร์ตอบผิดรูปแบบ (${res.status}) — มักเพราะ push_lib.php อัปผิดไฟล์: ${snippet}`
+        : 'เซิร์ฟเวอร์ตอบว่าง — อัป push_lib.php จาก api-upload ใหม่ (อย่าใช้ไฟล์อื่นชื่อซ้ำ)'
+    );
     err.code = 'BAD_RESPONSE';
     throw err;
   }

@@ -198,6 +198,39 @@ function session_secret() {
 }
 
 /**
+ * Load push_lib.php safely. Detects wrong uploads (e.g. endpoint file saved as push_lib.php).
+ */
+function require_push_lib() {
+  static $loaded = false;
+  if ($loaded) return;
+  $path = __DIR__ . '/push_lib.php';
+  if (!is_file($path)) {
+    out(array(
+      'ok' => false,
+      'error' => 'MISSING_PUSH_LIB',
+      'message' => 'ไม่พบ push_lib.php — อัปจากโฟลเดอร์ api-upload',
+    ), 500);
+  }
+  $raw = @file_get_contents($path);
+  if ($raw === false || strpos($raw, 'function push_ensure_table') === false || strpos($raw, 'auth_user') !== false) {
+    out(array(
+      'ok' => false,
+      'error' => 'BAD_PUSH_LIB',
+      'message' => 'ไฟล์ push_lib.php บนเซิร์ฟเวอร์ผิดชื่อ/ผิดเนื้อหา — ลบแล้วอัปใหม่จาก api-upload/push_lib.php (ขนาดประมาณ 4–5 KB ไม่ใช่ไฟล์ subscribe)',
+    ), 500);
+  }
+  require_once $path;
+  if (!function_exists('push_ensure_table') || !defined('SOMBAT_PUSH_LIB')) {
+    out(array(
+      'ok' => false,
+      'error' => 'BAD_PUSH_LIB',
+      'message' => 'โหลด push_lib.php ไม่สำเร็จ — อัปไฟล์ใหม่จาก api-upload',
+    ), 500);
+  }
+  $loaded = true;
+}
+
+/**
  * Verify PIN against a user row. Checks the detected pin column (from the
  * schema map) plus common fallbacks, and supports plain / bcrypt / md5 / sha1.
  */

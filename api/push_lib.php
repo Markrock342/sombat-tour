@@ -5,6 +5,9 @@
  */
 require_once __DIR__ . '/vapid.php';
 
+/** Marker so push_ping / endpoints can detect a correct upload */
+define('SOMBAT_PUSH_LIB', '1');
+
 function push_b64url_encode($data) {
   return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
 }

@@ -97,7 +97,7 @@ try {
   $pushResult = null;
   if ($type === 'breakdown') {
     try {
-      require_once __DIR__ . '/push_lib.php';
+      require_push_lib();
       $label = $vPlate !== '' ? $vPlate : ($vName !== '' ? $vName : ('#' . $jobNum));
       $pushResult = push_notify_staff($pdo, array(
         'title' => 'สมบัติทัวร์ · เสียกลางทาง',

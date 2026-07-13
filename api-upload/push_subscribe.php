@@ -3,7 +3,7 @@
 require_once __DIR__ . '/bootstrap.php';
 cors_headers(array('POST', 'OPTIONS'));
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/push_lib.php';
+require_push_lib();
 
 try {
   $user = auth_user($pdo, true);

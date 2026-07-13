@@ -123,7 +123,7 @@ try {
   // Notify staff PWAs (non-blocking — ignore failures)
   $pushResult = null;
   try {
-    require_once __DIR__ . '/push_lib.php';
+    require_push_lib();
     $kind = ($type === 'breakdown' || $type === 'roadside') ? 'เสียกลางทาง' : 'แจ้งซ่อม';
     $label = $vPlate !== '' ? $vPlate : ($vName !== '' ? $vName : ('#' . $jobNum));
     $pushResult = push_notify_staff($pdo, array(
