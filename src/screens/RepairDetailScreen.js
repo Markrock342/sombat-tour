@@ -950,6 +950,11 @@ const styles = StyleSheet.create({
   },
   btnPrimary: { minWidth: 120 },
   btnClose: { minWidth: 120, backgroundColor: '#E5544B' },
+  btnDelete: {
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+  },
+  btnDeleteText: { color: '#B91C1C', fontWeight: '800', fontSize: 15 },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: colors.onNavy, fontWeight: '800' },
   btnAlt: {
