@@ -296,7 +296,7 @@ export default function DashboardScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={[styles.header, isMobile && styles.headerMobile, { paddingHorizontal: pad }]}>
+      <View style={[styles.header, { paddingHorizontal: pad }]}>
         <Pressable style={styles.headerLeft} onPress={refreshHome}>
           <View style={styles.brandRow}>
             <Image source={require('../../assets/sombatlogobg.png')} style={[styles.logo, isMobile && styles.logoMobile]} />
@@ -308,10 +308,12 @@ export default function DashboardScreen({ navigation }) {
             </View>
           </View>
         </Pressable>
-        <View style={[styles.headerActions, isMobile && styles.headerActionsMobile]}>
+        <View style={styles.headerActions}>
           {user ? (
             <Pressable style={[styles.searchBtn, isMobile && styles.searchBtnMobile]} onPress={confirmLogout}>
-              <Text style={styles.searchBtnText} numberOfLines={1}>{user.username}</Text>
+              <Text style={[styles.searchBtnText, isMobile && styles.searchBtnTextMobile]} numberOfLines={1}>
+                {user.username}
+              </Text>
             </Pressable>
           ) : (
             <Pressable style={[styles.searchBtn, isMobile && styles.searchBtnMobile]} onPress={() => navigation.navigate('Login')}>
@@ -613,21 +615,14 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.navy },
   header: {
     paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.sm,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  headerMobile: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    paddingBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  headerLeft: { flexShrink: 1 },
-  headerActions: { flexDirection: 'row', gap: 8, flexShrink: 0 },
-  headerActionsMobile: { justifyContent: 'flex-end' },
+  headerLeft: { flex: 1, flexShrink: 1, minWidth: 0 },
+  headerActions: { flexDirection: 'row', gap: 6, flexShrink: 0, paddingTop: 2 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   logo: { width: 44, height: 44, borderRadius: 10, backgroundColor: colors.card },
   logoMobile: { width: 36, height: 36 },
@@ -641,10 +636,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.25)',
   },
   searchBtnMobile: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
   },
   searchBtnText: { color: colors.onNavy, fontSize: 13, fontWeight: '700' },
+  searchBtnTextMobile: { fontSize: 11, maxWidth: 72 },
   headerTitle: { color: colors.onNavy, fontSize: 24, fontWeight: '800', letterSpacing: 0.3 },
   headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
   headerSubMobile: { fontSize: 11 },
