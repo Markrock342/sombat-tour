@@ -94,37 +94,30 @@ try {
 
   $rId = (int)$pdo->lastInsertId();
 
-  // Alert desk staff BEFORE responding — the encrypted push (iPhone needs a
-  // payload) is sent synchronously so shared hosts can't kill it mid-flight,
-  // and the app can see the real result in the response.
-  $push = array('ok' => false, 'sent' => 0, 'error' => 'PUSH_LIB_NOT_LOADED');
-  try {
-    ignore_user_abort(true);
-    @set_time_limit(60);
-    // Old push_lib sends sequentially (slow → browser timeout); only send
-    // synchronously with the new batched lib, otherwise skip push entirely.
-    if (require_push_lib(false) && function_exists('push_send_webpush_multi')) {
-      $kind = ($type === 'breakdown') ? 'เสียกลางทาง' : 'แจ้งซ่อม';
-      $label = $vPlate !== '' ? $vPlate : ($vName !== '' ? $vName : ('#' . $jobNum));
-      $who = $techName !== '' ? $techName : (isset($user['username']) ? $user['username'] : '');
-      $push = push_notify_staff($pdo, array(
-        'title' => 'สมบัติทัวร์ · ' . $kind,
-        'body' => $label . ($who !== '' ? (' · ' . $who) : ''),
-        'url' => '/',
-      ));
-    }
-  } catch (Exception $e) {
-    $push = array('ok' => false, 'sent' => 0, 'error' => $e->getMessage());
-  }
-
-  out(array(
+  // ตอบสำเร็จก่อน — push ทำหลัง client ได้ JSON แล้ว (กัน Failed to fetch / 503)
+  ignore_user_abort(true);
+  @set_time_limit(60);
+  out_flush(array(
     'ok' => true,
     'r_id' => $rId,
     'r_job_num' => $jobNum,
     'created_by' => $user['username'],
     'r_type' => $type,
-    'push' => $push,
   ));
+
+  try {
+    if (require_push_lib(false) && function_exists('push_notify_staff')) {
+      $kind = ($type === 'breakdown') ? 'เสียกลางทาง' : 'แจ้งซ่อม';
+      $label = $vPlate !== '' ? $vPlate : ($vName !== '' ? $vName : ('#' . $jobNum));
+      $who = $techName !== '' ? $techName : (isset($user['username']) ? $user['username'] : '');
+      push_notify_staff($pdo, array(
+        'title' => 'สมบัติทัวร์ · ' . $kind,
+        'body' => $label . ($who !== '' ? (' · ' . $who) : ''),
+        'url' => '/',
+      ));
+    }
+  } catch (Exception $e) { /* ignore */ }
+  exit;
 } catch (Exception $e) {
   out(array('ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()), 500);
 }

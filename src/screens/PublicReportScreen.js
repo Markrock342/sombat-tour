@@ -159,7 +159,12 @@ export default function PublicReportScreen({ navigation, route }) {
         trackToken: created.track_token,
       });
     } catch (e) {
-      setError(e.message || 'ส่งไม่สำเร็จ ลองอีกครั้ง');
+      const raw = e.message || '';
+      setError(
+        /failed to fetch|networkerror|network request failed/i.test(raw)
+          ? 'ส่งไม่สำเร็จชั่วคราว — ลองใหม่ หรือเช็คว่าอัป report_public.php แล้ว'
+          : raw || 'ส่งไม่สำเร็จ ลองอีกครั้ง'
+      );
     } finally {
       setSaving(false);
     }

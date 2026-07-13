@@ -120,14 +120,20 @@ try {
 
   log_repair_status($pdo, $rId, 'submitted', 'แจ้งซ่อมออนไลน์', $reporterName);
 
-  // Notify desk staff BEFORE responding (best effort, synchronous —
-  // shared hosts kill the script after the response is flushed)
+  // ตอบสำเร็จก่อนเสมอ — ถ้า push พัง/503 เบราว์เซอร์จะไม่เจอ Failed to fetch
+  ignore_user_abort(true);
+  @set_time_limit(60);
+  out_flush(array(
+    'ok' => true,
+    'r_id' => $rId,
+    'r_job_num' => $jobNum,
+    'track_token' => $trackToken,
+    'public_status' => 'submitted',
+    'public_status_label' => public_repair_status_label('submitted'),
+  ));
+
   try {
-    ignore_user_abort(true);
-    @set_time_limit(60);
-    // Old push_lib sends sequentially (slow → browser timeout); only send
-    // synchronously with the new batched lib, otherwise skip push entirely.
-    if (require_push_lib(false) && function_exists('push_send_webpush_multi')) {
+    if (require_push_lib(false) && function_exists('push_notify_staff')) {
       $kind = ($type === 'breakdown' || $type === 'roadside') ? 'เสียกลางทาง' : 'แจ้งซ่อม';
       $label = $vPlate !== '' ? $vPlate : ($vName !== '' ? $vName : ('#' . $jobNum));
       push_notify_staff($pdo, array(
@@ -137,15 +143,7 @@ try {
       ));
     }
   } catch (Exception $e) { /* ignore */ }
-
-  out(array(
-    'ok' => true,
-    'r_id' => $rId,
-    'r_job_num' => $jobNum,
-    'track_token' => $trackToken,
-    'public_status' => 'submitted',
-    'public_status_label' => public_repair_status_label('submitted'),
-  ));
+  exit;
 } catch (Exception $e) {
   out(array('ok' => false, 'error' => 'SERVER_ERROR', 'message' => $e->getMessage()), 500);
 }
