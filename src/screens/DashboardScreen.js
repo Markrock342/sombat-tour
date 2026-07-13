@@ -558,7 +558,7 @@ export default function DashboardScreen({ navigation }) {
                 </Pressable>
               }
             >
-              <Text style={styles.previewSummary}>ไวท์บอร์ดงานตามโซน</Text>
+              <Text style={styles.previewSummary}>ไวท์บอร์ดจดโน้ต</Text>
               {boardPreview.length ? (
                 boardPreview.map((n) => (
                   <Pressable

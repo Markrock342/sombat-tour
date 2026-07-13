@@ -1,6 +1,4 @@
-/** Compose / parse structured board notes stored in board.body (+ department as zone) */
-
-export const BOARD_ZONES = ['พระราม 5', 'งานนอกพื้นที่', 'อู่', 'ต่างจังหวัด', 'อื่นๆ'];
+/** Board sticky-note helpers (whiteboard). Zone chips removed — free notes. */
 
 export const BOARD_STATUSES = [
   { key: 'wait', label: 'รอ' },
@@ -117,23 +115,11 @@ export function statusBadgeColor(statusKey) {
   }
 }
 
-export function groupNotesByZone(rows) {
-  const map = new Map();
-  for (const row of rows || []) {
-    const zone = (row.department || '').trim() || 'อื่นๆ';
-    if (!map.has(zone)) map.set(zone, []);
-    map.get(zone).push(row);
-  }
-  // pinned already sorted by API; keep zone order: known zones first
-  const ordered = [];
-  for (const z of BOARD_ZONES) {
-    if (map.has(z)) {
-      ordered.push({ zone: z, notes: map.get(z) });
-      map.delete(z);
-    }
-  }
-  for (const [zone, notes] of map.entries()) {
-    ordered.push({ zone, notes });
-  }
-  return ordered;
+/** Flat whiteboard order: pinned first, then newest */
+export function sortNotesForBoard(rows) {
+  return [...(rows || [])].sort((a, b) => {
+    const pin = (b.pin ? 1 : 0) - (a.pin ? 1 : 0);
+    if (pin !== 0) return pin;
+    return String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
+  });
 }
