@@ -1,0 +1,51 @@
+---
+description: Git push + Vercel deploy สำหรับ Sombat Tour — ต้อง push สอง remote และ author Sombattour
+alwaysApply: true
+---
+
+# Sombat Tour — Deploy & Git
+
+## สำคัญ: Production อยู่ที่ repo ลูกค้า ไม่ใช่ origin อย่างเดียว
+
+| Remote | URL | ใช้เมื่อไหร่ |
+|--------|-----|-------------|
+| `origin` | `Markrock342/sombat-tour` | backup / dev mirror |
+| `sombattour` | `Sombattour/425service` | **Vercel Production** → `425service.vercel.app` |
+
+**Vercel บล็อก deployment** ถ้า commit author เป็น `Markrock342` หรือ `cursoragent` — ต้อง author เป็น **Sombattour** ก่อน push ไป `sombattour`.
+
+## เมื่อ user บอก "commit push" หรือจบงานที่ต้องขึ้น Production
+
+1. Commit ด้วย author Sombattour (ไม่ใช้ git config global):
+
+```bash
+git add <files>
+git -c user.name="Sombattour" \
+    -c user.email="240834019+Sombattour@users.noreply.github.com" \
+    commit -m "ข้อความ commit"
+```
+
+2. Push ทั้งสอง remote (สลับ GitHub account ด้วย `gh auth switch`):
+
+```bash
+gh auth switch --user Sombattour
+git push sombattour main:main
+
+gh auth switch --user Markrock342
+git push origin main
+```
+
+หรือรันสคริปต์: `./scripts/push-production.sh`
+
+3. ยืนยัน Vercel ไม่ Blocked — ดูที่ GitHub `Sombattour/425service` → commit ล่าสุด author ต้องเป็น Sombattour
+
+## API (แยกจาก frontend)
+
+- อัปโหลดไฟล์จาก `api-upload/` ขึ้น `425store.com/api/` ด้วยมือ (cPanel/FTP)
+- ไม่ commit `config.php`, credentials, `schema_debug.php`
+
+## ลิงก์
+
+- Production web: https://425service.vercel.app
+- API: https://425store.com/api/
+- Repo deploy: https://github.com/Sombattour/425service
