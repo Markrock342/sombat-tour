@@ -21,10 +21,35 @@ function authHeaders(extra = {}) {
 }
 
 async function parseJson(res) {
-  const data = await res.json();
+  const text = await res.text();
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch (_) {
+      const err = new Error(
+        res.ok
+          ? 'เซิร์ฟเวอร์ตอบกลับไม่ใช่ JSON'
+          : `เซิร์ฟเวอร์ผิดพลาด (HTTP ${res.status})`
+      );
+      err.status = res.status;
+      err.code = 'BAD_RESPONSE';
+      throw err;
+    }
+  }
+  if (!data || typeof data !== 'object') {
+    const err = new Error(`เซิร์ฟเวอร์ไม่ตอบข้อมูล (HTTP ${res.status})`);
+    err.status = res.status;
+    err.code = 'EMPTY_RESPONSE';
+    throw err;
+  }
   if (!data.ok) {
-    const err = new Error(data.message || data.error || 'request failed');
-    err.code = data.error;
+    const msg = data.message || data.error || 'request failed';
+    const err = new Error(msg);
+    err.code =
+      /1142|denied|access violation/i.test(String(msg))
+        ? 'DB_PRIVILEGE'
+        : data.error;
     err.status = res.status;
     throw err;
   }

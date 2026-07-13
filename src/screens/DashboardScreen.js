@@ -417,7 +417,7 @@ export default function DashboardScreen({ navigation }) {
             <NavCard
               title="บอร์ดข่าว"
               icon="📋"
-              subtitle={boardPreview[0]?.title || 'ไวท์บอร์ดแผนก'}
+              subtitle={boardPreview[0]?.title || 'ไวท์บอร์ดงานตามโซน'}
               isWide={isWide}
               onPress={() => navigation.navigate('Board')}
             />

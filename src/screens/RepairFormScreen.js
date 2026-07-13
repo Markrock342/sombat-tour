@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -20,6 +21,7 @@ import {
   searchVehicles,
   uploadRepairImage,
 } from '../data/api';
+import { composeRepairList, REPAIR_TYPES } from '../data/repairNotes';
 
 export default function RepairFormScreen({ navigation, route }) {
   const { canWrite, user } = useAuth();
@@ -27,10 +29,16 @@ export default function RepairFormScreen({ navigation, route }) {
   const goBack = () => navigation.goBack();
   const presetType = route?.params?.type || 'normal';
 
+  const [jobType, setJobType] = useState(
+    presetType === 'breakdown' ? 'breakdown' : presetType === 'offsite' ? 'offsite' : 'normal'
+  );
   const [vehicleQ, setVehicleQ] = useState('');
   const [vehicleHits, setVehicleHits] = useState([]);
   const [vehicle, setVehicle] = useState(null);
-  const [repairList, setRepairList] = useState(presetType === 'breakdown' ? 'เสียกลางทาง: ' : '');
+  const [symptom, setSymptom] = useState(presetType === 'breakdown' ? '' : '');
+  const [location, setLocation] = useState('');
+  const [parts, setParts] = useState('');
+  const [action, setAction] = useState('');
   const [mile, setMile] = useState('');
   const [tankM, setTankM] = useState('');
   const [techs, setTechs] = useState([]);
@@ -78,20 +86,31 @@ export default function RepairFormScreen({ navigation, route }) {
     }
   }, []);
 
+  const removeImage = (idx) => {
+    setImages((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const onSave = async () => {
-    if (!repairList.trim()) {
-      setError('กรุณากรอกรายการซ่อม');
+    if (!symptom.trim()) {
+      setError('กรุณากรอกอาการ / ปัญหา');
       return;
     }
     setSaving(true);
     setError(null);
     try {
+      const repairList = composeRepairList({
+        type: jobType,
+        symptom,
+        location,
+        parts,
+        action,
+      });
       const payload = {
-        r_repair_list: repairList.trim(),
+        r_repair_list: repairList,
         r_mile: Number(mile) || 0,
         r_technician: techName,
         r_technician_id: techId || 0,
-        r_type: presetType === 'breakdown' ? 'breakdown' : 'normal',
+        r_type: jobType === 'breakdown' ? 'breakdown' : 'normal',
         r_tank_m: tankM,
       };
       if (vehicle) {
@@ -108,7 +127,12 @@ export default function RepairFormScreen({ navigation, route }) {
       const created = await createRepair(payload);
       for (const img of images) {
         try {
-          await uploadRepairImage(created.r_id, img.uri, img.fileName || 'photo.jpg', img.mimeType || 'image/jpeg');
+          await uploadRepairImage(
+            created.r_id,
+            img.uri,
+            img.fileName || 'photo.jpg',
+            img.mimeType || 'image/jpeg'
+          );
         } catch (_) {
           /* continue */
         }
@@ -126,13 +150,15 @@ export default function RepairFormScreen({ navigation, route }) {
     }
   };
 
+  const showTank = jobType === 'breakdown';
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
         <View style={styles.header}>
           {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
           <Text style={styles.headerTitle}>
-            {presetType === 'breakdown' ? 'แจ้งเสียกลางทาง' : 'แจ้งซ่อมออนไลน์'}
+            {jobType === 'breakdown' ? 'แจ้งเสียกลางทาง' : 'แจ้งซ่อมออนไลน์'}
           </Text>
           <Text style={styles.headerSub}>{user?.username ? `ผู้ใช้: ${user.username}` : ''}</Text>
         </View>
@@ -142,104 +168,214 @@ export default function RepairFormScreen({ navigation, route }) {
           contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.label}>ค้นหารถ</Text>
-          {vehicle ? (
-            <View style={styles.selected}>
-              <Text style={styles.selectedText}>
-                {vehicle.v_name} · {vehicle.v_plate || '-'}
-              </Text>
-              <Pressable onPress={() => { setVehicle(null); setVehicleQ(''); }}>
-                <Text style={styles.clear}>เปลี่ยน</Text>
-              </Pressable>
+          {/* ประเภทงาน */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>ประเภทงาน</Text>
+            <View style={styles.chipRow}>
+              {REPAIR_TYPES.map((t) => {
+                const active = jobType === t.key;
+                return (
+                  <Pressable
+                    key={t.key}
+                    style={[styles.typeChip, active && styles.typeChipActive]}
+                    onPress={() => setJobType(t.key)}
+                  >
+                    <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>
+                      {t.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
-          ) : (
-            <>
-              <TextInput
-                style={styles.input}
-                value={vehicleQ}
-                onChangeText={setVehicleQ}
-                placeholder="เบอร์รถ / ID"
-                placeholderTextColor={colors.textMuted}
-              />
-              {vehicleHits.slice(0, 6).map((v) => (
-                <Pressable
-                  key={v.v_id}
-                  style={styles.hit}
-                  onPress={() => {
-                    setVehicle(v);
-                    setVehicleQ(v.v_name || String(v.v_id));
-                    if (v.v_metr) setTankM(String(v.v_metr));
-                  }}
-                >
-                  <Text style={styles.hitText}>
-                    {v.v_name} · {v.v_plate || '-'} · {[v.v_brand, v.v_model].filter(Boolean).join(' ')}
-                  </Text>
-                </Pressable>
-              ))}
-            </>
-          )}
+          </View>
 
-          <Text style={styles.label}>รายการซ่อม *</Text>
-          <TextInput
-            style={[styles.input, styles.textarea]}
-            value={repairList}
-            onChangeText={setRepairList}
-            multiline
-            placeholder="อธิบายอาการ / งานซ่อม"
-            placeholderTextColor={colors.textMuted}
-          />
+          {/* รถ */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>รถ</Text>
+            {vehicle ? (
+              <View style={styles.vehicleCard}>
+                <View style={styles.vehicleHead}>
+                  <Text style={styles.vehicleName}>{vehicle.v_name || '-'}</Text>
+                  <Pressable
+                    onPress={() => {
+                      setVehicle(null);
+                      setVehicleQ('');
+                    }}
+                  >
+                    <Text style={styles.link}>เปลี่ยน</Text>
+                  </Pressable>
+                </View>
+                <Text style={styles.vehicleMeta}>
+                  {[vehicle.v_plate, vehicle.v_brand, vehicle.v_model].filter(Boolean).join(' · ') ||
+                    'ไม่มีทะเบียน/รุ่น'}
+                </Text>
+                {vehicle.v_id ? (
+                  <Text style={styles.vehicleId}>ID รถ: {vehicle.v_id}</Text>
+                ) : null}
+              </View>
+            ) : (
+              <>
+                <TextInput
+                  style={styles.input}
+                  value={vehicleQ}
+                  onChangeText={setVehicleQ}
+                  placeholder="ค้นหาเบอร์รถ / ทะเบียน / ID"
+                  placeholderTextColor={colors.textMuted}
+                />
+                {vehicleHits.slice(0, 6).map((v) => (
+                  <Pressable
+                    key={v.v_id}
+                    style={styles.hit}
+                    onPress={() => {
+                      setVehicle(v);
+                      setVehicleQ(v.v_name || String(v.v_id));
+                      if (v.v_metr) setTankM(String(v.v_metr));
+                    }}
+                  >
+                    <Text style={styles.hitTitle}>{v.v_name}</Text>
+                    <Text style={styles.hitMeta}>
+                      {[v.v_plate, v.v_brand, v.v_model].filter(Boolean).join(' · ')}
+                    </Text>
+                  </Pressable>
+                ))}
+              </>
+            )}
 
-          <Text style={styles.label}>เลขไมล์ / เมตร</Text>
-          <TextInput
-            style={styles.input}
-            value={mile}
-            onChangeText={setMile}
-            keyboardType="number-pad"
-            placeholder="0"
-            placeholderTextColor={colors.textMuted}
-          />
+            <View style={styles.row2}>
+              <View style={styles.half}>
+                <Text style={styles.label}>เลขไมล์</Text>
+                <TextInput
+                  style={styles.input}
+                  value={mile}
+                  onChangeText={setMile}
+                  keyboardType="number-pad"
+                  placeholder="0"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+              {showTank ? (
+                <View style={styles.half}>
+                  <Text style={styles.label}>เมตรถัง (ม.)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={tankM}
+                    onChangeText={setTankM}
+                    placeholder="เช่น 12"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+              ) : (
+                <View style={styles.half} />
+              )}
+            </View>
+          </View>
 
-          {presetType === 'breakdown' ? (
-            <>
-              <Text style={styles.label}>เมตรถัง / ความยาว (ม.)</Text>
-              <TextInput
-                style={styles.input}
-                value={tankM}
-                onChangeText={setTankM}
-                placeholder="เช่น 12"
-                placeholderTextColor={colors.textMuted}
-              />
-            </>
-          ) : null}
+          {/* งาน */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>รายละเอียดงาน</Text>
 
-          <Text style={styles.label}>ช่างผู้ซ่อม</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.techRow}>
-            {techs.map((t) => {
-              const active = String(techId) === String(t.id);
-              return (
-                <Pressable
-                  key={t.id}
-                  style={[styles.techChip, active && styles.techChipActive]}
-                  onPress={() => {
-                    setTechId(t.id);
-                    setTechName(t.name);
-                  }}
-                >
-                  <Text style={[styles.techChipText, active && styles.techChipTextActive]}>{t.name}</Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+            <Text style={styles.label}>อาการ / ปัญหา *</Text>
+            <TextInput
+              style={[styles.input, styles.textarea]}
+              value={symptom}
+              onChangeText={setSymptom}
+              multiline
+              placeholder="รถมีอาการอะไร / ปัญหาอะไร"
+              placeholderTextColor={colors.textMuted}
+            />
 
-          <Text style={styles.label}>รูปภาพ ({images.length})</Text>
-          <Pressable style={styles.secondaryBtn} onPress={pickImage}>
-            <Text style={styles.secondaryBtnText}>+ แนบรูป</Text>
-          </Pressable>
+            <Text style={styles.label}>สถานที่ (รถพัง / ทำที่ไหน)</Text>
+            <TextInput
+              style={styles.input}
+              value={location}
+              onChangeText={setLocation}
+              placeholder="เช่น พระราม 5, กม.xx, อู่เชียงใหม่"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <Text style={styles.label}>อะไหล่ (ใช้ / ต้องการ)</Text>
+            <TextInput
+              style={[styles.input, styles.textareaSm]}
+              value={parts}
+              onChangeText={setParts}
+              multiline
+              placeholder="รายการอะไหล่"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <Text style={styles.label}>ดำเนินการ / ใครทำอะไร</Text>
+            <TextInput
+              style={[styles.input, styles.textareaSm]}
+              value={action}
+              onChangeText={setAction}
+              multiline
+              placeholder="สรุปสิ่งที่ทำหรือมอบหมาย"
+              placeholderTextColor={colors.textMuted}
+            />
+          </View>
+
+          {/* ช่าง — by ID */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>ช่างผู้ซ่อม</Text>
+            <Text style={styles.hint}>เลือกด้วยรหัสช่าง (ID) — เปลี่ยนชื่อเล่นได้โดยไม่หลุดงาน</Text>
+            <View style={styles.techGrid}>
+              {techs.map((t) => {
+                const active = String(techId) === String(t.id);
+                return (
+                  <Pressable
+                    key={t.id}
+                    style={[styles.techCard, active && styles.techCardActive]}
+                    onPress={() => {
+                      setTechId(t.id);
+                      setTechName(t.name);
+                    }}
+                  >
+                    <Text
+                      style={[styles.techName, active && styles.techNameActive]}
+                      numberOfLines={1}
+                    >
+                      {t.name}
+                    </Text>
+                    <Text style={[styles.techId, active && styles.techIdActive]}>#{t.id}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {techId ? (
+              <Text style={styles.selectedTech}>
+                เลือกแล้ว: {techName} (ID {techId})
+              </Text>
+            ) : null}
+          </View>
+
+          {/* รูป */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>รูปภาพ ({images.length})</Text>
+            <Pressable style={styles.secondaryBtn} onPress={pickImage}>
+              <Text style={styles.secondaryBtnText}>+ แนบรูป</Text>
+            </Pressable>
+            {images.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbRow}>
+                {images.map((img, idx) => (
+                  <Pressable key={`${img.uri}-${idx}`} onPress={() => removeImage(idx)}>
+                    <Image source={{ uri: img.uri }} style={styles.thumb} />
+                    <Text style={styles.thumbRemove}>ลบ</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
+          </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Pressable style={[styles.primaryBtn, saving && { opacity: 0.6 }]} onPress={onSave} disabled={saving}>
-            <Text style={styles.primaryBtnText}>{saving ? 'กำลังบันทึก...' : 'บันทึกแจ้งซ่อม'}</Text>
+          <Pressable
+            style={[styles.primaryBtn, saving && { opacity: 0.6 }]}
+            onPress={onSave}
+            disabled={saving}
+          >
+            <Text style={styles.primaryBtnText}>
+              {saving ? 'กำลังบันทึก...' : 'บันทึกแจ้งซ่อม'}
+            </Text>
           </Pressable>
         </ScrollView>
         {isMobile ? <MobileBackBar onPress={goBack} /> : null}
@@ -252,7 +388,11 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.navy },
   body: { flex: 1 },
   scrollView: { flex: 1 },
-  header: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.lg },
+  header: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
+  },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
   headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },
   headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
@@ -263,10 +403,30 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.xl * 2,
     minHeight: '100%',
+    gap: spacing.md,
   },
-  label: { color: colors.textSecondary, fontWeight: '700', fontSize: 13, marginTop: spacing.md, marginBottom: 6 },
-  input: {
+  section: {
     backgroundColor: colors.card,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    ...shadow,
+  },
+  sectionTitle: {
+    color: colors.navy,
+    fontWeight: '800',
+    fontSize: 15,
+    marginBottom: spacing.sm,
+  },
+  hint: { color: colors.textMuted, fontSize: 12, marginBottom: spacing.sm },
+  label: {
+    color: colors.textSecondary,
+    fontWeight: '700',
+    fontSize: 12,
+    marginTop: spacing.sm,
+    marginBottom: 6,
+  },
+  input: {
+    backgroundColor: colors.background,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
@@ -275,48 +435,99 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  textarea: { minHeight: 90, textAlignVertical: 'top' },
-  selected: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  textarea: { minHeight: 88, textAlignVertical: 'top' },
+  textareaSm: { minHeight: 64, textAlignVertical: 'top' },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  typeChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.sm,
     backgroundColor: colors.navyTint,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  typeChipActive: { backgroundColor: colors.navy, borderColor: colors.navy },
+  typeChipText: { color: colors.navySoft, fontWeight: '700', fontSize: 13 },
+  typeChipTextActive: { color: colors.onNavy },
+  vehicleCard: {
+    backgroundColor: colors.navyTint,
+    borderRadius: radius.sm,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  vehicleHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  vehicleName: { color: colors.navy, fontWeight: '800', fontSize: 16, flex: 1 },
+  vehicleMeta: { color: colors.textSecondary, marginTop: 4, fontSize: 13 },
+  vehicleId: { color: colors.textMuted, marginTop: 2, fontSize: 11 },
+  link: { color: colors.barFillAlt, fontWeight: '800' },
+  hit: {
+    backgroundColor: colors.background,
     padding: spacing.md,
     borderRadius: radius.sm,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  selectedText: { color: colors.navy, fontWeight: '700', flex: 1 },
-  clear: { color: colors.barFillAlt, fontWeight: '800' },
-  hit: { backgroundColor: colors.card, padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
-  hitText: { color: colors.textPrimary, fontSize: 13 },
-  techRow: { marginBottom: spacing.sm },
-  techChip: {
+  hitTitle: { color: colors.textPrimary, fontWeight: '700', fontSize: 14 },
+  hitMeta: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
+  row2: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
+  half: { flex: 1 },
+  techGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  techCard: {
+    width: '47%',
+    flexGrow: 1,
+    minWidth: 140,
+    paddingVertical: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: colors.navyTint,
-    marginRight: 8,
+    borderRadius: radius.sm,
+    backgroundColor: colors.background,
+    borderWidth: 1.5,
+    borderColor: colors.border,
   },
-  techChipActive: { backgroundColor: colors.navy },
-  techChipText: { color: colors.navySoft, fontWeight: '700', fontSize: 13 },
-  techChipTextActive: { color: colors.onNavy },
+  techCardActive: { backgroundColor: colors.navy, borderColor: colors.navy },
+  techName: { color: colors.textPrimary, fontWeight: '700', fontSize: 13 },
+  techNameActive: { color: colors.onNavy },
+  techId: { color: colors.textMuted, fontSize: 11, marginTop: 2, fontWeight: '600' },
+  techIdActive: { color: 'rgba(255,255,255,0.7)' },
+  selectedTech: {
+    marginTop: spacing.sm,
+    color: colors.navy,
+    fontWeight: '700',
+    fontSize: 13,
+  },
   secondaryBtn: {
     alignSelf: 'flex-start',
-    backgroundColor: colors.card,
+    backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: radius.sm,
-    ...shadow,
   },
   secondaryBtnText: { color: colors.navy, fontWeight: '800' },
+  thumbRow: { marginTop: spacing.sm },
+  thumb: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.sm,
+    marginRight: 8,
+    backgroundColor: colors.border,
+  },
+  thumbRemove: {
+    textAlign: 'center',
+    color: '#B91C1C',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 2,
+    marginRight: 8,
+  },
   primaryBtn: {
-    marginTop: spacing.xl,
+    marginTop: spacing.sm,
     backgroundColor: colors.navy,
     borderRadius: radius.sm,
     paddingVertical: spacing.md,
     alignItems: 'center',
   },
   primaryBtnText: { color: colors.onNavy, fontWeight: '800', fontSize: 15 },
-  error: { color: '#E5544B', marginTop: spacing.md, fontWeight: '700' },
+  error: { color: '#E5544B', fontWeight: '700', textAlign: 'center' },
 });

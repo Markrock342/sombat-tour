@@ -24,6 +24,7 @@ import {
   fmtDateTime,
   isOpenRepair,
 } from '../data/api';
+import { repairListSections, parseRepairList } from '../data/repairNotes';
 
 export default function RepairDetailScreen({ route, navigation }) {
   const { repair: initial, rId: paramId } = route.params ?? {};
@@ -109,6 +110,14 @@ export default function RepairDetailScreen({ route, navigation }) {
   };
 
   const open = repair ? isOpenRepair(repair) : false;
+  const noteSections = repair ? repairListSections(repair.r_repair_list) : [];
+  const parsed = repair ? parseRepairList(repair.r_repair_list) : null;
+  const typeLabel =
+    repair?.r_type === 'breakdown' || repair?.r_type === 'roadside' || parsed?.type === 'breakdown'
+      ? 'เสียกลางทาง'
+      : parsed?.type === 'offsite'
+        ? 'งานนอกพื้นที่'
+        : null;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -142,12 +151,20 @@ export default function RepairDetailScreen({ route, navigation }) {
                   <Text style={[styles.pill, { backgroundColor: open ? '#1FA97A' : '#E5544B' }]}>
                     {open ? 'กำลังซ่อม' : 'ปิดงานแล้ว'}
                   </Text>
-                  {repair.r_type === 'breakdown' || repair.r_type === 'roadside' ? (
-                    <Text style={styles.typeTag}>เสียกลางทาง</Text>
-                  ) : null}
+                  {typeLabel ? <Text style={styles.typeTag}>{typeLabel}</Text> : null}
                 </View>
-                <Text style={styles.title}>{repair.r_repair_list || '-'}</Text>
-                <Text style={styles.meta}>ช่าง: {repair.r_technician || 'ไม่ระบุ'}</Text>
+
+                {noteSections.map((sec) => (
+                  <View key={sec.label} style={styles.noteBlock}>
+                    <Text style={styles.noteLabel}>{sec.label}</Text>
+                    <Text style={styles.noteValue}>{sec.value}</Text>
+                  </View>
+                ))}
+
+                <Text style={styles.meta}>
+                  ช่าง: {repair.r_technician || 'ไม่ระบุ'}
+                  {repair.r_technician_id ? ` · ID ${repair.r_technician_id}` : ''}
+                </Text>
                 <Text style={styles.meta}>
                   รถ: {[repair.r_v_name, repair.r_v_plate].filter(Boolean).join(' · ') || '-'}
                 </Text>
@@ -216,18 +233,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   typeTag: { color: '#B45309', fontWeight: '800', fontSize: 12 },
-  title: {
-    marginTop: spacing.md,
-    color: colors.navy,
-    fontSize: 20,
-    fontWeight: '800',
-    backgroundColor: '#FFF0C2',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
+  noteBlock: { marginTop: spacing.md },
+  noteLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '700', marginBottom: 2 },
+  noteValue: { color: colors.textPrimary, fontSize: 15, fontWeight: '600', lineHeight: 22 },
   meta: { color: colors.textSecondary, marginTop: 6, fontSize: 13 },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
   btn: {
