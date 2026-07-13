@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { colors, spacing, radius, shadow } from '../theme';
 import { MobileBackBar, useScreenLayout, mobileScrollInset, contentSheetStyle } from '../components/BackNavigation';
@@ -43,7 +44,10 @@ export default function ReportSuccessScreen({ navigation, route }) {
           <PublicStepBanner activeStep={3} />
 
           <View style={styles.tipBox}>
-            <Text style={styles.tipTitle}>📌 สำคัญ</Text>
+            <View style={styles.tipTitleRow}>
+              <Ionicons name="alert-circle" size={16} color="#92400E" />
+              <Text style={styles.tipTitle}>สำคัญ</Text>
+            </View>
             <Text style={styles.tipText}>
               ไม่ต้อง login — แชร์ลิงก์หรือเก็บ QR แล้วเปิดดูได้ว่างานถึงไหนแล้ว
             </Text>
@@ -125,6 +129,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FDE68A',
   },
+  tipTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   tipTitle: { fontWeight: '800', color: '#92400E', fontSize: 14 },
   tipText: { color: '#78350F', fontSize: 13, marginTop: 4, lineHeight: 20 },
   card: {

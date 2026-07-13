@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { RefreshControl } from '../components/AppRefreshControl';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -424,7 +425,7 @@ export default function BoardScreen({ navigation }) {
                           <Text style={styles.noteTitle} numberOfLines={2}>
                             {n.title || 'โน้ต'}
                           </Text>
-                          {n.pin ? <Text style={styles.pinMark}>📌</Text> : null}
+                          {n.pin ? <Ionicons name="pin" size={14} color={colors.navy} /> : null}
                         </View>
 
                         <Pressable
@@ -610,9 +611,13 @@ const styles = StyleSheet.create({
   notePinned: {
     transform: [{ rotate: '-1.2deg' }],
   },
-  noteTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  noteTitle: { fontWeight: '800', color: '#1A1A1A', fontSize: 15, flex: 1 },
-  pinMark: { fontSize: 14 },
+  noteTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  noteTitle: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.textPrimary },
   statusBadge: {
     alignSelf: 'flex-start',
     marginTop: 8,

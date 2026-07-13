@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius } from '../theme';
 
 const STEPS = [
@@ -18,9 +19,11 @@ export function PublicStepBanner({ activeStep = 1 }) {
           <React.Fragment key={s.n}>
             <View style={styles.item}>
               <View style={[styles.dot, done && styles.dotDone, active && styles.dotActive]}>
-                <Text style={[styles.dotText, (done || active) && styles.dotTextOn]}>
-                  {done ? '✓' : s.n}
-                </Text>
+                {done ? (
+                  <Ionicons name="checkmark" size={16} color={colors.onNavy} />
+                ) : (
+                  <Text style={[styles.dotText, active && styles.dotTextOn]}>{s.n}</Text>
+                )}
               </View>
               <Text style={[styles.label, active && styles.labelActive]} numberOfLines={1}>
                 {s.label}

@@ -18,6 +18,7 @@ import LoadingView from '../components/LoadingView';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
 import BreakdownSummaryCard from '../components/BreakdownSummaryCard';
 import { colors, spacing } from '../theme';
+import { Ionicons } from '@expo/vector-icons';
 import {
   fetchTechnicians,
   fetchRepairs,
@@ -334,7 +335,10 @@ export default function DashboardScreen({ navigation }) {
             </Pressable>
           )}
           <Pressable style={[styles.searchBtn, isMobile && styles.searchBtnMobile]} onPress={() => navigation.navigate('Search')}>
-            <Text style={styles.searchBtnText}>{isMobile ? '🔍' : '🔍 ค้นหา'}</Text>
+            <View style={styles.searchBtnInner}>
+              <Ionicons name="search" size={isMobile ? 16 : 15} color={colors.onNavy} />
+              {!isMobile ? <Text style={styles.searchBtnText}>ค้นหา</Text> : null}
+            </View>
           </Pressable>
         </View>
       </View>
@@ -566,9 +570,12 @@ export default function DashboardScreen({ navigation }) {
                     style={styles.previewRow}
                     onPress={() => navigation.navigate('Board')}
                   >
-                    <Text style={styles.previewMain} numberOfLines={1}>
-                      {n.pin ? '📌 ' : ''}{n.title}
-                    </Text>
+                    <View style={styles.previewMainRow}>
+                      {n.pin ? <Ionicons name="pin" size={13} color={colors.navy} /> : null}
+                      <Text style={styles.previewMain} numberOfLines={1}>
+                        {n.title}
+                      </Text>
+                    </View>
                     <Text style={styles.previewSub} numberOfLines={1}>
                       {n.department || 'ทั่วไป'}
                     </Text>
@@ -679,6 +686,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   searchBtnText: { color: colors.onNavy, fontSize: 13, fontWeight: '700' },
+  searchBtnInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   searchBtnTextMobile: { fontSize: 12, maxWidth: 110 },
   headerTitle: { color: colors.onNavy, fontSize: 24, fontWeight: '800', letterSpacing: 0.3 },
   headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
@@ -764,7 +772,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.barTrack,
   },
-  previewMain: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  previewMainRow: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0 },
+  previewMain: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.textPrimary },
   previewSub: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   previewEmpty: {
     fontSize: 13,
