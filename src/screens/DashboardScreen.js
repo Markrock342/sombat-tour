@@ -266,6 +266,15 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </Pressable>
         <View style={styles.headerActions}>
+          {user ? (
+            <Pressable style={styles.searchBtn} onPress={logout}>
+              <Text style={styles.searchBtnText}>{user.username}</Text>
+            </Pressable>
+          ) : (
+            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.searchBtnText}>เข้าสู่ระบบ</Text>
+            </Pressable>
+          )}
           <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Search')}>
             <Text style={styles.searchBtnText}>🔍 ค้นหา</Text>
           </Pressable>
@@ -387,16 +396,16 @@ export default function DashboardScreen({ navigation }) {
               )}
             </Card>
 
+            <BreakdownSummaryCard
+              navigation={navigation}
+              style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
+            />
             <NavCard
               title="แจ้งซ่อมออนไลน์"
               icon="🛠️"
               subtitle={canWrite ? 'ช่างแจ้งผ่านระบบได้เลย' : 'ต้องเข้าสู่ระบบก่อน'}
               isWide={isWide}
               onPress={() => (canWrite ? navigation.navigate('RepairForm') : navigation.navigate('Login'))}
-            />
-            <BreakdownSummaryCard
-              navigation={navigation}
-              style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
             />
             <NavCard
               title="ประวัติแจ้งซ่อมรายคัน"
@@ -430,21 +439,6 @@ export default function DashboardScreen({ navigation }) {
           </View>
         )}
       </ScrollView>
-
-      <SafeAreaView edges={['bottom']} style={styles.footerSafe}>
-        <View style={styles.footer}>
-          {user ? (
-            <Pressable style={styles.authBtn} onPress={logout} hitSlop={8}>
-              <Text style={styles.authBtnText}>{user.username}</Text>
-              <Text style={styles.authBtnHint}>แตะเพื่อออกจากระบบ</Text>
-            </Pressable>
-          ) : (
-            <Pressable style={styles.authBtn} onPress={() => navigation.navigate('Login')} hitSlop={8}>
-              <Text style={styles.authBtnText}>เข้าสู่ระบบ</Text>
-            </Pressable>
-          )}
-        </View>
-      </SafeAreaView>
     </SafeAreaView>
   );
 }
@@ -534,28 +528,4 @@ const styles = StyleSheet.create({
   placeholderBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.lg },
   placeholderIcon: { fontSize: 30, marginBottom: spacing.sm, opacity: 0.7 },
   placeholderText: { fontSize: 13, color: colors.textMuted, fontWeight: '600', textAlign: 'center' },
-  footerSafe: {
-    backgroundColor: colors.background,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  footer: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    alignItems: 'flex-start',
-  },
-  authBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-  },
-  authBtnText: {
-    color: colors.navy,
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  authBtnHint: {
-    color: colors.textMuted,
-    fontSize: 11,
-    marginTop: 2,
-  },
 });
