@@ -1,5 +1,5 @@
 /* Minimal service worker — enables installability without aggressive offline cache */
-const CACHE = 'sombat-tour-v3';
+const CACHE = 'sombat-tour-v4';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
