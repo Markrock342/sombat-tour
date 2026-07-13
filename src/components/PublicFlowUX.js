@@ -1,7 +1,6 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { colors, spacing, radius } from '../theme';
-import { MOBILE_BREAKPOINT } from './BackNavigation';
 
 const STEPS = [
   { n: 1, label: 'ชื่อผู้แจ้ง' },
@@ -10,9 +9,6 @@ const STEPS = [
 ];
 
 export function PublicStepBanner({ activeStep = 1 }) {
-  const { width } = useWindowDimensions();
-  const compact = width < MOBILE_BREAKPOINT;
-
   return (
     <View style={styles.wrap}>
       {STEPS.map((s, i) => {
@@ -26,7 +22,9 @@ export function PublicStepBanner({ activeStep = 1 }) {
                   {done ? '✓' : s.n}
                 </Text>
               </View>
-              {!compact ? <Text style={[styles.label, active && styles.labelActive]}>{s.label}</Text> : null}
+              <Text style={[styles.label, active && styles.labelActive]} numberOfLines={1}>
+                {s.label}
+              </Text>
             </View>
             {i < STEPS.length - 1 ? <View style={[styles.line, done && styles.lineDone]} /> : null}
           </React.Fragment>
@@ -86,7 +84,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     gap: 4,
   },
-  item: { alignItems: 'center', minWidth: 56 },
+  item: { alignItems: 'center', flex: 1, minWidth: 0, paddingHorizontal: 2 },
   dot: {
     width: 28,
     height: 28,
@@ -101,9 +99,15 @@ const styles = StyleSheet.create({
   dotDone: { borderColor: '#059669', backgroundColor: '#059669' },
   dotText: { fontSize: 12, fontWeight: '800', color: colors.textMuted },
   dotTextOn: { color: colors.onNavy },
-  label: { fontSize: 10, fontWeight: '700', color: colors.textMuted, marginTop: 4 },
+  label: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textMuted,
+    marginTop: 4,
+    textAlign: 'center',
+  },
   labelActive: { color: colors.navy },
-  line: { flex: 1, height: 2, backgroundColor: colors.border, maxWidth: 32, marginBottom: 14 },
+  line: { width: 20, height: 2, backgroundColor: colors.border, marginBottom: 18, flexShrink: 0 },
   lineDone: { backgroundColor: '#059669' },
   barWrap: {
     backgroundColor: colors.card,
