@@ -20,6 +20,14 @@ if (!function_exists('require_push_lib')) {
 }
 require_push_lib();
 
+if (!function_exists('push_capabilities') || !function_exists('push_send_webpush_multi')) {
+  out(array(
+    'ok' => false,
+    'error' => 'OLD_PUSH_LIB',
+    'message' => 'push_lib.php บนเซิร์ฟเวอร์ยังเป็นรุ่นเก่า — ลบไฟล์เดิมแล้วอัปใหม่จาก api-upload (ต้องได้ ~22 KB)',
+  ), 500);
+}
+
 @set_time_limit(45);
 @ini_set('max_execution_time', '45');
 ignore_user_abort(true);

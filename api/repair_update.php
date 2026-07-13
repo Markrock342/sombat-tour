@@ -33,16 +33,33 @@ try {
     'tank_m' => 'r_tank_m',
   ];
 
+  // Optional columns don't exist on the legacy repair table on this host —
+  // drop them instead of letting MySQL fail the whole UPDATE.
+  $optional = ['r_technician_id' => 1, 'r_type' => 1, 'r_tank_m' => 1];
+
   $seen = [];
+  $dropped = [];
   foreach ($map as $in => $col) {
     if (!array_key_exists($in, $b)) continue;
     if (isset($seen[$col])) continue;
     $seen[$col] = true;
+    if (isset($optional[$col]) && !repair_has_column($pdo, $col)) {
+      $dropped[] = $col;
+      continue;
+    }
     $fields[] = "$col = ?";
     $params[] = $b[$in];
   }
 
-  if (!$fields) out(['ok' => false, 'error' => 'NO_FIELDS'], 400);
+  if (!$fields) {
+    if ($dropped) {
+      // Only unsupported fields were sent — nothing to change, not an error
+      $st2 = $pdo->prepare('SELECT ' . repair_select_cols($pdo) . ' FROM repair WHERE r_id = ? LIMIT 1');
+      $st2->execute([$rId]);
+      out(['ok' => true, 'row' => $st2->fetch(), 'skipped_columns' => $dropped]);
+    }
+    out(['ok' => false, 'error' => 'NO_FIELDS'], 400);
+  }
 
   $params[] = $rId;
   $sql = 'UPDATE repair SET ' . implode(', ', $fields) . ' WHERE r_id = ?';

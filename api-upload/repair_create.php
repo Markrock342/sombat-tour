@@ -101,7 +101,9 @@ try {
   try {
     ignore_user_abort(true);
     @set_time_limit(60);
-    if (require_push_lib(false)) {
+    // Old push_lib sends sequentially (slow → browser timeout); only send
+    // synchronously with the new batched lib, otherwise skip push entirely.
+    if (require_push_lib(false) && function_exists('push_send_webpush_multi')) {
       $kind = ($type === 'breakdown') ? 'เสียกลางทาง' : 'แจ้งซ่อม';
       $label = $vPlate !== '' ? $vPlate : ($vName !== '' ? $vName : ('#' . $jobNum));
       $who = $techName !== '' ? $techName : (isset($user['username']) ? $user['username'] : '');
