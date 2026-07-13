@@ -6,8 +6,8 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  RefreshControl,
 } from 'react-native';
+import { RefreshControl } from '../components/AppRefreshControl';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
