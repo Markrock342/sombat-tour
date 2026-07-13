@@ -294,6 +294,15 @@ export async function uploadRepairImage(rId, uri, fileName = 'photo.jpg', mime =
   return parseJson(res);
 }
 
+export async function deleteRepairImage(imageId) {
+  const res = await fetch(`${API_BASE}/delete_image.php`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ id: imageId }),
+  });
+  return parseJson(res);
+}
+
 export async function createPublicRepair(payload) {
   const res = await fetch(`${API_BASE}/report_public.php`, {
     method: 'POST',

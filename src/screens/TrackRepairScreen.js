@@ -19,6 +19,7 @@ import RepairStatusTimeline from '../components/RepairStatusTimeline';
 import { RefreshControl } from '../components/AppRefreshControl';
 import StatusHero from '../components/StatusHero';
 import ContactActionRow from '../components/ContactActionRow';
+import ImageLightbox from '../components/ImageLightbox';
 import { fetchTrackByToken, fmtDateTime } from '../data/api';
 import { parseTrackToken } from '../data/repairTracking';
 import { parseRepairList } from '../data/repairNotes';
@@ -38,6 +39,7 @@ export default function TrackRepairScreen({ navigation, route }) {
   const [tokenInput, setTokenInput] = useState(initialToken);
   const [activeToken, setActiveToken] = useState(initialToken);
   const [showSearch, setShowSearch] = useState(!initialToken);
+  const [preview, setPreview] = useState(null);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(!!initialToken);
   const [refreshing, setRefreshing] = useState(false);
@@ -260,7 +262,9 @@ export default function TrackRepairScreen({ navigation, route }) {
                   <Text style={styles.sectionTitle}>รูปที่แนบ</Text>
                   <View style={styles.gallery}>
                     {data.images.map((img) => (
-                      <Image key={img.id} source={{ uri: img.url }} style={styles.thumb} />
+                      <Pressable key={img.id} onPress={() => setPreview(img)}>
+                        <Image source={{ uri: img.url }} style={styles.thumb} />
+                      </Pressable>
                     ))}
                   </View>
                 </>
@@ -288,6 +292,11 @@ export default function TrackRepairScreen({ navigation, route }) {
         </ScrollView>
         {isMobile ? <MobileBackBar onPress={goBack} /> : null}
       </View>
+      <ImageLightbox
+        visible={!!preview}
+        uri={preview?.url}
+        onClose={() => setPreview(null)}
+      />
     </SafeAreaView>
   );
 }

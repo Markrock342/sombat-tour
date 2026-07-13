@@ -11,16 +11,19 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 
 import { colors, spacing, radius, shadow } from '../theme';
 import { TopBackLink, MobileBackBar, useScreenLayout, mobileScrollInset, contentSheetStyle } from '../components/BackNavigation';
 import LoadingView from '../components/LoadingView';
+import ImageLightbox from '../components/ImageLightbox';
 import { useAuth } from '../auth/AuthContext';
 import {
   getRepair,
   updateRepair,
   fetchRepairImages,
   uploadRepairImage,
+  deleteRepairImage,
   fetchRepairTracking,
   updateRepairStatus,
   fetchTechnicians,
@@ -40,7 +43,7 @@ import RepairStatusTimeline from '../components/RepairStatusTimeline';
 import ContactActionRow from '../components/ContactActionRow';
 import { shareTrackLink, shareViaLine, callPhone, saveQrToGallery } from '../data/contactActions';
 import { qrImageUrl, trackUrl } from '../data/repairTracking';
-import { showAlert, chooseAction } from '../utils/dialog';
+import { showAlert, chooseAction, confirmDialog } from '../utils/dialog';
 
 function Fact({ label, value }) {
   if (!value) return null;
@@ -69,6 +72,8 @@ export default function RepairDetailScreen({ route, navigation }) {
   const [loading, setLoading] = useState(!initial);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const [deletingImage, setDeletingImage] = useState(false);
 
   const [techs, setTechs] = useState([]);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -223,6 +228,28 @@ export default function RepairDetailScreen({ route, navigation }) {
       else showAlert('อัปโหลดไม่สำเร็จ', e.message || '');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const removePhoto = async () => {
+    if (!preview?.id || !canWrite) return;
+    const ok = await confirmDialog('ลบรูปนี้?', 'ลบแล้วกู้คืนไม่ได้', {
+      confirmText: 'ลบ',
+      cancelText: 'ยกเลิก',
+      destructive: true,
+      icon: 'danger',
+    });
+    if (!ok) return;
+    setDeletingImage(true);
+    try {
+      await deleteRepairImage(preview.id);
+      setImages((prev) => prev.filter((x) => x.id !== preview.id));
+      setPreview(null);
+    } catch (e) {
+      if (e.code === 'UNAUTHORIZED') navigation.navigate('Login');
+      else showAlert('ลบไม่สำเร็จ', e.message || '');
+    } finally {
+      setDeletingImage(false);
     }
   };
 
@@ -619,7 +646,39 @@ export default function RepairDetailScreen({ route, navigation }) {
                 ) : (
                   <View style={styles.gallery}>
                     {images.map((img) => (
-                      <Image key={img.id} source={{ uri: img.url }} style={styles.thumb} />
+                      <View key={img.id} style={styles.thumbWrap}>
+                        <Pressable onPress={() => setPreview(img)}>
+                          <Image source={{ uri: img.url }} style={styles.thumb} />
+                        </Pressable>
+                        {canWrite ? (
+                          <Pressable
+                            style={styles.thumbDelete}
+                            hitSlop={8}
+                            onPress={async () => {
+                              const ok = await confirmDialog('ลบรูปนี้?', 'ลบแล้วกู้คืนไม่ได้', {
+                                confirmText: 'ลบ',
+                                cancelText: 'ยกเลิก',
+                                destructive: true,
+                                icon: 'danger',
+                              });
+                              if (!ok) return;
+                              setDeletingImage(true);
+                              try {
+                                await deleteRepairImage(img.id);
+                                setImages((prev) => prev.filter((x) => x.id !== img.id));
+                                if (preview?.id === img.id) setPreview(null);
+                              } catch (err) {
+                                if (err.code === 'UNAUTHORIZED') navigation.navigate('Login');
+                                else showAlert('ลบไม่สำเร็จ', err.message || '');
+                              } finally {
+                                setDeletingImage(false);
+                              }
+                            }}
+                          >
+                            <Ionicons name="close" size={14} color="#fff" />
+                          </Pressable>
+                        ) : null}
+                      </View>
                     ))}
                   </View>
                 )}
@@ -629,6 +688,15 @@ export default function RepairDetailScreen({ route, navigation }) {
         </ScrollView>
         {isMobile ? <MobileBackBar onPress={goBack} /> : null}
       </View>
+
+      <ImageLightbox
+        visible={!!preview}
+        uri={preview?.url}
+        onClose={() => setPreview(null)}
+        canDelete={canWrite}
+        onDelete={removePhoto}
+        deleting={deletingImage}
+      />
     </SafeAreaView>
   );
 }
@@ -867,7 +935,20 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   gallery: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  thumbWrap: { position: 'relative' },
   thumb: { width: 100, height: 100, borderRadius: 10, backgroundColor: colors.navyTint },
+  thumbDelete: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(229, 84, 75, 0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
   emptyGallery: {
     borderWidth: 1,
     borderColor: colors.border,
