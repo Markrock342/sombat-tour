@@ -106,7 +106,7 @@ function InstallGuideModal({ visible, onClose, target }) {
           ]
         : [
             { icon: 'download-outline', text: 'ดูไอคอนติดตั้งในแถบที่อยู่ (Chrome / Edge)' },
-            { icon: 'apps-outline', text: 'หรือเมนู ⋮ → “ติดตั้งสมบัติทัวร์…”' },
+            { icon: 'apps-outline', text: 'หรือเมนู ⋮ → “ติดตั้ง 425service…”' },
             { icon: 'checkmark-circle-outline', text: 'ยืนยันแล้วเปิดจากไอคอนแอป' },
           ];
 
