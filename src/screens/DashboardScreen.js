@@ -16,6 +16,7 @@ import Card from '../components/Card';
 import TechnicianBar from '../components/TechnicianBar';
 import LoadingView from '../components/LoadingView';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
+import BreakdownSummaryCard from '../components/BreakdownSummaryCard';
 import { colors, spacing } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -403,9 +404,17 @@ export default function DashboardScreen({ navigation }) {
               )}
             </Card>
 
-            {/* ฟีเจอร์เสริม (แจ้งด่วน / ประวัติรถ / บอร์ด / จุดจอด / สต็อก) — ซ่อนชั่วคราว */}
+            <BreakdownSummaryCard
+              navigation={navigation}
+              style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
+            />
           </View>
         )}
+        {!loading ? (
+          <Card title="ฟีเจอร์อื่น" style={styles.devCard}>
+            <Text style={styles.devHint}>กำลังพัฒนา</Text>
+          </Card>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -466,6 +475,14 @@ const styles = StyleSheet.create({
   cardFull: { width: '100%' },
   cardWide: { flexBasis: '30%', flexGrow: 1, minWidth: 280 },
   navInner: { margin: 0 },
+  devCard: { marginTop: spacing.lg },
+  devHint: {
+    color: colors.textMuted,
+    fontSize: 15,
+    fontWeight: '600',
+    paddingVertical: spacing.md,
+    textAlign: 'center',
+  },
   cardHeadRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
