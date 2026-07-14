@@ -1,7 +1,7 @@
 {
-  "name": "สมบัติทัวร์",
-  "short_name": "สมบัติทัวร์",
-  "description": "โปรแกรมซ่อมบำรุง สมบัติทัวร์",
+  "name": "425 service",
+  "short_name": "425 service",
+  "description": "425 service — โปรแกรมซ่อมบำรุง",
   "lang": "th",
   "start_url": "/",
   "scope": "/",

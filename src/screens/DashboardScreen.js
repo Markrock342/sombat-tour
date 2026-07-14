@@ -16,15 +16,12 @@ import Card from '../components/Card';
 import TechnicianBar from '../components/TechnicianBar';
 import LoadingView from '../components/LoadingView';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
-import BreakdownSummaryCard from '../components/BreakdownSummaryCard';
 import { colors, spacing } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
 import {
   fetchTechnicians,
   fetchRepairs,
   fetchPending,
-  fetchBoard,
-  fetchLocations,
   fmtDate,
   fmtThaiDate,
   isOpenRepair,
@@ -33,7 +30,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useScreenLayout } from '../components/BackNavigation';
 
 export default function DashboardScreen({ navigation }) {
-  const { user, canWrite, canSeePartsPrice } = useAuth();
+  const { user } = useAuth();
   const { isMobile, isWide, pad, heroTitleSize } = useScreenLayout();
   const [dateRange, setDateRange] = useState(() => presetRange('today'));
   const [datePreset, setDatePreset] = useState('today');
@@ -41,8 +38,6 @@ export default function DashboardScreen({ navigation }) {
   const [repairs, setRepairs] = useState([]);
   const [pendingByTech, setPendingByTech] = useState([]);
   const [pendingTotal, setPendingTotal] = useState(0);
-  const [boardPreview, setBoardPreview] = useState([]);
-  const [locationPreview, setLocationPreview] = useState([]);
   const [meta, setMeta] = useState({ date: null, total: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -57,14 +52,11 @@ export default function DashboardScreen({ navigation }) {
     else setLoading(true);
     setError(null);
     try {
-      const [repSettled, techSettled, pendingSettled, boardSettled, locSettled] =
-        await Promise.allSettled([
-          fetchRepairs(dateRange.start, dateRange.end),
-          fetchTechnicians(),
-          fetchPending(),
-          fetchBoard(),
-          fetchLocations(),
-        ]);
+      const [repSettled, techSettled, pendingSettled] = await Promise.allSettled([
+        fetchRepairs(dateRange.start, dateRange.end),
+        fetchTechnicians(),
+        fetchPending(),
+      ]);
 
       if (repSettled.status !== 'fulfilled') {
         throw repSettled.reason || new Error('โหลดรายการซ่อมไม่สำเร็จ');
@@ -101,17 +93,6 @@ export default function DashboardScreen({ navigation }) {
         setPendingByTech(fallback);
         setPendingTotal(open.length);
       }
-
-      setBoardPreview(
-        boardSettled.status === 'fulfilled'
-          ? (boardSettled.value || []).slice(0, 3)
-          : []
-      );
-      setLocationPreview(
-        locSettled.status === 'fulfilled'
-          ? (locSettled.value || []).slice(0, 3)
-          : []
-      );
     } catch (e) {
       setError(e.message || 'โหลดข้อมูลไม่สำเร็จ');
     } finally {
@@ -124,6 +105,8 @@ export default function DashboardScreen({ navigation }) {
     load();
   }, [load]);
 
+  // เมื่อเข้าหน้า / กลับมาแอป: ไม่ soft-refresh อัตโนมัติ (รำคาญ)
+  // เปลี่ยนแค่วันที่ถ้าข้ามเที่ยงคืน — ให้ load จาก dateRange effect ตามปกติ
   useFocusEffect(
     useCallback(() => {
       const today = fmtDate(new Date());
@@ -131,10 +114,8 @@ export default function DashboardScreen({ navigation }) {
         lastDeviceDay.current = today;
         setDateRange(presetRange('today'));
         setDatePreset('today');
-      } else {
-        load({ soft: true });
       }
-    }, [load])
+    }, [])
   );
 
   useEffect(() => {
@@ -145,13 +126,11 @@ export default function DashboardScreen({ navigation }) {
           lastDeviceDay.current = today;
           setDateRange(presetRange('today'));
           setDatePreset('today');
-        } else {
-          load({ soft: true });
         }
       }
     });
     return () => sub.remove();
-  }, [load]);
+  }, []);
 
   const countByKey = {};
   repairs.forEach((r) => {
@@ -241,27 +220,6 @@ export default function DashboardScreen({ navigation }) {
   pendingList.sort((a, b) => b.pending - a.pending);
   const pendingMax = Math.max(...pendingList.map((t) => t.pending), 1);
   const pendingSum = pendingTotal || pendingList.reduce((s, t) => s + t.pending, 0);
-
-  const recentRepairs = [...repairs]
-    .sort((a, b) => String(b.r_dt_rec || '').localeCompare(String(a.r_dt_rec || '')))
-    .slice(0, 3);
-
-  const recentVehicles = [];
-  const seenPlates = new Set();
-  for (const r of [...repairs].sort((a, b) => String(b.r_dt_rec || '').localeCompare(String(a.r_dt_rec || '')))) {
-    const plate = String(r.r_v_plate || r.r_v_name || '').trim();
-    if (!plate || seenPlates.has(plate)) continue;
-    seenPlates.add(plate);
-    recentVehicles.push({
-      plate,
-      name: r.r_v_name,
-      brand: r.r_v_brand,
-      lastJob: r.r_repair_list,
-    });
-    if (recentVehicles.length >= 3) break;
-  }
-
-  const openToday = repairs.filter(isOpenRepair).length;
 
   const openJobs = (tech) =>
     navigation.navigate('JobDetail', {
@@ -445,202 +403,11 @@ export default function DashboardScreen({ navigation }) {
               )}
             </Card>
 
-            <BreakdownSummaryCard
-              navigation={navigation}
-              style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
-            />
-            <PreviewCard
-              title="แจ้งซ่อมด่วน"
-              isWide={isWide}
-              onPress={() => navigation.navigate('PublicReport')}
-              headerRight={
-                <View style={styles.previewHeaderActions}>
-                  <Pressable
-                    style={styles.headerActionHit}
-                    onPress={() => navigation.navigate('PublicReport')}
-                    hitSlop={4}
-                  >
-                    <Text style={styles.viewAll}>+ แจ้ง</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.headerActionHit}
-                    onPress={() => navigation.navigate('TrackRepair')}
-                    hitSlop={4}
-                  >
-                    <Text style={styles.viewAllMuted}>QR</Text>
-                  </Pressable>
-                </View>
-              }
-            >
-              <Text style={styles.previewSummary}>
-                ไม่ต้อง login · ส่งแล้วได้ QR ติดตาม
-                {canWrite ? ' · staff ใช้ฟอร์มเต็มได้หลัง login' : ''}
-              </Text>
-              <View style={styles.quickActions}>
-                <Pressable
-                  style={styles.quickBtn}
-                  onPress={() => navigation.navigate('PublicReport', { type: 'breakdown' })}
-                >
-                  <Text style={styles.quickBtnText}>🚨 เสียกลางทาง</Text>
-                </Pressable>
-                <Pressable style={styles.quickBtnAlt} onPress={() => navigation.navigate('TrackRepair')}>
-                  <Text style={styles.quickBtnAltText}>ดูสถานะ</Text>
-                </Pressable>
-              </View>
-              <Text style={styles.previewSummary}>
-                วันนี้เปิดอยู่ <Text style={styles.summaryNum}>{openToday}</Text> งาน
-              </Text>
-              {recentRepairs.length ? (
-                recentRepairs.map((r) => (
-                  <Pressable
-                    key={r.r_id}
-                    style={styles.previewRow}
-                    onPress={() => navigation.navigate('RepairDetail', { rId: r.r_id })}
-                  >
-                    <Text style={styles.previewMain} numberOfLines={1}>
-                      {r.r_v_plate || r.r_v_name || '—'}
-                    </Text>
-                    <Text style={styles.previewSub} numberOfLines={1}>
-                      {clipText(r.r_repair_list)} · {r.r_technician || 'ไม่ระบุช่าง'}
-                    </Text>
-                  </Pressable>
-                ))
-              ) : (
-                <Text style={styles.previewEmpty}>ยังไม่มีงานในช่วงวันที่เลือก</Text>
-              )}
-            </PreviewCard>
-            <PreviewCard
-              title="ประวัติแจ้งซ่อมรายคัน"
-              isWide={isWide}
-              onPress={() => navigation.navigate('Search', { q: '' })}
-              headerRight={
-                <Pressable
-                  style={styles.headerActionHit}
-                  onPress={() => navigation.navigate('Search', { q: '' })}
-                >
-                  <Text style={styles.viewAll}>ค้นหา ›</Text>
-                </Pressable>
-              }
-            >
-              <Text style={styles.previewSummary}>รถที่มีงานล่าสุดในช่วงวันที่เลือก</Text>
-              {recentVehicles.length ? (
-                recentVehicles.map((v) => (
-                  <Pressable
-                    key={v.plate}
-                    style={styles.previewRow}
-                    onPress={() => navigation.navigate('Search', { q: v.plate })}
-                  >
-                    <Text style={styles.previewMain} numberOfLines={1}>
-                      {v.plate}
-                    </Text>
-                    <Text style={styles.previewSub} numberOfLines={1}>
-                      {[v.brand, clipText(v.lastJob, 40)].filter(Boolean).join(' · ')}
-                    </Text>
-                  </Pressable>
-                ))
-              ) : (
-                <Text style={styles.previewEmpty}>กดค้นหาเพื่อดูประวัติรายคัน</Text>
-              )}
-            </PreviewCard>
-            <PreviewCard
-              title="บอร์ดข่าว"
-              isWide={isWide}
-              onPress={() => navigation.navigate('Board')}
-              headerRight={
-                <Pressable style={styles.headerActionHit} onPress={() => navigation.navigate('Board')}>
-                  <Text style={styles.viewAll}>ดูทั้งหมด ›</Text>
-                </Pressable>
-              }
-            >
-              <Text style={styles.previewSummary}>ไวท์บอร์ดจดโน้ต</Text>
-              {boardPreview.length ? (
-                boardPreview.map((n) => (
-                  <Pressable
-                    key={n.id}
-                    style={styles.previewRow}
-                    onPress={() => navigation.navigate('Board')}
-                  >
-                    <View style={styles.previewMainRow}>
-                      {n.pin ? <Ionicons name="pin" size={13} color={colors.navy} /> : null}
-                      <Text style={styles.previewMain} numberOfLines={1}>
-                        {n.title}
-                      </Text>
-                    </View>
-                    <Text style={styles.previewSub} numberOfLines={1}>
-                      {n.department || 'ทั่วไป'}
-                    </Text>
-                  </Pressable>
-                ))
-              ) : (
-                <Text style={styles.previewEmpty}>ยังไม่มีโน้ต — กดเพื่อเพิ่มบนบอร์ด</Text>
-              )}
-            </PreviewCard>
-            <PreviewCard
-              title="ตำแหน่งรถจอด"
-              isWide={isWide}
-              onPress={() => navigation.navigate('Locations')}
-              headerRight={
-                <Pressable style={styles.headerActionHit} onPress={() => navigation.navigate('Locations')}>
-                  <Text style={styles.viewAll}>ดูทั้งหมด ›</Text>
-                </Pressable>
-              }
-            >
-              <Text style={styles.previewSummary}>จุดจอดที่บันทึกล่าสุด</Text>
-              {locationPreview.length ? (
-                locationPreview.map((loc) => (
-                  <Pressable
-                    key={loc.id}
-                    style={styles.previewRow}
-                    onPress={() => navigation.navigate('Locations')}
-                  >
-                    <Text style={styles.previewMain} numberOfLines={1}>
-                      {loc.title || loc.spot || 'จุดจอด'}
-                    </Text>
-                    <Text style={styles.previewSub} numberOfLines={1}>
-                      {[loc.v_name, loc.spot].filter(Boolean).join(' · ') || '—'}
-                    </Text>
-                  </Pressable>
-                ))
-              ) : (
-                <Text style={styles.previewEmpty}>ยังไม่มีจุดจอด — กดเพื่อมาร์กด้วยมือ</Text>
-              )}
-            </PreviewCard>
-            <PreviewCard
-              title="สต็อกอะไหล่"
-              isWide={isWide}
-              onPress={() => {}}
-              disabled
-            >
-              <Text style={styles.previewSummary}>
-                {canSeePartsPrice ? 'ราคาอะไหล่ (สิทธิ์ staff+)' : 'ซ่อนราคา — สิทธิ์ไม่พอ'}
-              </Text>
-              <Text style={styles.previewEmpty}>กำลังพัฒนา</Text>
-            </PreviewCard>
+            {/* ฟีเจอร์เสริม (แจ้งด่วน / ประวัติรถ / บอร์ด / จุดจอด / สต็อก) — ซ่อนชั่วคราว */}
           </View>
         )}
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function clipText(str, max = 36) {
-  const s = String(str || '').trim();
-  if (s.length <= max) return s;
-  return `${s.slice(0, max - 1)}…`;
-}
-
-function PreviewCard({ title, isWide, onPress, disabled, headerRight, children }) {
-  return (
-    <View style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}>
-      <Card
-        title={title}
-        style={styles.navInner}
-        headerRight={headerRight}
-        onTitlePress={disabled ? undefined : onPress}
-      >
-        <View style={styles.previewBody}>{children}</View>
-      </Card>
-    </View>
   );
 }
 
