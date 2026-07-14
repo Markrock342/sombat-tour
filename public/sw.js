@@ -1,5 +1,5 @@
 /* PWA service worker — cache + Web Push for staff alerts */
-const CACHE = 'sombat-tour-v6';
+const CACHE = 'sombat-tour-v7';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

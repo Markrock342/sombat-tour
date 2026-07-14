@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "425 service",
+    "name": "425service",
     "slug": "sombat-tour-dashboard",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -25,12 +25,12 @@
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png",
-      "name": "425 service",
-      "shortName": "425 service",
+      "name": "425service",
+      "shortName": "425service",
       "lang": "th",
       "themeColor": "#0F1A38",
-      "backgroundColor": "#0F1A38",
-      "description": "425 service — โปรแกรมซ่อมบำรุง"
+      "backgroundColor": "#FFFFFF",
+      "description": "425service — โปรแกรมซ่อมบำรุง"
     },
     "plugins": [
       "expo-asset",

@@ -1,13 +1,13 @@
 {
-  "name": "425 service",
-  "short_name": "425 service",
-  "description": "425 service — โปรแกรมซ่อมบำรุง",
+  "name": "425service",
+  "short_name": "425service",
+  "description": "425service — โปรแกรมซ่อมบำรุง",
   "lang": "th",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0F1A38",
+  "background_color": "#FFFFFF",
   "theme_color": "#0F1A38",
   "icons": [
     {
