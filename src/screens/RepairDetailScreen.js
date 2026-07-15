@@ -46,6 +46,9 @@ import { shareTrackLink, shareViaLine, callPhone, saveQrToGallery } from '../dat
 import { qrImageUrl, trackUrl } from '../data/repairTracking';
 import { showAlert, chooseAction, confirmDialog } from '../utils/dialog';
 
+/** ซ่อนมอบหมาย / ปิดงาน / เพิ่มรูป / ลบงาน ชั่วคราว — เปิดดูรายละเอียดได้อย่างเดียว */
+const JOB_DETAIL_ACTIONS = false;
+
 function Fact({ label, value }) {
   if (!value) return null;
   return (
@@ -62,6 +65,7 @@ export default function RepairDetailScreen({ route, navigation }) {
   const { repair: initial, rId: paramId } = route.params ?? {};
   const rId = paramId || initial?.r_id;
   const { canWrite, canSeePartsPrice } = useAuth();
+  const canManage = canWrite && JOB_DETAIL_ACTIONS;
   const { isMobile, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
   const goBack = () => navigation.goBack();
   const sheetStyle = contentSheetStyle(centerContent, contentMaxWidth);
@@ -154,6 +158,7 @@ export default function RepairDetailScreen({ route, navigation }) {
   }, [repair?.r_id, repair?.r_technician, repair?.r_technician_id, repair?.r_repair_list]);
 
   const openAssign = () => {
+    if (!JOB_DETAIL_ACTIONS) return;
     if (!canWrite) {
       navigation.navigate('Login');
       return;
@@ -162,6 +167,7 @@ export default function RepairDetailScreen({ route, navigation }) {
   };
 
   const saveAssign = async () => {
+    if (!JOB_DETAIL_ACTIONS) return;
     if (!canWrite) {
       navigation.navigate('Login');
       return;
@@ -193,6 +199,7 @@ export default function RepairDetailScreen({ route, navigation }) {
   };
 
   const closeJob = async () => {
+    if (!JOB_DETAIL_ACTIONS) return;
     if (!canWrite) {
       navigation.navigate('Login');
       return;
@@ -210,6 +217,7 @@ export default function RepairDetailScreen({ route, navigation }) {
   };
 
   const deleteJob = async () => {
+    if (!JOB_DETAIL_ACTIONS) return;
     if (!canSeePartsPrice) {
       showAlert('ลบงานไม่ได้', 'เฉพาะ admin / staff ที่รับเรื่องเท่านั้น');
       return;
@@ -240,6 +248,7 @@ export default function RepairDetailScreen({ route, navigation }) {
   };
 
   const addPhoto = async () => {
+    if (!JOB_DETAIL_ACTIONS) return;
     if (!canWrite) {
       navigation.navigate('Login');
       return;
@@ -263,7 +272,7 @@ export default function RepairDetailScreen({ route, navigation }) {
   };
 
   const removePhoto = async () => {
-    if (!preview?.id || !canWrite) return;
+    if (!JOB_DETAIL_ACTIONS || !preview?.id || !canWrite) return;
     const ok = await confirmDialog('ลบรูปนี้?', 'ลบแล้วกู้คืนไม่ได้', {
       confirmText: 'ลบ',
       cancelText: 'ยกเลิก',
@@ -408,7 +417,7 @@ export default function RepairDetailScreen({ route, navigation }) {
         />
       </View>
 
-      {canWrite ? (
+      {canManage ? (
         <View style={styles.assignBox}>
           <View style={styles.assignHead}>
             <Text style={styles.assignTitle}>มอบหมายงาน</Text>
@@ -517,6 +526,7 @@ export default function RepairDetailScreen({ route, navigation }) {
         </View>
       ) : null}
 
+      {canManage ? (
       <View style={styles.actions}>
         {open ? (
           <Pressable
@@ -544,6 +554,7 @@ export default function RepairDetailScreen({ route, navigation }) {
           </Pressable>
         ) : null}
       </View>
+      ) : null}
     </View>
   ) : null;
 
@@ -681,7 +692,9 @@ export default function RepairDetailScreen({ route, navigation }) {
                 {images.length === 0 ? (
                   <View style={styles.emptyGallery}>
                     <Text style={styles.emptyGalleryTitle}>ยังไม่มีรูป</Text>
-                    <Text style={styles.emptyGalleryMsg}>กด “เพิ่มรูป” เพื่อแนบหลักฐานงานซ่อม</Text>
+                    {canManage ? (
+                      <Text style={styles.emptyGalleryMsg}>กด “เพิ่มรูป” เพื่อแนบหลักฐานงานซ่อม</Text>
+                    ) : null}
                   </View>
                 ) : (
                   <View style={styles.gallery}>
@@ -690,7 +703,7 @@ export default function RepairDetailScreen({ route, navigation }) {
                         <Pressable onPress={() => setPreview(img)}>
                           <Image source={{ uri: img.url }} style={styles.thumb} />
                         </Pressable>
-                        {canWrite ? (
+                        {canManage ? (
                           <Pressable
                             style={styles.thumbDelete}
                             hitSlop={8}
@@ -735,7 +748,7 @@ export default function RepairDetailScreen({ route, navigation }) {
         imageId={preview?.id}
         fileName={`sombat-repair-${rId}-${preview?.id || 'photo'}.jpg`}
         onClose={() => setPreview(null)}
-        canDelete={canWrite}
+        canDelete={canManage}
         onDelete={removePhoto}
         deleting={deletingImage}
       />
