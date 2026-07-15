@@ -14,6 +14,7 @@ import Card from '../components/Card';
 import TechnicianBar from '../components/TechnicianBar';
 import LoadingView from '../components/LoadingView';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
+import BreakdownSummaryCard from '../components/BreakdownSummaryCard';
 import { colors, spacing } from '../theme';
 import { fetchTechnicians, fetchRepairs, fmtDate, fmtThaiDate } from '../data/api';
 
@@ -232,7 +233,12 @@ export default function DashboardScreen({ navigation }) {
             )}
           </Card>
 
-          {/* 3-6 — รอเชื่อม endpoint เพิ่ม */}
+          {/* 3 — เสียกลางทาง (แสดงสรุปบน Dashboard อย่างเดียว) */}
+          <BreakdownSummaryCard
+            style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
+          />
+
+          {/* 4-6 — รอเชื่อม endpoint เพิ่ม */}
           <Placeholder title="ประวัติแจ้งซ่อมรายคัน" tag="อาจจะ" icon="🚗" isWide={isWide} />
           <Placeholder title="สต็อกอะไหล่" tag="อาจจะ" icon="📦" isWide={isWide} />
           <Placeholder title="ข้อมูลด้านอื่น ๆ" icon="📊" isWide={isWide} />

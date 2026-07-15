@@ -159,3 +159,31 @@ export async function searchVehicles(term) {
   }
   return rows;
 }
+
+/** งานยังไม่ปิด */
+export function isOpenRepair(r) {
+  return !r.r_close || r.r_close === '0' || r.r_close === 0;
+}
+
+/** งานเสียกลางทาง — subtype 2 / type breakdown / ข้อความในรายการ */
+export const BREAKDOWN_SUBTYPE_ID = '2';
+
+export function isBreakdownRepair(r) {
+  if (!r) return false;
+  if (String(r.r_job_subtype_id) === BREAKDOWN_SUBTYPE_ID) return true;
+  const t = String(r.r_type || '').toLowerCase();
+  if (t === 'breakdown' || t === 'roadside') return true;
+  return String(r.r_repair_list || '').includes('เสียกลางทาง');
+}
+
+/** รายการเสียกลางทาง — ถ้า API ไม่มีจะ throw ให้ caller fallback */
+export async function fetchBreakdowns({ q = '', status = '', limit = 100 } = {}) {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (status) params.set('status', status);
+  params.set('limit', String(limit));
+  const res = await fetch(`${API_BASE}/breakdown_list.php?${params}`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || data.message || 'breakdown_list failed');
+  return data;
+}
