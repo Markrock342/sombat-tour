@@ -1,6 +1,7 @@
 import { Linking, Platform, Share } from 'react-native';
 import { statusLabel, trackUrl, qrImageUrl } from './repairTracking';
 import { showAlert } from '../utils/dialog';
+import { API_BASE } from './api';
 
 export function normalizePhone(phone) {
   const raw = String(phone || '').replace(/[^\d+]/g, '');
@@ -110,7 +111,7 @@ export async function saveImageToDevice(imageUrl, fileName = 'sombat-image.jpg',
 
   // Prefer CORS-friendly API download when we have image id
   const fetchUrl = imageId
-    ? `https://425store.com/api/download_image.php?id=${encodeURIComponent(imageId)}`
+    ? `${API_BASE}/download_image.php?id=${encodeURIComponent(imageId)}`
     : url;
 
   if (Platform.OS === 'web' && typeof document !== 'undefined') {

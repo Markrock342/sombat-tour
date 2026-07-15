@@ -1,5 +1,5 @@
 /* PWA service worker — same-origin cache + Web Push (do NOT intercept API) */
-const CACHE = 'sombat-tour-v8';
+const CACHE = 'sombat-tour-v9';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -41,6 +41,12 @@ self.addEventListener('fetch', (event) => {
   // แล้ว fallback เป็น caches.match('/') จะได้ HTML ของแอป
   // แล้วหน้า Dashboard คิดว่า API ตอบ HTML (HTTP 200)
   if (url.origin !== self.location.origin) return;
+
+  // /api/* = proxy ไป 425store — ห้าม fallback เป็น index.html
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
   event.respondWith(
     fetch(event.request)

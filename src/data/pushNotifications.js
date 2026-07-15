@@ -1,7 +1,5 @@
 import { Platform } from 'react-native';
-import { getAuthToken } from './api';
-
-const API_BASE = 'https://425store.com/api';
+import { API_BASE, getAuthToken } from './api';
 
 function authHeaders(extra = {}) {
   const h = { ...extra };

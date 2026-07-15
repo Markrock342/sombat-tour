@@ -1,8 +1,20 @@
-// เชื่อมต่อ API จริงของ 425store + endpoints ใหม่ใน repo นี้
-export const API_BASE = 'https://425store.com/api';
+// เชื่อมต่อ API จริงของ 425store
+// บน Vercel ใช้ /api (proxy same-origin) — คอมหลายเครื่องต่อตรง 425store.com ไม่ถึง / โดนบล็อก
+const API_ORIGIN = 'https://425store.com/api';
 
-/** Default request timeout — ไม่ให้หน้าโหลดค้างเพราะ TCP/เซิร์ฟเวอร์ค้าง */
-export const API_TIMEOUT_MS = 12000;
+function resolveApiBase() {
+  if (typeof window === 'undefined') return API_ORIGIN;
+  const host = String(window.location.hostname || '');
+  if (host === '425service.vercel.app' || /\.vercel\.app$/i.test(host)) {
+    return '/api';
+  }
+  return API_ORIGIN;
+}
+
+export const API_BASE = resolveApiBase();
+
+/** Default request timeout — proxy + PHP ช้าได้ */
+export const API_TIMEOUT_MS = 20000;
 
 let _authToken = null;
 
