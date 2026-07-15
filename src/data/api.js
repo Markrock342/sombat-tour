@@ -1,6 +1,9 @@
 // เชื่อมต่อ API จริงของ 425store + endpoints ใหม่ใน repo นี้
 export const API_BASE = 'https://425store.com/api';
 
+/** Default request timeout — ไม่ให้หน้าโหลดค้างเพราะ TCP/เซิร์ฟเวอร์ค้าง */
+export const API_TIMEOUT_MS = 12000;
+
 let _authToken = null;
 
 export function setAuthToken(token) {
@@ -18,6 +21,39 @@ function authHeaders(extra = {}) {
     h['X-Auth-Token'] = _authToken;
   }
   return h;
+}
+
+/**
+ * fetch + AbortController timeout (ใช้แทน fetch ตรงๆ กับ API)
+ * @param {string} url
+ * @param {RequestInit & { timeoutMs?: number }} [opts]
+ */
+export async function apiFetch(url, opts = {}) {
+  const { timeoutMs = API_TIMEOUT_MS, signal: outerSignal, ...rest } = opts;
+  const ctrl = new AbortController();
+  const onOuterAbort = () => ctrl.abort();
+  if (outerSignal) {
+    if (outerSignal.aborted) ctrl.abort();
+    else outerSignal.addEventListener('abort', onOuterAbort, { once: true });
+  }
+  const timer =
+    timeoutMs > 0
+      ? setTimeout(() => ctrl.abort(), timeoutMs)
+      : null;
+  try {
+    return await fetch(url, { ...rest, signal: ctrl.signal });
+  } catch (e) {
+    if (e?.name === 'AbortError') {
+      const err = new Error('โหลดช้าเกินกำหนด — ลองใหม่');
+      err.code = 'TIMEOUT';
+      err.status = 0;
+      throw err;
+    }
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+    if (outerSignal) outerSignal.removeEventListener('abort', onOuterAbort);
+  }
 }
 
 async function parseJson(res) {
@@ -99,12 +135,12 @@ export function fmtDateTime(str) {
 
 async function fetchRepairsForDay(dateStr) {
   const q = dateStr ? `?date=${encodeURIComponent(dateStr)}` : '?date=latest';
-  const res = await fetch(`${API_BASE}/list_repair.php${q}`);
+  const res = await apiFetch(`${API_BASE}/list_repair.php${q}`);
   return parseJson(res);
 }
 
 export async function fetchTechnicians() {
-  const res = await fetch(`${API_BASE}/technician_list.php?limit=500`);
+  const res = await apiFetch(`${API_BASE}/technician_list.php?limit=500`);
   const data = await parseJson(res);
   return data.rows || [];
 }
@@ -129,7 +165,7 @@ export async function fetchRepairs(start, end) {
     end: endStr,
     limit: '10000',
   });
-  const res = await fetch(`${API_BASE}/list_repair.php?${qs.toString()}`);
+  const res = await apiFetch(`${API_BASE}/list_repair.php?${qs.toString()}`);
   const data = await parseJson(res);
   return {
     ok: data.ok !== false,
@@ -140,7 +176,7 @@ export async function fetchRepairs(start, end) {
 }
 
 export async function fetchPending() {
-  const res = await fetch(`${API_BASE}/backlog.php`);
+  const res = await apiFetch(`${API_BASE}/backlog.php`);
   return parseJson(res);
 }
 
@@ -467,7 +503,7 @@ export async function fetchBreakdowns({ q = '', status = '', limit = 100 } = {})
   if (q) params.set('q', q);
   if (status) params.set('status', status);
   params.set('limit', String(limit));
-  const res = await fetch(`${API_BASE}/breakdown_list.php?${params}`);
+  const res = await apiFetch(`${API_BASE}/breakdown_list.php?${params}`);
   return parseJson(res);
 }
 

@@ -33,8 +33,8 @@ function isBreakdownRow(r) {
  * Dashboard card: เสียกลางทาง — circular loader while fetching (no skeleton).
  */
 export default function BreakdownSummaryCard({ style, navigation }) {
-  const [dateRange, setDateRange] = useState(() => presetRange('30d'));
-  const [datePreset, setDatePreset] = useState('30d');
+  const [dateRange, setDateRange] = useState(() => presetRange('7d'));
+  const [datePreset, setDatePreset] = useState('7d');
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [error, setError] = useState(null);
@@ -45,7 +45,7 @@ export default function BreakdownSummaryCard({ style, navigation }) {
     try {
       let list = [];
       try {
-        const data = await fetchBreakdowns({ limit: 300 });
+        const data = await fetchBreakdowns({ limit: 120 });
         list = data.rows || [];
       } catch (_) {
         // fallback: filter repairs in range

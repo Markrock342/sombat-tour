@@ -15,6 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import Card from '../components/Card';
 import TechnicianBar from '../components/TechnicianBar';
 import LoadingView from '../components/LoadingView';
+import CircularLoader from '../components/CircularLoader';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
 import BreakdownSummaryCard from '../components/BreakdownSummaryCard';
 import { colors, spacing } from '../theme';
@@ -40,6 +41,7 @@ export default function DashboardScreen({ navigation }) {
   const [repairs, setRepairs] = useState([]);
   const [pendingByTech, setPendingByTech] = useState([]);
   const [pendingTotal, setPendingTotal] = useState(0);
+  const [pendingLoading, setPendingLoading] = useState(true);
   const [meta, setMeta] = useState({ date: null, total: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -50,39 +52,44 @@ export default function DashboardScreen({ navigation }) {
   const dateEnd = fmtDate(dateRange.end);
 
   const load = useCallback(async (opts = {}) => {
-    if (opts.soft) setRefreshing(true);
-    else setLoading(true);
+    const soft = !!opts.soft;
+    if (soft) setRefreshing(true);
+    else {
+      setLoading(true);
+      setPendingLoading(true);
+    }
     setError(null);
+
     try {
-      const [repSettled, techSettled, pendingSettled] = await Promise.allSettled([
-        fetchRepairs(dateRange.start, dateRange.end),
+      // Critical path — โชว์การ์ดงานประจำวันทันที ไม่รอ backlog/ช่าง
+      const rep = await fetchRepairs(dateRange.start, dateRange.end);
+      const rows = rep.rows || [];
+      setRepairs(rows);
+      setMeta({ date: rep.date, total: rep.total ?? rows.length });
+
+      const names = [...new Set(rows.map((r) => r.r_technician).filter(Boolean))];
+      const fromRows = names.map((n, i) => ({ id: String(i + 1), name: n }));
+      if (!soft) setTechs(fromRows);
+      else {
+        setTechs((prev) => (prev.length ? prev : fromRows));
+      }
+      setLoading(false);
+
+      // Secondary — โหลดคู่ขนาน ไม่บล็อกหน้าจอหลัก
+      const [techSettled, pendingSettled] = await Promise.allSettled([
         fetchTechnicians(),
         fetchPending(),
       ]);
 
-      if (repSettled.status !== 'fulfilled') {
-        throw repSettled.reason || new Error('โหลดรายการซ่อมไม่สำเร็จ');
+      if (techSettled.status === 'fulfilled' && (techSettled.value || []).length) {
+        setTechs(techSettled.value);
       }
-      const rep = repSettled.value;
-      const rows = rep.rows || [];
-
-      let techRows =
-        techSettled.status === 'fulfilled' ? techSettled.value || [] : [];
-      if (!techRows.length) {
-        const names = [...new Set(rows.map((r) => r.r_technician).filter(Boolean))];
-        techRows = names.map((n, i) => ({ id: String(i + 1), name: n }));
-      }
-
-      setRepairs(rows);
-      setTechs(techRows);
-      setMeta({ date: rep.date, total: rep.total ?? rows.length });
 
       if (pendingSettled.status === 'fulfilled') {
         const pend = pendingSettled.value || {};
         setPendingByTech(pend.rows || []);
         setPendingTotal(pend.total || 0);
       } else {
-        // fallback: open jobs in selected date range only
         const open = rows.filter(isOpenRepair);
         const map = {};
         open.forEach((r) => {
@@ -97,8 +104,9 @@ export default function DashboardScreen({ navigation }) {
       }
     } catch (e) {
       setError(e.message || 'โหลดข้อมูลไม่สำเร็จ');
-    } finally {
       setLoading(false);
+    } finally {
+      setPendingLoading(false);
       setRefreshing(false);
     }
   }, [dateRange.start, dateRange.end]);
@@ -372,12 +380,17 @@ export default function DashboardScreen({ navigation }) {
               title="งานค้างซ่อม"
               style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
             >
-              {error ? (
+              {error && !pendingLoading ? (
                 <View style={styles.errorBox}>
                   <Text style={styles.errorText}>โหลดข้อมูลไม่สำเร็จ</Text>
                   <Pressable style={styles.retryBtn} onPress={load}>
                     <Text style={styles.retryText}>ลองใหม่</Text>
                   </Pressable>
+                </View>
+              ) : pendingLoading ? (
+                <View style={styles.inlineLoader}>
+                  <CircularLoader size={40} />
+                  <Text style={styles.inlineLoaderText}>กำลังโหลด...</Text>
                 </View>
               ) : (
                 <>
@@ -500,6 +513,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   list: { maxHeight: 320 },
+  inlineLoader: {
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    minHeight: 160,
+  },
+  inlineLoaderText: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
   errorBox: { paddingVertical: spacing.xl, alignItems: 'center' },
   errorText: { color: colors.textPrimary, fontWeight: '700', marginBottom: 4 },
   errorMsg: { color: colors.textMuted, fontSize: 12, textAlign: 'center', marginBottom: spacing.md },
