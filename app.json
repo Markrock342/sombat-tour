@@ -1,40 +1,29 @@
 {
   "expo": {
-    "name": "425service",
+    "name": "สมบัติทัวร์",
     "slug": "sombat-tour-dashboard",
-    "version": "1.0.12",
+    "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/sombattourbg.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0F1A38"
+      "backgroundColor": "#16234A"
     },
     "ios": {
-      "supportsTablet": true,
-      "icon": "./assets/icon.png"
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#0F1A38"
+        "backgroundColor": "#16234A"
       }
     },
     "web": {
-      "bundler": "metro",
-      "favicon": "./assets/favicon.png",
-      "name": "425service",
-      "shortName": "425service",
-      "lang": "th",
-      "themeColor": "#0F1A38",
-      "backgroundColor": "#FFFFFF",
-      "description": "425service — โปรแกรมซ่อมบำรุง"
+      "bundler": "metro"
     },
     "plugins": [
-      "expo-asset",
-      "expo-font"
+      "expo-asset"
     ]
   }
 }
