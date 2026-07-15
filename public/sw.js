@@ -1,5 +1,5 @@
-/* PWA service worker — cache + Web Push for staff alerts */
-const CACHE = 'sombat-tour-v7';
+/* PWA service worker — same-origin cache + Web Push (do NOT intercept API) */
+const CACHE = 'sombat-tour-v8';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -29,10 +29,32 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  let url;
+  try {
+    url = new URL(event.request.url);
+  } catch (_) {
+    return;
+  }
+
+  // สำคัญ: อย่าดัก fetch ไป 425store.com/api — ถ้าเน็ตหลุด/timeout
+  // แล้ว fallback เป็น caches.match('/') จะได้ HTML ของแอป
+  // แล้วหน้า Dashboard คิดว่า API ตอบ HTML (HTTP 200)
+  if (url.origin !== self.location.origin) return;
+
   event.respondWith(
     fetch(event.request)
       .then((res) => res)
-      .catch(() => caches.match(event.request).then((hit) => hit || caches.match('/')))
+      .catch((err) =>
+        caches.match(event.request).then((hit) => {
+          if (hit) return hit;
+          // fallback แอปเฉพาะตอนเปิดหน้า (navigate) — ไม่ใช้กับ asset อื่น
+          if (event.request.mode === 'navigate') {
+            return caches.match('/');
+          }
+          return Promise.reject(err);
+        })
+      )
   );
 });
 
