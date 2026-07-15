@@ -29,9 +29,10 @@ import {
 } from '../data/api';
 import { useAuth } from '../auth/AuthContext';
 import { useScreenLayout } from '../components/BackNavigation';
+import { confirmDialog } from '../utils/dialog';
 
 export default function DashboardScreen({ navigation }) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { isMobile, isWide, pad, heroTitleSize } = useScreenLayout();
   const [dateRange, setDateRange] = useState(() => presetRange('today'));
   const [datePreset, setDatePreset] = useState('today');
@@ -249,6 +250,16 @@ export default function DashboardScreen({ navigation }) {
     load();
   };
 
+  const confirmLogout = async () => {
+    const name = user?.username || '';
+    const ok = await confirmDialog(
+      'ออกจากระบบ',
+      name ? `ออกจากบัญชี ${name} ใช่ไหม?` : 'ออกจากระบบใช่ไหม?',
+      { confirmText: 'ออกจากระบบ', cancelText: 'ยกเลิก', destructive: true }
+    );
+    if (ok) logout();
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={[styles.header, { paddingHorizontal: pad }]}>
@@ -267,16 +278,13 @@ export default function DashboardScreen({ navigation }) {
           {user ? (
             <Pressable
               style={[styles.searchBtn, isMobile && styles.searchBtnMobile]}
-              onPress={() => navigation.navigate('Settings')}
+              onPress={confirmLogout}
               accessibilityRole="button"
-              accessibilityLabel="ตั้งค่า"
+              accessibilityLabel="ออกจากระบบ"
             >
-              <View style={styles.searchBtnInner}>
-                <Ionicons name="settings-outline" size={isMobile ? 16 : 15} color={colors.onNavy} />
-                <Text style={[styles.searchBtnText, isMobile && styles.searchBtnTextMobile]} numberOfLines={1}>
-                  {user.username}
-                </Text>
-              </View>
+              <Text style={[styles.searchBtnText, isMobile && styles.searchBtnTextMobile]} numberOfLines={1}>
+                {user.username}
+              </Text>
             </Pressable>
           ) : (
             <Pressable style={[styles.searchBtn, isMobile && styles.searchBtnMobile]} onPress={() => navigation.navigate('Login')}>
@@ -408,13 +416,10 @@ export default function DashboardScreen({ navigation }) {
               navigation={navigation}
               style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
             />
+
+            {/* หมวดเสริม (แจ้งด่วน / ประวัติ / บอร์ด / จุดจอด / สต็อก / ตั้งค่า) — ซ่อนไว้ก่อน */}
           </View>
         )}
-        {!loading ? (
-          <Card title="ฟีเจอร์อื่น" style={styles.devCard}>
-            <Text style={styles.devHint}>กำลังพัฒนา</Text>
-          </Card>
-        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -475,14 +480,6 @@ const styles = StyleSheet.create({
   cardFull: { width: '100%' },
   cardWide: { flexBasis: '30%', flexGrow: 1, minWidth: 280 },
   navInner: { margin: 0 },
-  devCard: { marginTop: spacing.lg },
-  devHint: {
-    color: colors.textMuted,
-    fontSize: 15,
-    fontWeight: '600',
-    paddingVertical: spacing.md,
-    textAlign: 'center',
-  },
   cardHeadRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -115,12 +115,7 @@ export default function BreakdownScreen({ navigation }) {
                 </Pressable>
               ) : null}
             </View>
-            <Pressable
-              style={styles.newBtn}
-              onPress={() => navigation.navigate('RepairForm', { type: 'breakdown' })}
-            >
-              <Text style={styles.newBtnText}>{isMobile ? '+ แจ้ง' : '+ แจ้งเสียกลางทาง'}</Text>
-            </Pressable>
+            {/* + แจ้งเสียกลางทาง — ซ่อนไว้ก่อน */}
           </View>
         </View>
 
