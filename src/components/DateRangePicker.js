@@ -33,6 +33,8 @@ export function presetRange(key, today = startOfDay(new Date())) {
       return { start: addDays(today, -6), end: today };
     case '30d':
       return { start: addDays(today, -29), end: today };
+    case '365d':
+      return { start: addDays(today, -364), end: today };
     case 'month':
       return { start: new Date(today.getFullYear(), today.getMonth(), 1), end: today };
     default:

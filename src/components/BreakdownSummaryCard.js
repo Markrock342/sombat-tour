@@ -25,12 +25,16 @@ function eachDay(start, end) {
   return days;
 }
 
+function isBreakdownRow(r) {
+  return isBreakdownRepair(r);
+}
+
 /**
- * Dashboard-only: แสดงสรุปเสียกลางทาง (ไม่มีลิงก์ไปหน้าอื่น)
+ * Dashboard card: เสียกลางทาง — circular loader while fetching (no skeleton).
  */
-export default function BreakdownSummaryCard({ style }) {
-  const [dateRange, setDateRange] = useState(() => presetRange('7d'));
-  const [datePreset, setDatePreset] = useState('7d');
+export default function BreakdownSummaryCard({ style, navigation }) {
+  const [dateRange, setDateRange] = useState(() => presetRange('30d'));
+  const [datePreset, setDatePreset] = useState('30d');
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [error, setError] = useState(null);
@@ -44,8 +48,9 @@ export default function BreakdownSummaryCard({ style }) {
         const data = await fetchBreakdowns({ limit: 120 });
         list = data.rows || [];
       } catch (_) {
+        // fallback: filter repairs in range
         const rep = await fetchRepairs(dateRange.start, dateRange.end);
-        list = (rep.rows || []).filter(isBreakdownRepair);
+        list = (rep.rows || []).filter(isBreakdownRow);
       }
 
       const startStr = fmtDate(dateRange.start);
@@ -91,7 +96,16 @@ export default function BreakdownSummaryCard({ style }) {
   const max = Math.max(...dayStats.map((d) => d.total), 1);
 
   return (
-    <Card starred title="เสียกลางทาง" style={style}>
+    <Card
+      starred
+      title="เสียกลางทาง"
+      style={style}
+      headerRight={
+        <Pressable onPress={() => navigation.navigate('Breakdown')}>
+          <Text style={styles.viewAll}>ดูทั้งหมด ›</Text>
+        </Pressable>
+      }
+    >
       <DateRangePicker
         value={dateRange}
         presetKey={datePreset}
@@ -133,7 +147,11 @@ export default function BreakdownSummaryCard({ style }) {
               const openPct = d.total > 0 ? d.open / max : 0;
               const closedPct = d.total > 0 ? d.closed / max : 0;
               return (
-                <View key={d.date} style={styles.row}>
+                <Pressable
+                  key={d.date}
+                  style={styles.row}
+                  onPress={() => navigation.navigate('Breakdown')}
+                >
                   <Text style={styles.dateLabel}>{fmtThaiDate(d.date)}</Text>
                   <View style={styles.barWrap}>
                     <View style={styles.track}>
@@ -156,7 +174,7 @@ export default function BreakdownSummaryCard({ style }) {
                     </View>
                   </View>
                   <Text style={[styles.value, d.total === 0 && styles.valueEmpty]}>{d.total}</Text>
-                </View>
+                </Pressable>
               );
             })}
           </ScrollView>
@@ -167,6 +185,7 @@ export default function BreakdownSummaryCard({ style }) {
 }
 
 const styles = StyleSheet.create({
+  viewAll: { color: colors.barFillAlt, fontWeight: '800', fontSize: 12 },
   loaderBox: {
     minHeight: 160,
     alignItems: 'center',

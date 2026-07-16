@@ -13,9 +13,9 @@ import { colors, spacing, radius, shadow } from '../theme';
 import DateRangePicker from '../components/DateRangePicker';
 import LoadingView from '../components/LoadingView';
 import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
-import { fetchRepairs, fmtThaiDate, fmtDateTime, fmtDate } from '../data/api';
+import { fetchRepairs, fetchPendingJobs, fmtThaiDate, fmtDateTime, fmtDate } from '../data/api';
 
-const isOpenRepair = (r) => !r.r_close || r.r_close === '0';
+const isOpenRepair = (r) => !r.r_close || r.r_close === '0' || r.r_close === 0;
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'ทั้งหมด' },
@@ -30,8 +30,14 @@ function parseDateStr(str) {
 }
 
 export default function JobDetailScreen({ route, navigation }) {
-  const { technician, date, dateEnd, datePreset: initialPreset = 'custom', mode = 'day' } =
-    route.params ?? {};
+  const {
+    technician,
+    date,
+    dateEnd,
+    datePreset: initialPreset = 'custom',
+    mode = 'day',
+    viewAll = false,
+  } = route.params ?? {};
   const isPending = mode === 'pending';
   const [dateRange, setDateRange] = useState(() => ({
     start: parseDateStr(date),
@@ -44,7 +50,12 @@ export default function JobDetailScreen({ route, navigation }) {
     dateEndStr !== dateStart
       ? `${fmtThaiDate(dateStart)} – ${fmtThaiDate(dateEndStr)}`
       : fmtThaiDate(dateStart);
-  const techLabel = technician?.trim() ? technician : 'ไม่ระบุช่าง';
+  const techLabel =
+    viewAll || !technician?.trim() || technician === 'ไม่ระบุช่าง'
+      ? viewAll
+        ? 'ทุกช่าง'
+        : 'ไม่ระบุช่าง'
+      : technician;
   const [jobs, setJobs] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -58,22 +69,39 @@ export default function JobDetailScreen({ route, navigation }) {
     setLoading(true);
     setError(null);
     try {
-      // โหมดงานค้าง: งานในช่วงวันที่ที่ยังไม่ปิด; โหมดปกติ: งานทั้งหมดในช่วงวันที่
-      const rows = ((await fetchRepairs(dateRange.start, dateRange.end)).rows || []).filter((r) => {
-        if (isPending && !isOpenRepair(r)) return false;
-        const tech = (r.r_technician || '').trim();
-        const want = (technician || '').trim();
-        if (!want || want === 'ไม่ระบุช่าง') return !tech;
-        return tech === want;
-      });
+      let rows = [];
+      if (isPending) {
+        // สะสมทุกวันจาก backlog — ไม่จำกัดช่วงวันที่บน dashboard
+        const want = viewAll ? null : technician;
+        const data = await fetchPendingJobs(want);
+        rows = data.rows || [];
+        if (!viewAll) {
+          const wantName = (technician || '').trim();
+          rows = rows.filter((r) => {
+            const tech = (r.r_technician || '').trim();
+            if (!wantName || wantName === 'ไม่ระบุช่าง') return !tech;
+            return tech === wantName;
+          });
+        }
+      } else {
+        rows = ((await fetchRepairs(dateRange.start, dateRange.end)).rows || []).filter((r) => {
+          if (viewAll) return true;
+          const tech = (r.r_technician || '').trim();
+          const want = (technician || '').trim();
+          if (!want || want === 'ไม่ระบุช่าง') return !tech;
+          return tech === want;
+        });
+      }
 
       const sorted = [...rows].sort((a, b) => (b.r_dt_rec || '').localeCompare(a.r_dt_rec || ''));
 
       const mapped = sorted.map((r, i) => ({
         id: i + 1,
+        rId: r.r_id,
+        raw: r,
         code: r.r_job_num ? `#${r.r_job_num}` : `#${r.r_id}`,
         title: r.r_repair_list || 'งานแจ้งซ่อม',
-        closed: r.r_close && r.r_close !== '0',
+        closed: !isOpenRepair(r),
         vehicleNo: r.r_v_name || '',
         plate: r.r_v_plate || '',
         chassis: r.r_v_chassis || '',
@@ -89,7 +117,7 @@ export default function JobDetailScreen({ route, navigation }) {
     } finally {
       setLoading(false);
     }
-  }, [technician, dateRange.start, dateRange.end, isPending]);
+  }, [technician, dateRange.start, dateRange.end, isPending, viewAll]);
 
   useEffect(() => {
     load();
@@ -118,7 +146,7 @@ export default function JobDetailScreen({ route, navigation }) {
         </Text>
         <Text style={styles.headerSub}>
           {techLabel}
-          {` · ${dateLabel}`}
+          {isPending ? ' · สะสมทั้งหมด' : ` · ${dateLabel}`}
           {!loading && !error ? ` · ${jobs.length === 0 ? '0 งาน' : countLabel}` : ''}
         </Text>
       </View>
@@ -128,14 +156,16 @@ export default function JobDetailScreen({ route, navigation }) {
         contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
         showsVerticalScrollIndicator={false}
       >
-        <DateRangePicker
-          value={dateRange}
-          presetKey={datePreset}
-          onChange={(range, key) => {
-            setDateRange(range);
-            setDatePreset(key);
-          }}
-        />
+        {!isPending ? (
+          <DateRangePicker
+            value={dateRange}
+            presetKey={datePreset}
+            onChange={(range, key) => {
+              setDateRange(range);
+              setDatePreset(key);
+            }}
+          />
+        ) : null}
 
         {loading ? (
           <LoadingView compact />
@@ -170,8 +200,8 @@ export default function JobDetailScreen({ route, navigation }) {
             {jobs.length === 0 ? (
               <View style={styles.center}>
                 <Text style={styles.centerText}>
-              {isPending ? 'ไม่มีงานค้างของช่างคนนี้ในช่วงวันที่เลือก' : 'ไม่มีงานของช่างคนนี้ในวันที่เลือก'}
-            </Text>
+                  {isPending ? 'ไม่มีงานค้างของช่างคนนี้' : 'ไม่มีงานของช่างคนนี้ในวันที่เลือก'}
+                </Text>
               </View>
             ) : visibleJobs.length === 0 ? (
               <View style={styles.center}>
@@ -181,12 +211,18 @@ export default function JobDetailScreen({ route, navigation }) {
               <View style={[styles.grid, isWide && styles.gridWide]}>
                 {visibleJobs.map((job) => (
                   <Pressable
-                    key={job.code}
+                    key={`${job.rId || job.code}-${job.displayId}`}
                     style={({ pressed }) => [
                       styles.jobCard,
                       isWide ? styles.jobCardWide : styles.jobCardFull,
                       pressed && styles.pressed,
                     ]}
+                    onPress={() =>
+                      navigation.navigate('RepairDetail', {
+                        repair: job.raw,
+                        rId: job.rId,
+                      })
+                    }
                   >
                     <View style={styles.jobTopRow}>
                       <View style={styles.indexBadge}>
