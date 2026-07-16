@@ -19,7 +19,7 @@ const CARD_MAX = 360;
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
   const [username, setUsername] = useState('');
-  const [pin, setPin] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -27,15 +27,20 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     setError(null);
     try {
-      await login(username.trim(), pin);
+      await login(username.trim(), password);
       // AuthGate สลับไป Dashboard ให้อัตโนมัติหลัง login สำเร็จ
     } catch (e) {
+      const code = e.code || '';
       const msg =
-        e.code === 'INVALID_CREDENTIALS'
-          ? 'ชื่อผู้ใช้หรือ PIN ไม่ถูกต้อง'
-          : e.code === 'UNAUTHORIZED'
-            ? 'ไม่สามารถเข้าสู่ระบบได้'
-            : e.message || 'เข้าสู่ระบบไม่สำเร็จ';
+        code === 'NO_USER'
+          ? 'ไม่มีชื่อผู้ใช้นี้'
+          : code === 'BAD_PASSWORD' || code === 'INVALID_CREDENTIALS'
+            ? 'รหัสผ่านไม่ถูกต้อง'
+            : code === 'SUSPENDED'
+              ? 'บัญชีถูกระงับการใช้งาน'
+              : code === 'UNAUTHORIZED'
+                ? 'ไม่สามารถเข้าสู่ระบบได้'
+                : e.message || 'เข้าสู่ระบบไม่สำเร็จ';
       setError(msg);
     } finally {
       setLoading(false);
@@ -56,7 +61,7 @@ export default function LoginScreen({ navigation }) {
           <View style={styles.center}>
             <Image source={require('../../assets/sombatlogobg.png')} style={styles.logo} />
             <Text style={styles.title}>เข้าสู่ระบบ</Text>
-            <Text style={styles.sub}>เข้าสู่ระบบเพื่อจัดการงานซ่อม</Text>
+            <Text style={styles.sub}>ใช้บัญชีสมาชิกเดียวกับระบบ 425store</Text>
 
             <View style={styles.card}>
               <Text style={[styles.label, styles.labelFirst]}>ชื่อผู้ใช้</Text>
@@ -66,19 +71,19 @@ export default function LoginScreen({ navigation }) {
                 onChangeText={setUsername}
                 autoCapitalize="none"
                 autoCorrect={false}
-                placeholder="admin"
+                placeholder="ชื่อผู้ใช้"
                 placeholderTextColor={colors.textMuted}
               />
 
-              <Text style={styles.label}>PIN</Text>
+              <Text style={styles.label}>รหัสผ่าน</Text>
               <TextInput
                 style={styles.input}
-                value={pin}
-                onChangeText={setPin}
+                value={password}
+                onChangeText={setPassword}
                 secureTextEntry
-                keyboardType="number-pad"
-                maxLength={8}
-                placeholder="••••"
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="รหัสผ่าน"
                 placeholderTextColor={colors.textMuted}
                 onSubmitEditing={onSubmit}
               />
@@ -86,9 +91,12 @@ export default function LoginScreen({ navigation }) {
               {error ? <Text style={styles.error}>{error}</Text> : null}
 
               <Pressable
-                style={[styles.btn, (loading || !username.trim() || !pin) && styles.btnDisabled]}
+                style={[
+                  styles.btn,
+                  (loading || !username.trim() || !password) && styles.btnDisabled,
+                ]}
                 onPress={onSubmit}
-                disabled={loading || !username.trim() || !pin}
+                disabled={loading || !username.trim() || !password}
               >
                 <Text style={styles.btnText}>
                   {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}

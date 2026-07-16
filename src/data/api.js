@@ -449,28 +449,102 @@ export async function fetchVehicleHistory({ vehicle, vId, vName, vPlate, limit =
 }
 
 export async function login(username, pin) {
-  const res = await fetch(`${API_BASE}/auth.php`, {
+  const user = String(username || '').trim();
+  const pass = String(pin || '');
+  if (!user || !pass) {
+    const err = new Error('กรอกชื่อผู้ใช้และรหัสผ่าน');
+    err.code = 'MISSING_CREDENTIALS';
+    throw err;
+  }
+
+  // ระบบเดิม: login.php รับ inpUser / inpPass (member.m_user + m_pass bcrypt)
+  const form = new URLSearchParams();
+  form.set('inpUser', user);
+  form.set('inpPass', pass);
+  const res = await fetch(`${API_BASE}/login.php`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'login', username, pin }),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: form.toString(),
   });
-  return parseJson(res);
+  const data = await parseJson(res);
+  const profile = data.user || {};
+  // session ฝั่ง client — login.php ไม่ออก token
+  const tokenPayload = {
+    u: {
+      id: profile.id,
+      username: profile.username || user,
+      level: profile.level,
+      role: profile.level,
+      fname: profile.fname || '',
+      lname: profile.lname || '',
+      job: profile.job || '',
+    },
+    t: Date.now(),
+  };
+  let token = '';
+  try {
+    token =
+      'local:' +
+      (typeof btoa === 'function'
+        ? btoa(unescape(encodeURIComponent(JSON.stringify(tokenPayload))))
+        : Buffer.from(JSON.stringify(tokenPayload), 'utf8').toString('base64'));
+  } catch (_) {
+    token = 'local:' + JSON.stringify(tokenPayload);
+  }
+
+  return {
+    ok: true,
+    token,
+    expires: null,
+    user: tokenPayload.u,
+  };
 }
 
 export async function logout() {
   try {
-    const res = await fetch(`${API_BASE}/auth.php`, {
-      method: 'POST',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ action: 'logout' }),
-    });
-    await parseJson(res);
+    if (_authToken && !String(_authToken).startsWith('local:')) {
+      const res = await fetch(`${API_BASE}/auth.php`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ action: 'logout' }),
+      });
+      await parseJson(res);
+    }
   } catch (_) {
     /* ignore */
   }
 }
 
+function decodeLocalSession(token) {
+  const raw = String(token || '');
+  if (!raw.startsWith('local:')) return null;
+  const body = raw.slice(6);
+  try {
+    const json =
+      typeof atob === 'function'
+        ? decodeURIComponent(escape(atob(body)))
+        : Buffer.from(body, 'base64').toString('utf8');
+    const payload = JSON.parse(json);
+    return payload?.u || null;
+  } catch (_) {
+    try {
+      return JSON.parse(body)?.u || null;
+    } catch (__) {
+      return null;
+    }
+  }
+}
+
 export async function fetchMe() {
+  if (_authToken && String(_authToken).startsWith('local:')) {
+    const user = decodeLocalSession(_authToken);
+    if (!user) {
+      const err = new Error('SESSION_EXPIRED');
+      err.code = 'UNAUTHORIZED';
+      throw err;
+    }
+    return { ok: true, user };
+  }
   const res = await fetch(`${API_BASE}/auth.php?action=me`, {
     headers: authHeaders(),
   });
