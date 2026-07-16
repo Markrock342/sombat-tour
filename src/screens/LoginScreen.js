@@ -28,7 +28,7 @@ export default function LoginScreen({ navigation }) {
     setError(null);
     try {
       await login(username.trim(), pin);
-      navigation.goBack();
+      // AuthGate สลับไป Dashboard ให้อัตโนมัติหลัง login สำเร็จ
     } catch (e) {
       const msg =
         e.code === 'INVALID_CREDENTIALS'
@@ -93,10 +93,6 @@ export default function LoginScreen({ navigation }) {
                 <Text style={styles.btnText}>
                   {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
                 </Text>
-              </Pressable>
-
-              <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
-                <Text style={styles.cancel}>ยกเลิก</Text>
               </Pressable>
             </View>
           </View>

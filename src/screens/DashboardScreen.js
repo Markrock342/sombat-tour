@@ -180,17 +180,11 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
         <View style={styles.headerActions}>
-          {user ? (
-            <Pressable style={styles.searchBtn} onPress={confirmLogout}>
-              <Text style={styles.searchBtnText} numberOfLines={1}>
-                {user.username} · ออก
-              </Text>
-            </Pressable>
-          ) : (
-            <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.searchBtnText}>เข้าสู่ระบบ</Text>
-            </Pressable>
-          )}
+          <Pressable style={styles.searchBtn} onPress={confirmLogout}>
+            <Text style={styles.searchBtnText} numberOfLines={1}>
+              {user?.username || 'ผู้ใช้'} · ออก
+            </Text>
+          </Pressable>
           <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('VehicleSearch')}>
             <Text style={styles.searchBtnText}>🔍 ค้นหารถ</Text>
           </Pressable>
