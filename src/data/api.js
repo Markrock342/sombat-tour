@@ -648,3 +648,104 @@ export function isBreakdownRepair(r) {
   if (t === 'breakdown' || t === 'roadside') return true;
   return String(r.r_repair_list || '').includes('เสียกลางทาง');
 }
+
+function pickField(row, keys, dflt = '') {
+  for (const k of keys) {
+    const v = row?.[k];
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return dflt;
+}
+
+/** รายการเบิกอะไหล่ของงาน 1 ใบ */
+export async function fetchJobParts(jobId) {
+  if (!jobId) return [];
+  const res = await fetch(`${API_BASE}/used_parts.php?job_id=${encodeURIComponent(jobId)}`);
+  const data = await parseJson(res);
+  return (data.rows || []).map((r, i) => ({
+    seq: i + 1,
+    id: pickField(r, ['up_id', 'id']),
+    dt: pickField(r, ['up_dt_rec', 'up_dt', 'up_date', 'up_datetime', 'up_time']),
+    partId: pickField(r, ['up_parts_id', 'up_p_id', 'up_part_id']),
+    code: pickField(r, ['up_parts_num', 'up_parts_code', 'up_p_code', 'up_code', 'up_part_code']),
+    name: pickField(r, ['up_parts_name', 'up_p_name', 'up_name', 'up_part_name']),
+    lotId: pickField(r, ['up_lot_id', 'up_lot', 'up_lot_num']),
+    qty: pickField(r, ['up_quantity', 'up_qty', 'up_amount', 'up_num']),
+    unit: pickField(r, ['up_unit', 'up_uom']),
+  }));
+}
+
+/** รายการค่าใช้จ่ายอื่นๆ ของงาน 1 ใบ */
+export async function fetchJobOtherCosts(jobId) {
+  if (!jobId) return [];
+  const res = await fetch(`${API_BASE}/other_cost.php?job_id=${encodeURIComponent(jobId)}`);
+  const data = await parseJson(res);
+  return (data.rows || []).map((r, i) => ({
+    seq: i + 1,
+    id: pickField(r, ['oc_id', 'id']),
+    dt: pickField(r, ['oc_dt_rec', 'oc_dt', 'oc_date', 'oc_datetime', 'oc_time']),
+    name: pickField(r, ['oc_listname', 'oc_list', 'oc_name', 'oc_detail', 'oc_desc', 'oc_item', 'oc_title']),
+    qty: pickField(r, ['oc_qty', 'oc_amount', 'oc_num', 'oc_quantity']),
+    unit: pickField(r, ['oc_unit', 'oc_uom']),
+  }));
+}
+
+/** map แถว repair → รูปที่ JobSummaryModal ใช้ */
+export function mapRepairRow(r, i = 0) {
+  return {
+    id: i + 1,
+    rawId: r.r_id || r.r_job_num || '',
+    jobNum: r.r_job_num || '',
+    code: r.r_job_num ? `#${r.r_job_num}` : r.r_id ? `#${r.r_id}` : '—',
+    title: r.r_repair_list || 'งานแจ้งซ่อม',
+    repairList: r.r_repair_list || '',
+    closed: !isOpenRepair(r),
+    vehicleNo: r.r_v_name || '',
+    plate: r.r_v_plate || '',
+    chassis: r.r_v_chassis || '',
+    model: [r.r_v_brand, r.r_v_model].filter(Boolean).join(' • '),
+    vBrand: r.r_v_brand || '',
+    vModel: r.r_v_model || '',
+    meter: r.r_v_metr || '',
+    mile: Number(r.r_mile) || 0,
+    company: r.r_v_company || '',
+    billing: r.r_inv_com || '',
+    technician: (r.r_technician || '').trim() || 'ไม่ระบุช่าง',
+    recorder: (r.r_recorder || '').trim(),
+    datetime: r.r_dt_rec || '',
+    closeDatetime: r.r_dt_close || '',
+    workReport: r.r_work_report || '',
+  };
+}
+
+/** เติม workReport / ช่าง ถ้าแถวสรุปยังไม่ครบ */
+export async function enrichJobSummary(job) {
+  if (!job) return job;
+  const hasReport = !!(job.workReport || '').trim();
+  const hasTech = job.technician && job.technician !== 'ไม่ระบุช่าง';
+  if (hasReport && hasTech) return job;
+
+  const dateStr = String(job.datetime || '').slice(0, 10);
+  const jobNum = String(job.jobNum || job.rawId || '').trim();
+  if (!dateStr || !jobNum) return job;
+
+  try {
+    const rep = await fetchRepairs(dateStr, dateStr);
+    const row = (rep.rows || []).find(
+      (r) => String(r.r_job_num) === jobNum || String(r.r_id) === jobNum
+    );
+    if (!row) return job;
+    const mapped = mapRepairRow(row);
+    return {
+      ...job,
+      workReport: mapped.workReport || job.workReport,
+      technician: mapped.technician !== 'ไม่ระบุช่าง' ? mapped.technician : job.technician,
+      recorder: mapped.recorder || job.recorder,
+      meter: mapped.meter || job.meter,
+      vBrand: mapped.vBrand || job.vBrand,
+      vModel: mapped.vModel || job.vModel,
+    };
+  } catch (_) {
+    return job;
+  }
+}

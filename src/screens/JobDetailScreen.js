@@ -13,9 +13,15 @@ import { colors, spacing, radius, shadow } from '../theme';
 import DateRangePicker from '../components/DateRangePicker';
 import LoadingView from '../components/LoadingView';
 import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
-import { fetchRepairs, fetchPendingJobs, fmtThaiDate, fmtDateTime, fmtDate } from '../data/api';
-
-const isOpenRepair = (r) => !r.r_close || r.r_close === '0' || r.r_close === 0;
+import JobSummaryModal from '../components/JobSummaryModal';
+import {
+  fetchRepairs,
+  fetchPendingJobs,
+  mapRepairRow,
+  fmtThaiDate,
+  fmtDateTime,
+  fmtDate,
+} from '../data/api';
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'ทั้งหมด' },
@@ -60,6 +66,7 @@ export default function JobDetailScreen({ route, navigation }) {
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedJob, setSelectedJob] = useState(null);
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
   const isMobile = useIsMobile();
@@ -71,7 +78,6 @@ export default function JobDetailScreen({ route, navigation }) {
     try {
       let rows = [];
       if (isPending) {
-        // สะสมทุกวันจาก backlog — ไม่จำกัดช่วงวันที่บน dashboard
         const want = viewAll ? null : technician;
         const data = await fetchPendingJobs(want);
         rows = data.rows || [];
@@ -94,23 +100,7 @@ export default function JobDetailScreen({ route, navigation }) {
       }
 
       const sorted = [...rows].sort((a, b) => (b.r_dt_rec || '').localeCompare(a.r_dt_rec || ''));
-
-      const mapped = sorted.map((r, i) => ({
-        id: i + 1,
-        rId: r.r_id,
-        raw: r,
-        code: r.r_job_num ? `#${r.r_job_num}` : `#${r.r_id}`,
-        title: r.r_repair_list || 'งานแจ้งซ่อม',
-        closed: !isOpenRepair(r),
-        vehicleNo: r.r_v_name || '',
-        plate: r.r_v_plate || '',
-        chassis: r.r_v_chassis || '',
-        model: [r.r_v_brand, r.r_v_model].filter(Boolean).join(' • '),
-        mile: Number(r.r_mile) || 0,
-        company: r.r_v_company || r.r_inv_com || '',
-        datetime: r.r_dt_rec,
-      }));
-      setJobs(mapped);
+      setJobs(sorted.map((r, i) => mapRepairRow(r, i)));
       setStatusFilter('all');
     } catch (e) {
       setError(e.message || 'โหลดข้อมูลไม่สำเร็จ');
@@ -211,18 +201,13 @@ export default function JobDetailScreen({ route, navigation }) {
               <View style={[styles.grid, isWide && styles.gridWide]}>
                 {visibleJobs.map((job) => (
                   <Pressable
-                    key={`${job.rId || job.code}-${job.displayId}`}
+                    key={`${job.rawId || job.code}-${job.displayId}`}
                     style={({ pressed }) => [
                       styles.jobCard,
                       isWide ? styles.jobCardWide : styles.jobCardFull,
                       pressed && styles.pressed,
                     ]}
-                    onPress={() =>
-                      navigation.navigate('RepairDetail', {
-                        repair: job.raw,
-                        rId: job.rId,
-                      })
-                    }
+                    onPress={() => setSelectedJob(job)}
                   >
                     <View style={styles.jobTopRow}>
                       <View style={styles.indexBadge}>
@@ -253,7 +238,10 @@ export default function JobDetailScreen({ route, navigation }) {
                       ) : null}
                     </View>
 
-                    <Text style={styles.jobTitle}>{job.title}</Text>
+                    <Text style={styles.jobTitle} numberOfLines={4}>
+                      {job.repairList || job.title}
+                    </Text>
+                    <Text style={styles.jobHint}>ดูสรุปงาน ›</Text>
                   </Pressable>
                 ))}
               </View>
@@ -263,6 +251,8 @@ export default function JobDetailScreen({ route, navigation }) {
       </ScrollView>
       {isMobile ? <MobileBackBar onPress={goBack} /> : null}
       </View>
+
+      <JobSummaryModal job={selectedJob} onClose={() => setSelectedJob(null)} />
     </SafeAreaView>
   );
 }
@@ -351,6 +341,12 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 8,
     overflow: 'hidden',
+  },
+  jobHint: {
+    color: colors.barFill,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 4,
   },
   vehicleBox: {
     backgroundColor: '#F3F5FB',

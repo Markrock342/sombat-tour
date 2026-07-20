@@ -43,22 +43,25 @@ export default function BreakdownSummaryCard({ style, navigation }) {
     setLoading(true);
     setError(null);
     try {
-      let list = [];
-      try {
-        const data = await fetchBreakdowns({ limit: 120 });
-        list = data.rows || [];
-      } catch (_) {
-        // fallback: filter repairs in range
-        const rep = await fetchRepairs(dateRange.start, dateRange.end);
-        list = (rep.rows || []).filter(isBreakdownRow);
+      // โหลดตามช่วงวันที่จริง (ไม่ใช้ breakdown_list แบบ limit ล่าสุด — ทำให้วัน/ดูทั้งหมดเพี้ยน)
+      const rep = await fetchRepairs(dateRange.start, dateRange.end);
+      let list = (rep.rows || []).filter(isBreakdownRow);
+
+      // ถ้า list_repair ไม่ติด tag เสียกลางทาง ลองเสริมจาก breakdown_list แล้วกรองวัน
+      if (list.length === 0) {
+        try {
+          const data = await fetchBreakdowns({ limit: 500 });
+          const startStr = fmtDate(dateRange.start);
+          const endStr = fmtDate(dateRange.end);
+          list = (data.rows || []).filter((r) => {
+            const day = String(r.r_dt_rec || '').slice(0, 10);
+            return day >= startStr && day <= endStr;
+          });
+        } catch (_) {
+          /* keep empty */
+        }
       }
 
-      const startStr = fmtDate(dateRange.start);
-      const endStr = fmtDate(dateRange.end);
-      list = list.filter((r) => {
-        const day = String(r.r_dt_rec || '').slice(0, 10);
-        return day >= startStr && day <= endStr;
-      });
       setRows(list);
     } catch (e) {
       setError(e.message || 'โหลดไม่สำเร็จ');
@@ -95,13 +98,23 @@ export default function BreakdownSummaryCard({ style, navigation }) {
   const total = rows.length;
   const max = Math.max(...dayStats.map((d) => d.total), 1);
 
+  const openBreakdown = (day) => {
+    const start = day || fmtDate(dateRange.start);
+    const end = day || fmtDate(dateRange.end);
+    navigation.navigate('Breakdown', {
+      date: start,
+      dateEnd: end,
+      datePreset: day ? 'custom' : datePreset,
+    });
+  };
+
   return (
     <Card
       starred
       title="เสียกลางทาง"
       style={style}
       headerRight={
-        <Pressable onPress={() => navigation.navigate('Breakdown')}>
+        <Pressable onPress={() => openBreakdown(null)}>
           <Text style={styles.viewAll}>ดูทั้งหมด ›</Text>
         </Pressable>
       }
@@ -150,7 +163,7 @@ export default function BreakdownSummaryCard({ style, navigation }) {
                 <Pressable
                   key={d.date}
                   style={styles.row}
-                  onPress={() => navigation.navigate('Breakdown')}
+                  onPress={() => openBreakdown(d.date)}
                 >
                   <Text style={styles.dateLabel}>{fmtThaiDate(d.date)}</Text>
                   <View style={styles.barWrap}>
