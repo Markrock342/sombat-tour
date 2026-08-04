@@ -8,6 +8,10 @@
       "destination": "https://425store.com/api/:path*"
     },
     {
+      "source": "/api-test/:path*",
+      "destination": "https://425store.com/api-test/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

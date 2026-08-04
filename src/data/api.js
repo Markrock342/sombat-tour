@@ -1,12 +1,14 @@
 // เชื่อมต่อ API จริงของ 425store
-// บน Vercel ใช้ /api (proxy same-origin) — คอมหลายเครื่องต่อตรง 425store.com ไม่ถึง / โดนบล็อก
-const API_ORIGIN = 'https://425store.com/api';
+// บน Vercel ใช้ proxy same-origin (ดู rewrites ใน vercel.json) — คอมหลายเครื่องต่อตรง 425store.com ไม่ถึง / โดนบล็อก
+// เว็บทดลอง (staging): ตั้ง EXPO_PUBLIC_API_PATH=/api-test ใน Vercel project ของ staging
+const API_ORIGIN = process.env.EXPO_PUBLIC_API_ORIGIN || 'https://425store.com/api';
+const API_PROXY_PATH = process.env.EXPO_PUBLIC_API_PATH || '/api';
 
 function resolveApiBase() {
   if (typeof window === 'undefined') return API_ORIGIN;
   const host = String(window.location.hostname || '');
   if (host === '425service.vercel.app' || /\.vercel\.app$/i.test(host)) {
-    return '/api';
+    return API_PROXY_PATH;
   }
   return API_ORIGIN;
 }
