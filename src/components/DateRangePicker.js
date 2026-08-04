@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, Modal, StyleSheet } from 'react-native';
 import { colors, spacing, radius, shadow } from '../theme';
+import { useIsMobile } from './BackNavigation';
 
 const TH_MONTHS = [
   'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
@@ -33,8 +34,6 @@ export function presetRange(key, today = startOfDay(new Date())) {
       return { start: addDays(today, -6), end: today };
     case '30d':
       return { start: addDays(today, -29), end: today };
-    case '365d':
-      return { start: addDays(today, -364), end: today };
     case 'month':
       return { start: new Date(today.getFullYear(), today.getMonth(), 1), end: today };
     default:
@@ -55,6 +54,7 @@ const rangeLabel = (r) =>
     : `${fmtThai(r.start)} – ${fmtThai(r.end)}`;
 
 export default function DateRangePicker({ value, presetKey, onChange }) {
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [tempStart, setTempStart] = useState(value.start);
   const [tempEnd, setTempEnd] = useState(value.end);
@@ -122,8 +122,8 @@ export default function DateRangePicker({ value, presetKey, onChange }) {
   return (
     <>
       {/* trigger in the card */}
-      <Text style={styles.fieldLabel}>ช่วงวันที่</Text>
-      <Pressable style={styles.trigger} onPress={openModal}>
+      <Text style={[styles.fieldLabel, isMobile && styles.fieldLabelCompact]}>ช่วงวันที่</Text>
+      <Pressable style={[styles.trigger, isMobile && styles.triggerCompact]} onPress={openModal}>
         <Text style={styles.triggerText} numberOfLines={1}>
           📅 {rangeLabel(value)}
         </Text>
@@ -290,6 +290,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.sm,
   },
+  fieldLabelCompact: { marginBottom: 6, fontSize: 11 },
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -301,6 +302,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     marginBottom: spacing.md,
+  },
+  triggerCompact: {
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
   },
   triggerText: { fontSize: 13, fontWeight: '700', color: colors.navy, flexShrink: 1 },
   caret: { fontSize: 12, color: colors.navySoft, marginLeft: spacing.sm },

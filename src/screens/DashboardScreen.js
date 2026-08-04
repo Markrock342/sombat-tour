@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,16 +6,20 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
-  useWindowDimensions,
+  AppState,
 } from 'react-native';
+import { RefreshControl } from '../components/AppRefreshControl';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 
 import Card from '../components/Card';
 import TechnicianBar from '../components/TechnicianBar';
 import LoadingView from '../components/LoadingView';
+import CircularLoader from '../components/CircularLoader';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
 import BreakdownSummaryCard from '../components/BreakdownSummaryCard';
 import { colors, spacing } from '../theme';
+import { Ionicons } from '@expo/vector-icons';
 import {
   fetchTechnicians,
   fetchRepairs,
@@ -25,53 +29,62 @@ import {
   isOpenRepair,
 } from '../data/api';
 import { useAuth } from '../auth/AuthContext';
+import { useScreenLayout } from '../components/BackNavigation';
 import { confirmDialog } from '../utils/dialog';
 
 export default function DashboardScreen({ navigation }) {
   const { user, logout } = useAuth();
+  const { isMobile, isWide, pad, heroTitleSize } = useScreenLayout();
   const [dateRange, setDateRange] = useState(() => presetRange('today'));
   const [datePreset, setDatePreset] = useState('today');
   const [techs, setTechs] = useState([]);
   const [repairs, setRepairs] = useState([]);
   const [pendingByTech, setPendingByTech] = useState([]);
   const [pendingTotal, setPendingTotal] = useState(0);
+  const [pendingLoading, setPendingLoading] = useState(true);
   const [meta, setMeta] = useState({ date: null, total: 0 });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const lastDeviceDay = useRef(fmtDate(new Date()));
 
-  const { width } = useWindowDimensions();
-  const isWide = width >= 900;
   const dateStart = fmtDate(dateRange.start);
   const dateEnd = fmtDate(dateRange.end);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts = {}) => {
+    const soft = !!opts.soft;
+    if (soft) setRefreshing(true);
+    else {
+      setLoading(true);
+      setPendingLoading(true);
+    }
     setError(null);
+
     try {
-      const [repSettled, techSettled, pendingSettled] = await Promise.allSettled([
-        fetchRepairs(dateRange.start, dateRange.end),
+      // Critical path — โชว์การ์ดงานประจำวันทันที ไม่รอ backlog/ช่าง
+      const rep = await fetchRepairs(dateRange.start, dateRange.end);
+      const rows = rep.rows || [];
+      setRepairs(rows);
+      setMeta({ date: rep.date, total: rep.total ?? rows.length });
+
+      const names = [...new Set(rows.map((r) => r.r_technician).filter(Boolean))];
+      const fromRows = names.map((n, i) => ({ id: String(i + 1), name: n }));
+      if (!soft) setTechs(fromRows);
+      else {
+        setTechs((prev) => (prev.length ? prev : fromRows));
+      }
+      setLoading(false);
+
+      // Secondary — โหลดคู่ขนาน ไม่บล็อกหน้าจอหลัก
+      const [techSettled, pendingSettled] = await Promise.allSettled([
         fetchTechnicians(),
         fetchPending(),
       ]);
 
-      if (repSettled.status !== 'fulfilled') {
-        throw repSettled.reason || new Error('โหลดรายการซ่อมไม่สำเร็จ');
-      }
-      const rep = repSettled.value;
-      const rows = rep.rows || [];
-
-      let techRows =
-        techSettled.status === 'fulfilled' ? techSettled.value || [] : [];
-      if (!techRows.length) {
-        const names = [...new Set(rows.map((r) => r.r_technician).filter(Boolean))];
-        techRows = names.map((n, i) => ({ id: String(i + 1), name: n }));
+      if (techSettled.status === 'fulfilled' && (techSettled.value || []).length) {
+        setTechs(techSettled.value);
       }
 
-      setRepairs(rows);
-      setTechs(techRows);
-      setMeta({ date: rep.date, total: rep.total ?? rows.length });
-
-      // งานค้างซ่อม = สะสมทุกวัน (backlog) ไม่ผูกช่วงวันที่
       if (pendingSettled.status === 'fulfilled') {
         const pend = pendingSettled.value || {};
         setPendingByTech(pend.rows || []);
@@ -80,7 +93,7 @@ export default function DashboardScreen({ navigation }) {
         const open = rows.filter(isOpenRepair);
         const map = {};
         open.forEach((r) => {
-          const n = (r.r_technician || '').trim() || 'ไม่ระบุช่าง';
+          const n = (r.r_technician || '').trim() || '';
           map[n] = (map[n] || 0) + 1;
         });
         const fallback = Object.entries(map)
@@ -91,8 +104,10 @@ export default function DashboardScreen({ navigation }) {
       }
     } catch (e) {
       setError(e.message || 'โหลดข้อมูลไม่สำเร็จ');
-    } finally {
       setLoading(false);
+    } finally {
+      setPendingLoading(false);
+      setRefreshing(false);
     }
   }, [dateRange.start, dateRange.end]);
 
@@ -100,47 +115,126 @@ export default function DashboardScreen({ navigation }) {
     load();
   }, [load]);
 
-  const countByName = {};
-  repairs.forEach((r) => {
-    const n = r.r_technician?.trim() ? r.r_technician.trim() : 'ไม่ระบุช่าง';
-    countByName[n] = (countByName[n] || 0) + 1;
-  });
-  const techNames = new Set(techs.map((t) => t.name));
-  const routine = [
-    ...techs.map((t) => ({ id: t.id, name: t.name, today: countByName[t.name] || 0 })),
-    ...Object.entries(countByName)
-      .filter(([name]) => !techNames.has(name))
-      .map(([name, count], i) => ({
-        id: `routine-${i}`,
-        name,
-        today: count,
-        queryName: name === 'ไม่ระบุช่าง' ? '' : name,
-      })),
-  ].sort((a, b) => b.today - a.today);
-  const routineMax = Math.max(...routine.map((t) => t.today), 1);
-  const total = meta.total || repairs.length;
-  const active = routine.filter((t) => t.today > 0).length;
+  // เมื่อเข้าหน้า / กลับมาแอป: ไม่ soft-refresh อัตโนมัติ (รำคาญ)
+  // เปลี่ยนแค่วันที่ถ้าข้ามเที่ยงคืน — ให้ load จาก dateRange effect ตามปกติ
+  useFocusEffect(
+    useCallback(() => {
+      const today = fmtDate(new Date());
+      if (today !== lastDeviceDay.current) {
+        lastDeviceDay.current = today;
+        setDateRange(presetRange('today'));
+        setDatePreset('today');
+      }
+    }, [])
+  );
 
-  const pendingList = pendingByTech
-    .map((row, i) => {
-      const name = (row.name || '').trim() || 'ไม่ระบุช่าง';
-      const pending = Number(row.pending) || 0;
-      const matched = techs.find((t) => t.name === name);
-      return {
-        id: matched?.id ?? `pending-${i}`,
-        name,
-        pending,
-        queryName: name === 'ไม่ระบุช่าง' ? '' : name,
-      };
-    })
-    .filter((t) => t.pending > 0)
-    .sort((a, b) => b.pending - a.pending);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        const today = fmtDate(new Date());
+        if (today !== lastDeviceDay.current) {
+          lastDeviceDay.current = today;
+          setDateRange(presetRange('today'));
+          setDatePreset('today');
+        }
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  const countByKey = {};
+  repairs.forEach((r) => {
+    const key = r.r_technician_id
+      ? `id:${r.r_technician_id}`
+      : r.r_technician?.trim()
+        ? `name:${r.r_technician.trim()}`
+        : 'none';
+    countByNameOrId(countByKey, key, r);
+  });
+
+  function countByNameOrId(map, key) {
+    map[key] = (map[key] || 0) + 1;
+  }
+
+  const routine = [
+    ...techs.map((t) => {
+      const byId = countByKey[`id:${t.id}`] || 0;
+      const byName = countByKey[`name:${t.name}`] || 0;
+      // repairs keyed by id OR by name (mutually exclusive per row)
+      const today = byId + byName;
+      return { id: t.id, name: t.name, today, queryName: t.name };
+    }),
+    ...Object.entries(countByKey)
+      .filter(([key]) => {
+        if (key === 'none') return true;
+        if (key.startsWith('id:')) {
+          const id = key.slice(3);
+          return !techs.some((t) => String(t.id) === String(id));
+        }
+        const name = key.slice(5);
+        return !techs.some((t) => t.name === name);
+      })
+      .map(([key, count], i) => {
+        if (key === 'none') {
+          return { id: `routine-none-${i}`, name: 'ไม่ระบุช่าง', today: count, queryName: '' };
+        }
+        const name = key.startsWith('name:') ? key.slice(5) : key;
+        return { id: `routine-${i}`, name, today: count, queryName: name };
+      }),
+  ].sort((a, b) => b.today - a.today);
+
+  // dedupe names that appear twice (id + orphan name)
+  const seenNames = new Set();
+  const routineDedup = [];
+  for (const t of routine) {
+    const k = t.name;
+    if (seenNames.has(k)) {
+      const existing = routineDedup.find((x) => x.name === k);
+      if (existing) existing.today = Math.max(existing.today, t.today);
+      continue;
+    }
+    seenNames.add(k);
+    routineDedup.push(t);
+  }
+
+  const routineMax = Math.max(...routineDedup.map((t) => t.today), 1);
+  const total = meta.total || repairs.length;
+  const active = routineDedup.filter((t) => t.today > 0).length;
+
+  const pendingListRaw = pendingByTech.map((row, i) => {
+    const name = (row.name || '').trim();
+    const pending = Number(row.pending) || 0;
+    const matched = techs.find((t) => t.name === name);
+    if (!name) {
+      return { id: `pending-none-${i}`, name: 'ไม่ระบุช่าง', pending, queryName: '' };
+    }
+    return {
+      id: matched?.id ?? `pending-${i}`,
+      name,
+      pending,
+      queryName: name,
+    };
+  });
+
+  const pendingSeen = new Set();
+  const pendingList = [];
+  for (const t of pendingListRaw) {
+    if (pendingSeen.has(t.name)) {
+      const existing = pendingList.find((x) => x.name === t.name);
+      if (existing) existing.pending = Math.max(existing.pending, t.pending);
+      continue;
+    }
+    pendingSeen.add(t.name);
+    pendingList.push(t);
+  }
+  pendingList.sort((a, b) => b.pending - a.pending);
   const pendingMax = Math.max(...pendingList.map((t) => t.pending), 1);
   const pendingSum = pendingTotal || pendingList.reduce((s, t) => s + t.pending, 0);
 
   const openJobs = (tech) =>
     navigation.navigate('JobDetail', {
       technician: tech.queryName ?? tech.name,
+      technicianId: tech.id,
       date: dateStart,
       dateEnd,
       datePreset,
@@ -150,12 +244,19 @@ export default function DashboardScreen({ navigation }) {
   const openPendingJobs = (tech) =>
     navigation.navigate('JobDetail', {
       technician: tech.queryName ?? tech.name,
+      technicianId: tech.id,
       date: dateStart,
       dateEnd,
       datePreset,
       mode: 'pending',
-      viewAll: false,
     });
+
+  const refreshHome = () => {
+    lastDeviceDay.current = fmtDate(new Date());
+    setDateRange(presetRange('today'));
+    setDatePreset('today');
+    load();
+  };
 
   const confirmLogout = async () => {
     const name = user?.username || '';
@@ -169,29 +270,51 @@ export default function DashboardScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
+      <View style={[styles.header, { paddingHorizontal: pad }]}>
+        <Pressable style={styles.headerLeft} onPress={refreshHome}>
           <View style={styles.brandRow}>
-            <Image source={require('../../assets/sombatlogobg.png')} style={styles.logo} />
+            <Image source={require('../../assets/sombatlogobg.png')} style={[styles.logo, isMobile && styles.logoMobile]} />
             <View style={styles.brandText}>
-              <Text style={styles.headerTitle}>สมบัติทัวร์</Text>
-              <Text style={styles.headerSub}>โปรแกรมงานซ่อมบำรุง</Text>
+              <Text style={[styles.headerTitle, { fontSize: heroTitleSize }]}>สมบัติทัวร์</Text>
+              <Text style={[styles.headerSub, isMobile && styles.headerSubMobile]}>
+                โปรแกรมงานซ่อมบำรุง
+              </Text>
             </View>
           </View>
-        </View>
+        </Pressable>
         <View style={styles.headerActions}>
-          <Pressable style={styles.searchBtn} onPress={confirmLogout}>
-            <Text style={styles.searchBtnText} numberOfLines={1}>
-              {user?.username || 'ผู้ใช้'} · ออก
-            </Text>
-          </Pressable>
-          <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('VehicleSearch')}>
-            <Text style={styles.searchBtnText}>🔍 ค้นหารถ</Text>
+          {user ? (
+            <Pressable
+              style={[styles.searchBtn, isMobile && styles.searchBtnMobile]}
+              onPress={confirmLogout}
+              accessibilityRole="button"
+              accessibilityLabel="ออกจากระบบ"
+            >
+              <Text style={[styles.searchBtnText, isMobile && styles.searchBtnTextMobile]} numberOfLines={1}>
+                {user.username}
+              </Text>
+            </Pressable>
+          ) : (
+            <Pressable style={[styles.searchBtn, isMobile && styles.searchBtnMobile]} onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.searchBtnText}>เข้าสู่ระบบ</Text>
+            </Pressable>
+          )}
+          <Pressable style={[styles.searchBtn, isMobile && styles.searchBtnMobile]} onPress={() => navigation.navigate('Search')}>
+            <View style={styles.searchBtnInner}>
+              <Ionicons name="search" size={isMobile ? 16 : 15} color={colors.onNavy} />
+              {!isMobile ? <Text style={styles.searchBtnText}>ค้นหา</Text> : null}
+            </View>
           </Pressable>
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, isMobile && styles.scrollMobile]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => load({ soft: true })} tintColor={colors.navy} />
+        }
+      >
         {loading ? (
           <LoadingView />
         ) : (
@@ -225,23 +348,19 @@ export default function DashboardScreen({ navigation }) {
                       มีงาน <Text style={styles.summaryNum}>{active}</Text> ผู้ซ่อม · รวม{' '}
                       <Text style={styles.summaryNum}>{total}</Text> งาน
                     </Text>
-                    <Pressable
-                      onPress={() =>
-                        navigation.navigate('JobDetail', {
-                          technician: '',
-                          date: dateStart,
-                          dateEnd,
-                          datePreset,
-                          mode: 'day',
-                          viewAll: true,
-                        })
-                      }
-                    >
+                    <Pressable onPress={() => navigation.navigate('JobDetail', {
+                      technician: '',
+                      date: dateStart,
+                      dateEnd,
+                      datePreset,
+                      mode: 'day',
+                      viewAll: true,
+                    })}>
                       <Text style={styles.viewAll}>ดูทั้งหมด</Text>
                     </Pressable>
                   </View>
                   <ScrollView style={styles.list} nestedScrollEnabled>
-                    {routine.map((tech) => (
+                    {routineDedup.map((tech) => (
                       <TechnicianBar
                         key={tech.id}
                         name={tech.name}
@@ -261,32 +380,32 @@ export default function DashboardScreen({ navigation }) {
               title="งานค้างซ่อม"
               style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
             >
-              {error ? (
+              {error && !pendingLoading ? (
                 <View style={styles.errorBox}>
                   <Text style={styles.errorText}>โหลดข้อมูลไม่สำเร็จ</Text>
                   <Pressable style={styles.retryBtn} onPress={load}>
                     <Text style={styles.retryText}>ลองใหม่</Text>
                   </Pressable>
                 </View>
+              ) : pendingLoading ? (
+                <View style={styles.inlineLoader}>
+                  <CircularLoader size={40} />
+                  <Text style={styles.inlineLoaderText}>กำลังโหลด...</Text>
+                </View>
               ) : (
                 <>
                   <View style={styles.cardHeadRow}>
                     <Text style={styles.summary}>
-                      สะสมทั้งหมด · รวม <Text style={styles.summaryNum}>{pendingSum}</Text>{' '}
-                      งานที่ยังไม่ปิด
+                      สะสมทั้งหมด · รวม <Text style={styles.summaryNum}>{pendingSum}</Text> งานที่ยังไม่ปิด
                     </Text>
-                    <Pressable
-                      onPress={() =>
-                        navigation.navigate('JobDetail', {
-                          technician: '',
-                          date: dateStart,
-                          dateEnd,
-                          datePreset,
-                          mode: 'pending',
-                          viewAll: true,
-                        })
-                      }
-                    >
+                    <Pressable onPress={() => navigation.navigate('JobDetail', {
+                      technician: '',
+                      date: dateStart,
+                      dateEnd,
+                      datePreset,
+                      mode: 'pending',
+                      viewAll: true,
+                    })}>
                       <Text style={styles.viewAll}>ดูทั้งหมด</Text>
                     </Pressable>
                   </View>
@@ -311,9 +430,7 @@ export default function DashboardScreen({ navigation }) {
               style={[styles.card, isWide ? styles.cardWide : styles.cardFull]}
             />
 
-            <Placeholder title="ประวัติแจ้งซ่อมรายคัน" tag="อาจจะ" icon="🚗" isWide={isWide} />
-            <Placeholder title="สต็อกอะไหล่" tag="อาจจะ" icon="📦" isWide={isWide} />
-            <Placeholder title="ข้อมูลด้านอื่น ๆ" icon="📊" isWide={isWide} />
+            {/* หมวดเสริม (แจ้งด่วน / ประวัติ / บอร์ด / จุดจอด / สต็อก / ตั้งค่า) — ซ่อนไว้ก่อน */}
           </View>
         )}
       </ScrollView>
@@ -321,35 +438,21 @@ export default function DashboardScreen({ navigation }) {
   );
 }
 
-function Placeholder({ title, tag, icon, isWide }) {
-  return (
-    <Card
-      title={tag ? `${title} (${tag})` : title}
-      style={[styles.card, isWide ? styles.cardWide : styles.cardFull, styles.placeholderCard]}
-    >
-      <View style={styles.placeholderBody}>
-        <Text style={styles.placeholderIcon}>{icon}</Text>
-        <Text style={styles.placeholderText}>อยู่ระหว่างพัฒนา</Text>
-      </View>
-    </Card>
-  );
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.navy },
   header: {
-    paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.sm,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  headerLeft: { flexShrink: 1, flex: 1 },
-  headerActions: { flexDirection: 'row', gap: 8, flexShrink: 0 },
+  headerLeft: { flex: 1, flexShrink: 1, minWidth: 0 },
+  headerActions: { flexDirection: 'row', gap: 6, flexShrink: 0, paddingTop: 2 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   logo: { width: 44, height: 44, borderRadius: 10, backgroundColor: colors.card },
+  logoMobile: { width: 36, height: 36 },
   brandText: { flexShrink: 1 },
   searchBtn: {
     backgroundColor: 'rgba(255,255,255,0.12)',
@@ -358,11 +461,20 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
-    maxWidth: 160,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  searchBtnMobile: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 44,
   },
   searchBtnText: { color: colors.onNavy, fontSize: 13, fontWeight: '700' },
+  searchBtnInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  searchBtnTextMobile: { fontSize: 12, maxWidth: 110 },
   headerTitle: { color: colors.onNavy, fontSize: 24, fontWeight: '800', letterSpacing: 0.3 },
   headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
+  headerSubMobile: { fontSize: 11 },
   scroll: {
     backgroundColor: colors.background,
     borderTopLeftRadius: 28,
@@ -371,22 +483,44 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl * 2,
     minHeight: '100%',
   },
+  scrollMobile: {
+    padding: spacing.md,
+    paddingBottom: spacing.xl,
+  },
   grid: { gap: spacing.lg },
   gridWide: { flexDirection: 'row', flexWrap: 'wrap' },
   card: {},
   cardFull: { width: '100%' },
   cardWide: { flexBasis: '30%', flexGrow: 1, minWidth: 280 },
+  navInner: { margin: 0 },
   cardHeadRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: spacing.sm,
+    gap: 8,
     marginBottom: spacing.sm,
   },
-  summary: { flex: 1, fontSize: 13, color: colors.textSecondary },
+  summary: { fontSize: 13, color: colors.textSecondary, flex: 1 },
   summaryNum: { color: colors.navy, fontWeight: '800', fontSize: 15 },
   viewAll: { color: colors.barFillAlt, fontWeight: '800', fontSize: 12 },
+  viewAllMuted: { color: colors.textSecondary, fontWeight: '700', fontSize: 12 },
+  previewHeaderActions: { flexDirection: 'row', gap: 4, alignItems: 'center' },
+  headerActionHit: {
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   list: { maxHeight: 320 },
+  inlineLoader: {
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    minHeight: 160,
+  },
+  inlineLoaderText: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
   errorBox: { paddingVertical: spacing.xl, alignItems: 'center' },
   errorText: { color: colors.textPrimary, fontWeight: '700', marginBottom: 4 },
   errorMsg: { color: colors.textMuted, fontSize: 12, textAlign: 'center', marginBottom: spacing.md },
@@ -397,13 +531,47 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryText: { color: colors.onNavy, fontWeight: '700' },
-  placeholderCard: { minHeight: 170 },
-  placeholderBody: {
+  previewBody: { paddingVertical: spacing.xs, minHeight: 100 },
+  previewSummary: { fontSize: 12, color: colors.textSecondary, marginBottom: spacing.sm },
+  quickActions: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
+  quickBtn: {
     flex: 1,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     alignItems: 'center',
+    minHeight: 48,
     justifyContent: 'center',
-    paddingVertical: spacing.xl,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
-  placeholderIcon: { fontSize: 30, marginBottom: spacing.sm, opacity: 0.7 },
-  placeholderText: { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
+  quickBtnText: { fontSize: 13, fontWeight: '800', color: '#92400E' },
+  quickBtnAlt: {
+    flex: 1,
+    backgroundColor: colors.navyTint,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  quickBtnAltText: { fontSize: 13, fontWeight: '800', color: colors.navy },
+  previewRow: {
+    paddingVertical: 12,
+    minHeight: 48,
+    justifyContent: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.barTrack,
+  },
+  previewMainRow: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0 },
+  previewMain: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  previewSub: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  previewEmpty: {
+    fontSize: 13,
+    color: colors.textMuted,
+    fontWeight: '600',
+    paddingVertical: spacing.md,
+    textAlign: 'center',
+  },
 });

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -21,104 +21,47 @@ import {
 } from '../components/BackNavigation';
 import CircularLoader from '../components/CircularLoader';
 import RepairJobCard, { mapRepairToCardJob, jobCardSearchHay } from '../components/RepairJobCard';
-import JobSummaryModal from '../components/JobSummaryModal';
-import DateRangePicker, { presetRange } from '../components/DateRangePicker';
-import {
-  fetchBreakdowns,
-  fetchRepairs,
-  isBreakdownRepair,
-  mapRepairRow,
-  fmtDate,
-  fmtThaiDate,
-} from '../data/api';
+import { fetchBreakdowns, fetchRepairs, isBreakdownRepair } from '../data/api';
+import { presetRange } from '../components/DateRangePicker';
 
-function parseDateStr(str) {
-  if (!str) return new Date();
-  const [y, m, d] = String(str).split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
-
-export default function BreakdownScreen({ navigation, route }) {
-  const {
-    date: paramDate,
-    dateEnd: paramDateEnd,
-    datePreset: paramPreset = 'custom',
-  } = route.params ?? {};
-
+export default function BreakdownScreen({ navigation }) {
   const { isMobile, isWide, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
   const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, isWide ? 1180 : 640));
   const goBack = () => navigation.goBack();
-
-  const [dateRange, setDateRange] = useState(() => {
-    if (paramDate) {
-      return {
-        start: parseDateStr(paramDate),
-        end: parseDateStr(paramDateEnd || paramDate),
-      };
-    }
-    return presetRange('30d');
-  });
-  const [datePreset, setDatePreset] = useState(paramDate ? paramPreset : '30d');
   const [q, setQ] = useState('');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedJob, setSelectedJob] = useState(null);
   const hasLoaded = useRef(false);
 
-  // sync when navigating with new day params
-  useEffect(() => {
-    if (!paramDate) return;
-    setDateRange({
-      start: parseDateStr(paramDate),
-      end: parseDateStr(paramDateEnd || paramDate),
-    });
-    setDatePreset(paramPreset || 'custom');
-  }, [paramDate, paramDateEnd, paramPreset]);
-
-  const dateStart = fmtDate(dateRange.start);
-  const dateEnd = fmtDate(dateRange.end);
-  const dateLabel =
-    dateStart === dateEnd
-      ? fmtThaiDate(dateStart)
-      : `${fmtThaiDate(dateStart)} – ${fmtThaiDate(dateEnd)}`;
-
-  const load = useCallback(
-    async (opts = {}) => {
-      if (opts.soft) setRefreshing(true);
-      else setLoading(true);
-      setError(null);
+  const load = useCallback(async (opts = {}) => {
+    if (opts.soft) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+    try {
+      let list = [];
       try {
-        // ตามช่วงวันที่จาก Dashboard / ปฏิทิน — ไม่ดึงแค่ 300 รายการล่าสุด
-        const rep = await fetchRepairs(dateRange.start, dateRange.end);
-        let list = (rep.rows || []).filter(isBreakdownRepair);
-
-        if (list.length === 0) {
-          try {
-            const data = await fetchBreakdowns({ q: '', limit: 500 });
-            list = (data.rows || []).filter((r) => {
-              const day = String(r.r_dt_rec || '').slice(0, 10);
-              return day >= dateStart && day <= dateEnd;
-            });
-          } catch (_) {
-            /* keep empty */
-          }
-        }
-
-        list = [...list].sort((a, b) =>
-          String(b.r_dt_rec || '').localeCompare(String(a.r_dt_rec || ''))
-        );
-        setRows(list);
-      } catch (e) {
-        setError(e.message || 'โหลดไม่สำเร็จ');
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+        // โหลดทั้งหมดแล้วกรองฝั่ง client — ค้นหาไม่บัคตอนเคลียร์ช่อง / กดค้นซ้ำ
+        const data = await fetchBreakdowns({ q: '', limit: 300 });
+        list = data.rows || [];
+      } catch (_) {
+        const range = presetRange('365d');
+        const rep = await fetchRepairs(range.start, range.end);
+        list = (rep.rows || []).filter(isBreakdownRepair);
       }
-    },
-    [dateRange.start, dateRange.end, dateStart, dateEnd]
-  );
+      // เรียงวันเวลาใหม่ → เก่า เหมือนรายการแจ้งซ่อม / งานค้าง
+      list = [...list].sort((a, b) =>
+        String(b.r_dt_rec || '').localeCompare(String(a.r_dt_rec || ''))
+      );
+      setRows(list);
+    } catch (e) {
+      setError(e.message || 'โหลดไม่สำเร็จ');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -145,10 +88,9 @@ export default function BreakdownScreen({ navigation, route }) {
           <View style={[styles.headerInner, sheetStyle]}>
             {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
             <Text style={[styles.headerTitle, { fontSize: titleSize }]}>เสียกลางทาง</Text>
-            <Text style={styles.headerSub}>
-              {dateLabel}
-              {!loading && !error ? ` · ${rows.length} งาน` : ''}
-            </Text>
+            {!isMobile ? (
+              <Text style={styles.headerSub}>งานแจ้งซ่อมระหว่างทาง · กดเพื่อดูรายละเอียด</Text>
+            ) : null}
           </View>
         </View>
 
@@ -156,14 +98,6 @@ export default function BreakdownScreen({ navigation, route }) {
           style={[styles.toolbar, { paddingHorizontal: pad }, centerContent && styles.headerCentered]}
         >
           <View style={[sheetStyle, styles.toolbarInner]}>
-            <DateRangePicker
-              value={dateRange}
-              presetKey={datePreset}
-              onChange={(range, key) => {
-                setDateRange(range);
-                setDatePreset(key);
-              }}
-            />
             <View style={styles.searchBar}>
               <TextInput
                 style={styles.input}
@@ -181,6 +115,7 @@ export default function BreakdownScreen({ navigation, route }) {
                 </Pressable>
               ) : null}
             </View>
+            {/* + แจ้งเสียกลางทาง — ซ่อนไว้ก่อน */}
           </View>
         </View>
 
@@ -216,22 +151,29 @@ export default function BreakdownScreen({ navigation, route }) {
               </View>
             ) : visibleJobs.length === 0 ? (
               <Text style={styles.msg}>
-                {q.trim() ? 'ไม่พบรายการที่ตรงกับคำค้น' : 'ไม่มีรายการเสียกลางทางในช่วงนี้'}
+                {q.trim() ? 'ไม่พบรายการที่ตรงกับคำค้น' : 'ไม่มีรายการเสียกลางทาง'}
               </Text>
             ) : (
               <View style={[styles.grid, isWide && styles.gridWide]}>
-                <Text style={[styles.countLabel, isWide && styles.countLabelWide]}>
-                  {q.trim()
-                    ? `${visibleJobs.length} จาก ${rows.length} งาน`
-                    : `${rows.length} งาน · กดเพื่อดูสรุปงาน`}
-                </Text>
+                {!loading ? (
+                  <Text style={[styles.countLabel, isWide && styles.countLabelWide]}>
+                    {q.trim()
+                      ? `${visibleJobs.length} จาก ${rows.length} งาน`
+                      : `${rows.length} งาน`}
+                  </Text>
+                ) : null}
                 {visibleJobs.map((job) => (
                   <RepairJobCard
                     key={`${job.rId}-${job.code}`}
                     job={job}
                     accent="breakdown"
                     style={isWide ? styles.cardWide : styles.cardFull}
-                    onPress={() => setSelectedJob(mapRepairRow(job.raw))}
+                    onPress={() =>
+                      navigation.navigate('RepairDetail', {
+                        repair: job.raw,
+                        rId: job.rId,
+                      })
+                    }
                   />
                 ))}
               </View>
@@ -240,8 +182,6 @@ export default function BreakdownScreen({ navigation, route }) {
         </ScrollView>
         {isMobile ? <MobileBackBar onPress={goBack} /> : null}
       </View>
-
-      <JobSummaryModal job={selectedJob} onClose={() => setSelectedJob(null)} />
     </SafeAreaView>
   );
 }
@@ -283,6 +223,18 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.25)',
   },
   clearBtnText: { color: colors.onNavy, fontWeight: '800' },
+  newBtn: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: radius.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  newBtnText: { color: colors.onNavy, fontWeight: '800' },
   scroll: {
     backgroundColor: colors.background,
     borderTopLeftRadius: 28,
@@ -298,24 +250,33 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'stretch',
     gap: spacing.lg,
+    rowGap: spacing.lg,
+    columnGap: spacing.lg,
   },
   countLabel: {
     color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '700',
-    width: '100%',
+    marginBottom: 2,
   },
-  countLabelWide: { marginBottom: 0 },
-  cardWide: { flexBasis: '30%', flexGrow: 1, minWidth: 280 },
+  countLabelWide: { flexBasis: '100%', width: '100%' },
   cardFull: { width: '100%' },
-  center: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl * 2, gap: spacing.md },
+  cardWide: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '22%',
+    minWidth: 240,
+    maxWidth: '100%',
+  },
+  center: { alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.md },
   loadingText: { color: colors.textSecondary, fontWeight: '600' },
-  msg: { color: colors.textSecondary, textAlign: 'center', paddingVertical: spacing.xl, fontWeight: '600' },
+  msg: { textAlign: 'center', color: colors.textSecondary, marginTop: spacing.xl },
   retryBtn: {
     backgroundColor: colors.navy,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm,
-    borderRadius: radius.sm,
+    borderRadius: 8,
+    marginTop: spacing.sm,
   },
-  retryText: { color: colors.onNavy, fontWeight: '800' },
+  retryText: { color: colors.onNavy, fontWeight: '700' },
 });
