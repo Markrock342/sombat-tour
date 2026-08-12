@@ -1,36 +1,26 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   ScrollView,
   Pressable,
   StyleSheet,
-  TextInput,
-  AppState,
+  useWindowDimensions,
 } from 'react-native';
 import { RefreshControl } from '../components/AppRefreshControl';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 
 import { colors, spacing, radius } from '../theme';
 import DateRangePicker from '../components/DateRangePicker';
 import LoadingView from '../components/LoadingView';
-import RepairJobCard, { mapRepairToCardJob, jobCardSearchHay } from '../components/RepairJobCard';
+import { TopBackLink, MobileBackBar, useIsMobile, mobileScrollInset } from '../components/BackNavigation';
+import RepairJobCard, { mapRepairToCardJob } from '../components/RepairJobCard';
 import JobSummaryModal from '../components/JobSummaryModal';
-import {
-  TopBackLink,
-  MobileBackBar,
-  useScreenLayout,
-  mobileScrollInset,
-  contentSheetStyle,
-} from '../components/BackNavigation';
 import {
   fetchRepairs,
   fetchPendingJobs,
-  mapRepairRow,
   fmtThaiDate,
   fmtDate,
-  repairMatchesTech,
 } from '../data/api';
 
 const STATUS_FILTERS = [
@@ -48,7 +38,6 @@ function parseDateStr(str) {
 export default function JobDetailScreen({ route, navigation }) {
   const {
     technician,
-    technicianId,
     date,
     dateEnd,
     datePreset: initialPreset = 'custom',
@@ -67,24 +56,23 @@ export default function JobDetailScreen({ route, navigation }) {
     dateEndStr !== dateStart
       ? `${fmtThaiDate(dateStart)} – ${fmtThaiDate(dateEndStr)}`
       : fmtThaiDate(dateStart);
-  const techLabel = viewAll
-    ? 'ทั้งหมด'
-    : technician?.trim()
-      ? technician
-      : 'ไม่ระบุช่าง';
+  const techLabel =
+    viewAll || !technician?.trim() || technician === 'ไม่ระบุช่าง'
+      ? viewAll
+        ? 'ทุกช่าง'
+        : 'ไม่ระบุช่าง'
+      : technician;
   const [jobs, setJobs] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
-  const [textFilter, setTextFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [selectedJob, setSelectedJob] = useState(null);
-  const { isMobile, isWide, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
-  const goBack = () => navigation.goBack();
-  // กว้างพอให้แถวละ 4 การ์ดบนจอใหญ่
-  const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, isWide ? 1180 : 640));
-  const lastDeviceDay = useRef(fmtDate(new Date()));
   const hasLoaded = useRef(false);
+  const { width } = useWindowDimensions();
+  const isWide = width >= 900;
+  const isMobile = useIsMobile();
+  const goBack = () => navigation.goBack();
 
   const load = useCallback(
     async (opts = {}) => {
@@ -92,29 +80,32 @@ export default function JobDetailScreen({ route, navigation }) {
       else setLoading(true);
       setError(null);
       try {
-        const techObj = viewAll
-          ? null
-          : { id: technicianId, name: technician, queryName: technician };
-
-        let rows;
+        let rows = [];
         if (isPending) {
-          const data = await fetchPendingJobs(viewAll ? null : technician);
+          const want = viewAll ? null : technician;
+          const data = await fetchPendingJobs(want);
           rows = data.rows || [];
-          if (!viewAll && techObj) {
-            rows = rows.filter((r) => repairMatchesTech(r, techObj));
+          if (!viewAll) {
+            const wantName = (technician || '').trim();
+            rows = rows.filter((r) => {
+              const tech = (r.r_technician || '').trim();
+              if (!wantName || wantName === 'ไม่ระบุช่าง') return !tech;
+              return tech === wantName;
+            });
           }
         } else {
           rows = ((await fetchRepairs(dateRange.start, dateRange.end)).rows || []).filter((r) => {
             if (viewAll) return true;
-            return repairMatchesTech(r, techObj);
+            const tech = (r.r_technician || '').trim();
+            const want = (technician || '').trim();
+            if (!want || want === 'ไม่ระบุช่าง') return !tech;
+            return tech === want;
           });
         }
 
-        // เรียงวันเวลาใหม่ → เก่า (แบบเดิมก่อน dense table)
-        const sorted = [...rows].sort((a, b) =>
-          String(b.r_dt_rec || '').localeCompare(String(a.r_dt_rec || ''))
-        );
+        const sorted = [...rows].sort((a, b) => (b.r_dt_rec || '').localeCompare(a.r_dt_rec || ''));
         setJobs(sorted.map((r, i) => mapRepairToCardJob(r, i)));
+        setStatusFilter('all');
       } catch (e) {
         setError(e.message || 'โหลดข้อมูลไม่สำเร็จ');
       } finally {
@@ -122,7 +113,7 @@ export default function JobDetailScreen({ route, navigation }) {
         setRefreshing(false);
       }
     },
-    [technician, technicianId, dateRange.start, dateRange.end, isPending, viewAll]
+    [technician, dateRange.start, dateRange.end, isPending, viewAll]
   );
 
   useEffect(() => {
@@ -130,69 +121,37 @@ export default function JobDetailScreen({ route, navigation }) {
     hasLoaded.current = true;
   }, [load]);
 
-  useFocusEffect(
-    useCallback(() => {
-      const today = fmtDate(new Date());
-      if (today !== lastDeviceDay.current) {
-        lastDeviceDay.current = today;
-        load({ soft: true });
-      }
-    }, [load])
-  );
-
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') load({ soft: true });
-    });
-    return () => sub.remove();
-  }, [load]);
-
-  const visibleJobs = useMemo(() => {
-    const term = textFilter.trim().toLowerCase();
-    return jobs
-      .filter((job) => {
-        if (statusFilter === 'open') return !job.closed;
-        if (statusFilter === 'closed') return job.closed;
-        return true;
-      })
-      .filter((job) => {
-        if (!term) return true;
-        return jobCardSearchHay(job).includes(term);
-      })
-      .map((job, i) => ({ ...job, displayId: i + 1 }));
-  }, [jobs, statusFilter, textFilter]);
+  const visibleJobs = jobs
+    .filter((job) => {
+      if (statusFilter === 'open') return !job.closed;
+      if (statusFilter === 'closed') return job.closed;
+      return true;
+    })
+    .map((job, i) => ({ ...job, displayId: i + 1 }));
 
   const countLabel =
-    statusFilter === 'all' && !textFilter.trim()
+    statusFilter === 'all'
       ? `${jobs.length} งาน`
       : `${visibleJobs.length} จาก ${jobs.length} งาน`;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
-        <View
-          style={[styles.header, { paddingHorizontal: pad }, centerContent && styles.headerCentered]}
-        >
-          <View style={[styles.headerInner, sheetStyle]}>
-            {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
-            <Text style={[styles.headerTitle, { fontSize: titleSize }]}>
-              {isPending ? 'งานค้างซ่อม' : 'รายการแจ้งซ่อม'}
-            </Text>
-            <Text style={styles.headerSub} numberOfLines={isMobile ? 2 : undefined}>
-              {techLabel}
-              {isPending ? ' · สะสมทั้งหมด' : ` · ${dateLabel}`}
-              {!loading && !error ? ` · ${jobs.length === 0 ? '0 งาน' : countLabel}` : ''}
-            </Text>
-          </View>
+        <View style={styles.header}>
+          {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
+          <Text style={styles.headerTitle}>
+            {isPending ? 'งานค้างซ่อม' : 'รายการแจ้งซ่อม'}
+          </Text>
+          <Text style={styles.headerSub}>
+            {techLabel}
+            {isPending ? ' · สะสมทั้งหมด' : ` · ${dateLabel}`}
+            {!loading && !error ? ` · ${jobs.length === 0 ? '0 งาน' : countLabel}` : ''}
+          </Text>
         </View>
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[
-            styles.scroll,
-            centerContent && styles.scrollCentered,
-            isMobile && mobileScrollInset,
-          ]}
+          contentContainerStyle={[styles.scroll, isMobile && mobileScrollInset]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -201,85 +160,72 @@ export default function JobDetailScreen({ route, navigation }) {
               tintColor={colors.navy}
             />
           }
-          keyboardShouldPersistTaps="handled"
         >
-          <View style={sheetStyle}>
-            {!isPending ? (
-              <DateRangePicker
-                value={dateRange}
-                presetKey={datePreset}
-                onChange={(range, key) => {
-                  setDateRange(range);
-                  setDatePreset(key);
-                }}
-              />
-            ) : null}
-
-            <TextInput
-              style={styles.filterInput}
-              value={textFilter}
-              onChangeText={setTextFilter}
-              placeholder="ค้นเลขงาน · ทะเบียน · ช่าง · อาการ..."
-              placeholderTextColor={colors.textMuted}
-              autoCorrect={false}
-              autoCapitalize="none"
+          {!isPending ? (
+            <DateRangePicker
+              value={dateRange}
+              presetKey={datePreset}
+              onChange={(range, key) => {
+                setDateRange(range);
+                setDatePreset(key);
+              }}
             />
+          ) : null}
 
-            {loading && jobs.length === 0 ? (
-              <LoadingView compact />
-            ) : error && jobs.length === 0 ? (
-              <View style={styles.center}>
-                <Text style={styles.centerText}>{error}</Text>
-                <Pressable style={styles.retryBtn} onPress={() => load()}>
-                  <Text style={styles.retryText}>ลองใหม่</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <>
-                {jobs.length > 0 ? (
-                  <View style={styles.filterRow}>
-                    {STATUS_FILTERS.map((f) => {
-                      const active = statusFilter === f.key;
-                      return (
-                        <Pressable
-                          key={f.key}
-                          onPress={() => setStatusFilter(f.key)}
-                          style={[styles.filterChip, active && styles.filterChipActive]}
-                        >
-                          <Text style={[styles.filterText, active && styles.filterTextActive]}>
-                            {f.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : null}
+          {loading && jobs.length === 0 ? (
+            <LoadingView compact />
+          ) : error && jobs.length === 0 ? (
+            <View style={styles.center}>
+              <Text style={styles.centerText}>{error}</Text>
+              <Pressable style={styles.retryBtn} onPress={() => load()}>
+                <Text style={styles.retryText}>ลองใหม่</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              {jobs.length > 0 ? (
+                <View style={styles.filterRow}>
+                  {STATUS_FILTERS.map((f) => {
+                    const active = statusFilter === f.key;
+                    return (
+                      <Pressable
+                        key={f.key}
+                        onPress={() => setStatusFilter(f.key)}
+                        style={[styles.filterChip, active && styles.filterChipActive]}
+                      >
+                        <Text style={[styles.filterText, active && styles.filterTextActive]}>
+                          {f.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
 
-                {jobs.length === 0 && !loading ? (
-                  <View style={styles.center}>
-                    <Text style={styles.centerText}>
-                      {isPending ? 'ไม่มีงานค้างซ่อม' : 'ไม่มีงานในช่วงวันที่เลือก'}
-                    </Text>
-                  </View>
-                ) : visibleJobs.length === 0 && !loading ? (
-                  <View style={styles.center}>
-                    <Text style={styles.centerText}>ไม่มีงานที่ตรงกับตัวกรอง</Text>
-                  </View>
-                ) : (
-                  <View style={[styles.grid, isWide && styles.gridWide]}>
-                    {visibleJobs.map((job) => (
-                      <RepairJobCard
-                        key={`${job.rId}-${job.code}`}
-                        job={job}
-                        style={isWide ? styles.cardWide : styles.cardFull}
-                        onPress={() => setSelectedJob(mapRepairRow(job.raw))}
-                      />
-                    ))}
-                  </View>
-                )}
-              </>
-            )}
-          </View>
+              {jobs.length === 0 && !loading ? (
+                <View style={styles.center}>
+                  <Text style={styles.centerText}>
+                    {isPending ? 'ไม่มีงานค้างของช่างคนนี้' : 'ไม่มีงานของช่างคนนี้ในวันที่เลือก'}
+                  </Text>
+                </View>
+              ) : visibleJobs.length === 0 && !loading ? (
+                <View style={styles.center}>
+                  <Text style={styles.centerText}>ไม่มีงานในสถานะที่เลือก</Text>
+                </View>
+              ) : (
+                <View style={[styles.grid, isWide && styles.gridWide]}>
+                  {visibleJobs.map((job) => (
+                    <RepairJobCard
+                      key={`${job.rawId || job.code}-${job.displayId}`}
+                      job={job}
+                      style={isWide ? styles.cardWide : styles.cardFull}
+                      onPress={() => setSelectedJob(job)}
+                    />
+                  ))}
+                </View>
+              )}
+            </>
+          )}
         </ScrollView>
         {isMobile ? <MobileBackBar onPress={goBack} /> : null}
       </View>
@@ -294,12 +240,10 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   scrollView: { flex: 1 },
   header: {
+    paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.lg,
   },
-  headerCentered: { alignItems: 'center' },
-  headerInner: { width: '100%' },
-  scrollCentered: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
   headerTitle: { color: colors.onNavy, fontSize: 22, fontWeight: '800' },
   headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
@@ -307,29 +251,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    padding: spacing.xl,
+    padding: spacing.lg,
     paddingBottom: spacing.xl * 2,
     minHeight: '100%',
   },
-  filterInput: {
-    backgroundColor: colors.card,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    minHeight: 44,
-    marginBottom: spacing.md,
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
   center: { paddingVertical: spacing.xl * 2, alignItems: 'center' },
-  centerText: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    marginTop: spacing.sm,
-    textAlign: 'center',
-  },
+  centerText: { color: colors.textSecondary, fontSize: 14, marginTop: spacing.sm, textAlign: 'center' },
   retryBtn: {
     backgroundColor: colors.navy,
     paddingHorizontal: spacing.xl,
@@ -338,34 +265,18 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   retryText: { color: colors.onNavy, fontWeight: '700' },
-  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.lg },
   filterChip: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    minHeight: 36,
+    paddingVertical: 7,
     borderRadius: 999,
     backgroundColor: colors.navyTint,
-    justifyContent: 'center',
   },
   filterChipActive: { backgroundColor: colors.navy },
   filterText: { fontSize: 13, fontWeight: '700', color: colors.navySoft },
   filterTextActive: { color: colors.onNavy },
-  grid: { gap: spacing.lg },
-  gridWide: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'stretch',
-    gap: spacing.lg,
-    rowGap: spacing.lg,
-    columnGap: spacing.lg,
-  },
+  grid: { gap: spacing.md },
+  gridWide: { flexDirection: 'row', flexWrap: 'wrap' },
   cardFull: { width: '100%' },
-  // ~4 ต่อแถว; แถวท้ายไม่ครบจะ flexGrow ยืดเต็มความกว้าง
-  cardWide: {
-    flexGrow: 1,
-    flexShrink: 1,
-    flexBasis: '22%',
-    minWidth: 240,
-    maxWidth: '100%',
-  },
+  cardWide: { flexBasis: '22%', flexGrow: 1, minWidth: 220 },
 });

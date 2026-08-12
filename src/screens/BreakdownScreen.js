@@ -26,7 +26,6 @@ import {
   fetchBreakdowns,
   fetchRepairs,
   isBreakdownRepair,
-  mapRepairRow,
   fmtDate,
   fmtThaiDate,
 } from '../data/api';
@@ -212,7 +211,7 @@ export default function BreakdownScreen({ navigation, route }) {
                     key={`${job.rId}-${job.code}`}
                     job={job}
                     style={isWide ? styles.cardWide : styles.cardFull}
-                    onPress={() => setSelectedJob(mapRepairRow(job.raw))}
+                    onPress={() => setSelectedJob(job)}
                   />
                 ))}
               </View>
