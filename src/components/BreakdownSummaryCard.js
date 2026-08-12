@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 
 import Card from './Card';
@@ -33,43 +33,51 @@ function isBreakdownRow(r) {
  * Dashboard card: เสียกลางทาง — circular loader while fetching (no skeleton).
  */
 export default function BreakdownSummaryCard({ style, navigation }) {
-  const [dateRange, setDateRange] = useState(() => presetRange('7d'));
-  const [datePreset, setDatePreset] = useState('7d');
+  const [dateRange, setDateRange] = useState(() => presetRange('30d'));
+  const [datePreset, setDatePreset] = useState('30d');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [rows, setRows] = useState([]);
   const [error, setError] = useState(null);
+  const hasLoaded = useRef(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts = {}) => {
+    if (opts.soft) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     try {
-      let list = [];
-      try {
-        const data = await fetchBreakdowns({ limit: 120 });
-        list = data.rows || [];
-      } catch (_) {
-        // fallback: filter repairs in range
-        const rep = await fetchRepairs(dateRange.start, dateRange.end);
-        list = (rep.rows || []).filter(isBreakdownRow);
+      // โหลดตามช่วงวันที่จริง (ไม่ใช้ breakdown_list แบบ limit ล่าสุด — ทำให้วัน/ดูทั้งหมดเพี้ยน)
+      const rep = await fetchRepairs(dateRange.start, dateRange.end);
+      let list = (rep.rows || []).filter(isBreakdownRow);
+
+      // ถ้า list_repair ไม่ติด tag เสียกลางทาง ลองเสริมจาก breakdown_list แล้วกรองวัน
+      if (list.length === 0) {
+        try {
+          const data = await fetchBreakdowns({ limit: 500 });
+          const startStr = fmtDate(dateRange.start);
+          const endStr = fmtDate(dateRange.end);
+          list = (data.rows || []).filter((r) => {
+            const day = String(r.r_dt_rec || '').slice(0, 10);
+            return day >= startStr && day <= endStr;
+          });
+        } catch (_) {
+          /* keep empty */
+        }
       }
 
-      const startStr = fmtDate(dateRange.start);
-      const endStr = fmtDate(dateRange.end);
-      list = list.filter((r) => {
-        const day = String(r.r_dt_rec || '').slice(0, 10);
-        return day >= startStr && day <= endStr;
-      });
       setRows(list);
     } catch (e) {
       setError(e.message || 'โหลดไม่สำเร็จ');
       setRows([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [dateRange.start, dateRange.end]);
 
   useEffect(() => {
-    load();
+    load({ soft: hasLoaded.current });
+    hasLoaded.current = true;
   }, [load]);
 
   const dayStats = useMemo(() => {
@@ -95,13 +103,25 @@ export default function BreakdownSummaryCard({ style, navigation }) {
   const total = rows.length;
   const max = Math.max(...dayStats.map((d) => d.total), 1);
 
+  const openBreakdown = (day) => {
+    const start = day || fmtDate(dateRange.start);
+    const end = day || fmtDate(dateRange.end);
+    navigation.navigate('Breakdown', {
+      date: start,
+      dateEnd: end,
+      datePreset: day ? 'custom' : datePreset,
+    });
+  };
+
+  const showLoader = loading && rows.length === 0;
+
   return (
     <Card
       starred
       title="เสียกลางทาง"
       style={style}
       headerRight={
-        <Pressable onPress={() => navigation.navigate('Breakdown')}>
+        <Pressable onPress={() => openBreakdown(null)}>
           <Text style={styles.viewAll}>ดูทั้งหมด ›</Text>
         </Pressable>
       }
@@ -115,15 +135,15 @@ export default function BreakdownSummaryCard({ style, navigation }) {
         }}
       />
 
-      {loading ? (
+      {showLoader ? (
         <View style={styles.loaderBox}>
           <CircularLoader size={48} />
           <Text style={styles.loaderText}>กำลังโหลด...</Text>
         </View>
-      ) : error ? (
+      ) : error && rows.length === 0 ? (
         <View style={styles.loaderBox}>
           <Text style={styles.errorText}>{error}</Text>
-          <Pressable onPress={load} style={styles.retry}>
+          <Pressable onPress={() => load()} style={styles.retry}>
             <Text style={styles.retryText}>ลองใหม่</Text>
           </Pressable>
         </View>
@@ -131,6 +151,7 @@ export default function BreakdownSummaryCard({ style, navigation }) {
         <>
           <Text style={styles.summary}>
             รวม <Text style={styles.summaryNum}>{total}</Text> งาน
+            {refreshing ? ' · กำลังอัปเดต...' : ''}
           </Text>
           <View style={styles.legend}>
             <View style={styles.legendItem}>
@@ -150,7 +171,7 @@ export default function BreakdownSummaryCard({ style, navigation }) {
                 <Pressable
                   key={d.date}
                   style={styles.row}
-                  onPress={() => navigation.navigate('Breakdown')}
+                  onPress={() => openBreakdown(d.date)}
                 >
                   <Text style={styles.dateLabel}>{fmtThaiDate(d.date)}</Text>
                   <View style={styles.barWrap}>
@@ -194,47 +215,44 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xl,
   },
   loaderText: { color: colors.textSecondary, fontSize: 13, fontWeight: '600' },
-  errorText: { color: colors.textSecondary, textAlign: 'center', fontSize: 13 },
+  errorText: { color: '#E5544B', fontSize: 13, textAlign: 'center' },
   retry: {
+    marginTop: spacing.sm,
     backgroundColor: colors.navy,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: radius.sm,
   },
-  retryText: { color: colors.onNavy, fontWeight: '800' },
-  summary: { fontSize: 13, color: colors.textSecondary, marginBottom: spacing.sm },
-  summaryNum: { color: colors.navy, fontWeight: '800', fontSize: 15 },
-  legend: { flexDirection: 'row', gap: spacing.lg, marginBottom: spacing.sm },
+  retryText: { color: colors.onNavy, fontWeight: '700' },
+  summary: { color: colors.textSecondary, fontSize: 13, marginBottom: spacing.sm },
+  summaryNum: { color: colors.navy, fontWeight: '800' },
+  legend: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.sm },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendText: { color: colors.textSecondary, fontSize: 12, fontWeight: '600' },
   dot: { width: 10, height: 10, borderRadius: 2 },
-  legendText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
   list: { maxHeight: 280 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    marginBottom: 10,
   },
-  dateLabel: {
-    width: 100,
-    fontSize: 12,
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
-  barWrap: { flex: 1, marginHorizontal: spacing.sm },
+  dateLabel: { width: 88, color: colors.textPrimary, fontSize: 12, fontWeight: '700' },
+  barWrap: { flex: 1 },
   track: {
     height: 14,
     borderRadius: 7,
-    backgroundColor: colors.barTrack,
-    overflow: 'hidden',
+    backgroundColor: '#EEF1F7',
     flexDirection: 'row',
+    overflow: 'hidden',
   },
   fill: { height: '100%', borderRadius: 7 },
   value: {
-    width: 24,
+    width: 28,
     textAlign: 'right',
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textPrimary,
+    color: colors.navy,
+    fontWeight: '800',
+    fontSize: 13,
   },
   valueEmpty: { color: colors.textMuted, fontWeight: '600' },
 });

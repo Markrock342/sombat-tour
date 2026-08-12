@@ -47,6 +47,7 @@ export default function DashboardScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const lastDeviceDay = useRef(fmtDate(new Date()));
+  const hasLoaded = useRef(false);
 
   const dateStart = fmtDate(dateRange.start);
   const dateEnd = fmtDate(dateRange.end);
@@ -112,7 +113,8 @@ export default function DashboardScreen({ navigation }) {
   }, [dateRange.start, dateRange.end]);
 
   useEffect(() => {
-    load();
+    load({ soft: hasLoaded.current });
+    hasLoaded.current = true;
   }, [load]);
 
   // เมื่อเข้าหน้า / กลับมาแอป: ไม่ soft-refresh อัตโนมัติ (รำคาญ)
@@ -315,7 +317,7 @@ export default function DashboardScreen({ navigation }) {
           <RefreshControl refreshing={refreshing} onRefresh={() => load({ soft: true })} tintColor={colors.navy} />
         }
       >
-        {loading ? (
+        {loading && repairs.length === 0 ? (
           <LoadingView />
         ) : (
           <View style={[styles.grid, isWide && styles.gridWide]}>
@@ -333,11 +335,11 @@ export default function DashboardScreen({ navigation }) {
                 }}
               />
 
-              {error ? (
+              {error && repairs.length === 0 ? (
                 <View style={styles.errorBox}>
                   <Text style={styles.errorText}>โหลดข้อมูลไม่สำเร็จ</Text>
                   <Text style={styles.errorMsg}>{error}</Text>
-                  <Pressable style={styles.retryBtn} onPress={load}>
+                  <Pressable style={styles.retryBtn} onPress={() => load()}>
                     <Text style={styles.retryText}>ลองใหม่</Text>
                   </Pressable>
                 </View>
@@ -347,6 +349,7 @@ export default function DashboardScreen({ navigation }) {
                     <Text style={styles.summary}>
                       มีงาน <Text style={styles.summaryNum}>{active}</Text> ผู้ซ่อม · รวม{' '}
                       <Text style={styles.summaryNum}>{total}</Text> งาน
+                      {refreshing ? ' · กำลังอัปเดต...' : ''}
                     </Text>
                     <Pressable onPress={() => navigation.navigate('JobDetail', {
                       technician: '',

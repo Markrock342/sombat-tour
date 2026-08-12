@@ -146,6 +146,7 @@ export default function RepairJobCard({
       <View style={styles.noteBlock}>
         <Text style={styles.noteText}>{notes}</Text>
       </View>
+      <Text style={styles.hint}>ดูสรุปงาน ›</Text>
     </Pressable>
   );
 }
@@ -210,6 +211,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     lineHeight: 22,
+  },
+  hint: {
+    color: colors.barFill,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: spacing.sm,
   },
   pill: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: 999 },
   pillText: { color: colors.onNavy, fontSize: 11, fontWeight: '700' },

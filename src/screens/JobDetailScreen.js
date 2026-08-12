@@ -16,6 +16,7 @@ import { colors, spacing, radius } from '../theme';
 import DateRangePicker from '../components/DateRangePicker';
 import LoadingView from '../components/LoadingView';
 import RepairJobCard, { mapRepairToCardJob, jobCardSearchHay } from '../components/RepairJobCard';
+import JobSummaryModal from '../components/JobSummaryModal';
 import {
   TopBackLink,
   MobileBackBar,
@@ -26,6 +27,7 @@ import {
 import {
   fetchRepairs,
   fetchPendingJobs,
+  mapRepairRow,
   fmtThaiDate,
   fmtDate,
   repairMatchesTech,
@@ -76,11 +78,13 @@ export default function JobDetailScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedJob, setSelectedJob] = useState(null);
   const { isMobile, isWide, centerContent, pad, titleSize, contentMaxWidth } = useScreenLayout();
   const goBack = () => navigation.goBack();
   // กว้างพอให้แถวละ 4 การ์ดบนจอใหญ่
   const sheetStyle = contentSheetStyle(centerContent, Math.max(contentMaxWidth, isWide ? 1180 : 640));
   const lastDeviceDay = useRef(fmtDate(new Date()));
+  const hasLoaded = useRef(false);
 
   const load = useCallback(
     async (opts = {}) => {
@@ -122,7 +126,8 @@ export default function JobDetailScreen({ route, navigation }) {
   );
 
   useEffect(() => {
-    load();
+    load({ soft: hasLoaded.current });
+    hasLoaded.current = true;
   }, [load]);
 
   useFocusEffect(
@@ -220,12 +225,12 @@ export default function JobDetailScreen({ route, navigation }) {
               autoCapitalize="none"
             />
 
-            {loading ? (
+            {loading && jobs.length === 0 ? (
               <LoadingView compact />
-            ) : error ? (
+            ) : error && jobs.length === 0 ? (
               <View style={styles.center}>
                 <Text style={styles.centerText}>{error}</Text>
-                <Pressable style={styles.retryBtn} onPress={load}>
+                <Pressable style={styles.retryBtn} onPress={() => load()}>
                   <Text style={styles.retryText}>ลองใหม่</Text>
                 </Pressable>
               </View>
@@ -250,13 +255,13 @@ export default function JobDetailScreen({ route, navigation }) {
                   </View>
                 ) : null}
 
-                {jobs.length === 0 ? (
+                {jobs.length === 0 && !loading ? (
                   <View style={styles.center}>
                     <Text style={styles.centerText}>
                       {isPending ? 'ไม่มีงานค้างซ่อม' : 'ไม่มีงานในช่วงวันที่เลือก'}
                     </Text>
                   </View>
-                ) : visibleJobs.length === 0 ? (
+                ) : visibleJobs.length === 0 && !loading ? (
                   <View style={styles.center}>
                     <Text style={styles.centerText}>ไม่มีงานที่ตรงกับตัวกรอง</Text>
                   </View>
@@ -267,12 +272,7 @@ export default function JobDetailScreen({ route, navigation }) {
                         key={`${job.rId}-${job.code}`}
                         job={job}
                         style={isWide ? styles.cardWide : styles.cardFull}
-                        onPress={() =>
-                          navigation.navigate('RepairDetail', {
-                            repair: job.raw,
-                            rId: job.rId,
-                          })
-                        }
+                        onPress={() => setSelectedJob(mapRepairRow(job.raw))}
                       />
                     ))}
                   </View>
@@ -283,6 +283,8 @@ export default function JobDetailScreen({ route, navigation }) {
         </ScrollView>
         {isMobile ? <MobileBackBar onPress={goBack} /> : null}
       </View>
+
+      <JobSummaryModal job={selectedJob} onClose={() => setSelectedJob(null)} />
     </SafeAreaView>
   );
 }
