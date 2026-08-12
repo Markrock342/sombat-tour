@@ -176,13 +176,15 @@ export default function DashboardScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.brandRow}>
-            <Image source={require('../../assets/sombatlogobg.png')} style={styles.logo} />
-            <View style={styles.brandText}>
-              <Text style={styles.headerTitle}>สมบัติทัวร์</Text>
-              <Text style={styles.headerSub}>โปรแกรมงานซ่อมบำรุง</Text>
-            </View>
+        <View style={styles.brandRow}>
+          <Image source={require('../../assets/sombatlogobg.png')} style={styles.logo} />
+          <View style={styles.brandText}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              สมบัติทัวร์
+            </Text>
+            <Text style={styles.headerSub} numberOfLines={1}>
+              โปรแกรมงานซ่อมบำรุง
+            </Text>
           </View>
         </View>
         <View style={styles.headerActions}>
@@ -192,7 +194,9 @@ export default function DashboardScreen({ navigation }) {
             </Text>
           </Pressable>
           <Pressable style={styles.searchBtn} onPress={() => navigation.navigate('VehicleSearch')}>
-            <Text style={styles.searchBtnText}>🔍 ค้นหารถ</Text>
+            <Text style={styles.searchBtnText} numberOfLines={1}>
+              🔍 ค้นหารถ
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -361,13 +365,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.sm,
+    flexWrap: 'wrap',
+    gap: spacing.md,
   },
-  headerLeft: { flexShrink: 1, flex: 1 },
-  headerActions: { flexDirection: 'row', gap: 8, flexShrink: 0 },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  logo: { width: 44, height: 44, borderRadius: 10, backgroundColor: colors.card },
-  brandText: { flexShrink: 1 },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flexGrow: 1,
+    flexShrink: 0,
+    minWidth: 200,
+  },
+  logo: { width: 44, height: 44, borderRadius: 10, backgroundColor: colors.card, flexShrink: 0 },
+  brandText: { flexShrink: 0 },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 1,
+  },
   searchBtn: {
     backgroundColor: 'rgba(255,255,255,0.12)',
     paddingHorizontal: spacing.md,
@@ -378,8 +394,19 @@ const styles = StyleSheet.create({
     maxWidth: 160,
   },
   searchBtnText: { color: colors.onNavy, fontSize: 13, fontWeight: '700' },
-  headerTitle: { color: colors.onNavy, fontSize: 24, fontWeight: '800', letterSpacing: 0.3 },
-  headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
+  headerTitle: {
+    color: colors.onNavy,
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+    lineHeight: 28,
+  },
+  headerSub: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    marginTop: 2,
+    lineHeight: 18,
+  },
   scroll: {
     backgroundColor: colors.background,
     borderTopLeftRadius: 28,
