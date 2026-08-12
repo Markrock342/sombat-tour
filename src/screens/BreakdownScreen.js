@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { RefreshControl } from '../components/AppRefreshControl';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 
 import { colors, spacing, radius } from '../theme';
 import {
@@ -19,7 +18,7 @@ import {
   mobileScrollInset,
   contentSheetStyle,
 } from '../components/BackNavigation';
-import CircularLoader from '../components/CircularLoader';
+import LoadingView from '../components/LoadingView';
 import RepairJobCard, { mapRepairToCardJob, jobCardSearchHay } from '../components/RepairJobCard';
 import JobSummaryModal from '../components/JobSummaryModal';
 import DateRangePicker, { presetRange } from '../components/DateRangePicker';
@@ -90,7 +89,6 @@ export default function BreakdownScreen({ navigation, route }) {
       else setLoading(true);
       setError(null);
       try {
-        // ตามช่วงวันที่จาก Dashboard / ปฏิทิน — ไม่ดึงแค่ 300 รายการล่าสุด
         const rep = await fetchRepairs(dateRange.start, dateRange.end);
         let list = (rep.rows || []).filter(isBreakdownRepair);
 
@@ -120,12 +118,10 @@ export default function BreakdownScreen({ navigation, route }) {
     [dateRange.start, dateRange.end, dateStart, dateEnd]
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      load({ soft: hasLoaded.current });
-      hasLoaded.current = true;
-    }, [load])
-  );
+  useEffect(() => {
+    load({ soft: hasLoaded.current });
+    hasLoaded.current = true;
+  }, [load]);
 
   const visibleJobs = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -136,6 +132,10 @@ export default function BreakdownScreen({ navigation, route }) {
     return filtered.map((job, i) => ({ ...job, displayId: i + 1 }));
   }, [rows, q]);
 
+  const countLabel = q.trim()
+    ? `${visibleJobs.length} จาก ${rows.length} งาน`
+    : `${rows.length} งาน`;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
@@ -145,42 +145,10 @@ export default function BreakdownScreen({ navigation, route }) {
           <View style={[styles.headerInner, sheetStyle]}>
             {!isMobile ? <TopBackLink onPress={goBack} style={styles.back} /> : null}
             <Text style={[styles.headerTitle, { fontSize: titleSize }]}>เสียกลางทาง</Text>
-            <Text style={styles.headerSub}>
+            <Text style={styles.headerSub} numberOfLines={isMobile ? 2 : undefined}>
               {dateLabel}
-              {!loading && !error ? ` · ${rows.length} งาน` : ''}
+              {!loading && !error ? ` · ${rows.length === 0 ? '0 งาน' : countLabel}` : ''}
             </Text>
-          </View>
-        </View>
-
-        <View
-          style={[styles.toolbar, { paddingHorizontal: pad }, centerContent && styles.headerCentered]}
-        >
-          <View style={[sheetStyle, styles.toolbarInner]}>
-            <DateRangePicker
-              value={dateRange}
-              presetKey={datePreset}
-              onChange={(range, key) => {
-                setDateRange(range);
-                setDatePreset(key);
-              }}
-            />
-            <View style={styles.searchBar}>
-              <TextInput
-                style={styles.input}
-                value={q}
-                onChangeText={setQ}
-                placeholder="ค้นเลขงาน · ทะเบียน · ช่าง · อาการ..."
-                placeholderTextColor={colors.textMuted}
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="search"
-              />
-              {q.trim() ? (
-                <Pressable style={styles.clearBtn} onPress={() => setQ('')}>
-                  <Text style={styles.clearBtnText}>ล้าง</Text>
-                </Pressable>
-              ) : null}
-            </View>
           </View>
         </View>
 
@@ -190,8 +158,8 @@ export default function BreakdownScreen({ navigation, route }) {
             styles.scroll,
             centerContent && styles.scrollCentered,
             isMobile && mobileScrollInset,
-            visibleJobs.length === 0 && !loading && styles.scrollEmpty,
           ]}
+          showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
@@ -202,34 +170,47 @@ export default function BreakdownScreen({ navigation, route }) {
           }
         >
           <View style={sheetStyle}>
-            {loading && !refreshing ? (
+            <DateRangePicker
+              value={dateRange}
+              presetKey={datePreset}
+              onChange={(range, key) => {
+                setDateRange(range);
+                setDatePreset(key);
+              }}
+            />
+
+            <TextInput
+              style={styles.filterInput}
+              value={q}
+              onChangeText={setQ}
+              placeholder="ค้นเลขงาน · ทะเบียน · ช่าง · อาการ..."
+              placeholderTextColor={colors.textMuted}
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+            />
+
+            {loading && rows.length === 0 ? (
+              <LoadingView compact />
+            ) : error && rows.length === 0 ? (
               <View style={styles.center}>
-                <CircularLoader size={52} />
-                <Text style={styles.loadingText}>กำลังโหลด...</Text>
-              </View>
-            ) : error ? (
-              <View style={styles.center}>
-                <Text style={styles.msg}>{error}</Text>
+                <Text style={styles.centerText}>{error}</Text>
                 <Pressable style={styles.retryBtn} onPress={() => load()}>
                   <Text style={styles.retryText}>ลองใหม่</Text>
                 </Pressable>
               </View>
-            ) : visibleJobs.length === 0 ? (
-              <Text style={styles.msg}>
-                {q.trim() ? 'ไม่พบรายการที่ตรงกับคำค้น' : 'ไม่มีรายการเสียกลางทางในช่วงนี้'}
-              </Text>
+            ) : visibleJobs.length === 0 && !loading ? (
+              <View style={styles.center}>
+                <Text style={styles.centerText}>
+                  {q.trim() ? 'ไม่พบรายการที่ตรงกับคำค้น' : 'ไม่มีรายการเสียกลางทางในช่วงนี้'}
+                </Text>
+              </View>
             ) : (
               <View style={[styles.grid, isWide && styles.gridWide]}>
-                <Text style={[styles.countLabel, isWide && styles.countLabelWide]}>
-                  {q.trim()
-                    ? `${visibleJobs.length} จาก ${rows.length} งาน`
-                    : `${rows.length} งาน · กดเพื่อดูสรุปงาน`}
-                </Text>
                 {visibleJobs.map((job) => (
                   <RepairJobCard
                     key={`${job.rId}-${job.code}`}
                     job={job}
-                    accent="breakdown"
                     style={isWide ? styles.cardWide : styles.cardFull}
                     onPress={() => setSelectedJob(mapRepairRow(job.raw))}
                   />
@@ -250,48 +231,36 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.navy },
   body: { flex: 1 },
   scrollView: { flex: 1 },
-  header: { paddingTop: spacing.sm, paddingBottom: spacing.xs },
+  header: {
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
   headerCentered: { alignItems: 'center' },
   headerInner: { width: '100%' },
   back: { color: 'rgba(255,255,255,0.85)', fontSize: 15, marginBottom: spacing.sm },
   headerTitle: { color: colors.onNavy, fontWeight: '800' },
-  headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 2 },
-  toolbar: { paddingBottom: spacing.sm },
-  toolbarInner: { width: '100%', gap: spacing.sm },
-  searchBar: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    alignItems: 'center',
-  },
-  input: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    minHeight: 44,
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
-  clearBtn: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: spacing.md,
-    minHeight: 44,
-    justifyContent: 'center',
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  clearBtnText: { color: colors.onNavy, fontWeight: '800' },
+  headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
   scroll: {
     backgroundColor: colors.background,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    padding: spacing.lg,
-    paddingBottom: spacing.xl,
+    padding: spacing.xl,
+    paddingBottom: spacing.xl * 2,
+    minHeight: '100%',
   },
   scrollCentered: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
-  scrollEmpty: { flexGrow: 1 },
+  filterInput: {
+    backgroundColor: colors.card,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    minHeight: 44,
+    marginBottom: spacing.md,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
   grid: { gap: spacing.lg },
   gridWide: {
     flexDirection: 'row',
@@ -299,23 +268,21 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     gap: spacing.lg,
   },
-  countLabel: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-    width: '100%',
-  },
-  countLabelWide: { marginBottom: 0 },
   cardWide: { flexBasis: '30%', flexGrow: 1, minWidth: 280 },
   cardFull: { width: '100%' },
-  center: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl * 2, gap: spacing.md },
-  loadingText: { color: colors.textSecondary, fontWeight: '600' },
-  msg: { color: colors.textSecondary, textAlign: 'center', paddingVertical: spacing.xl, fontWeight: '600' },
+  center: { paddingVertical: spacing.xl * 2, alignItems: 'center' },
+  centerText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
   retryBtn: {
     backgroundColor: colors.navy,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm,
-    borderRadius: radius.sm,
+    borderRadius: 8,
+    marginTop: spacing.md,
   },
-  retryText: { color: colors.onNavy, fontWeight: '800' },
+  retryText: { color: colors.onNavy, fontWeight: '700' },
 });
