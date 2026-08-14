@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, Image, Animated, ActivityIndicator, StyleSheet, Easing } from 'react-native';
 import { colors, spacing } from '../theme';
 
-export default function LoadingView({ message = 'กำลังโหลด...', compact = false }) {
+export default function LoadingView({ message = 'กำลังโหลด...', compact = false, style }) {
   const pulse = useRef(new Animated.Value(0.85)).current;
 
   useEffect(() => {
@@ -27,7 +27,7 @@ export default function LoadingView({ message = 'กำลังโหลด...'
   }, [pulse]);
 
   return (
-    <View style={[styles.wrap, compact && styles.wrapCompact]}>
+    <View style={[styles.wrap, compact && styles.wrapCompact, style]}>
       <Animated.View style={{ opacity: pulse, transform: [{ scale: pulse }] }}>
         <Image
           source={require('../../assets/sombattourbg.png')}
@@ -51,7 +51,10 @@ const styles = StyleSheet.create({
   },
   wrapCompact: {
     flex: 0,
-    paddingVertical: spacing.xl,
+    // เว้นระยะใต้ช่องค้น/ปฏิทิน — กันโลโก้ทับ input ตอนโหลด
+    paddingTop: spacing.xl * 3,
+    paddingBottom: spacing.xl * 2,
+    marginTop: spacing.lg,
   },
   banner: {
     width: 280,
@@ -59,8 +62,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   bannerCompact: {
-    width: 220,
-    height: 74,
+    width: 180,
+    height: 60,
   },
   spinner: { marginBottom: spacing.sm },
   message: { color: colors.textSecondary, fontSize: 14, fontWeight: '600' },
